@@ -109,4 +109,30 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-argument": "error",
     },
   },
+  {
+    // Spec: AST-2
+    // The writing assistant never adds or changes text in the book. Its
+    // modules can't reach the book's data at all: the page comes in as text
+    // from the page screen, and the only thing they write (through
+    // lib/openrouter.ts) is the usage ledger.
+    files: ["src/components/AssistantPanel.tsx", "src/lib/assistant*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "@tauri-apps/plugin-sql", message: "The assistant can't touch the database (AST-2)." },
+            { name: "@tauri-apps/api/core", message: "The assistant can't call into the app's commands (AST-2)." },
+            { name: "drizzle-orm", message: "The assistant can't touch the database (AST-2)." },
+          ],
+          patterns: [
+            {
+              regex: "(^|/)(db|book[^/]*|blocks[^/]*|revisions[^/]*)(\\.ts)?$|(^|/)db/",
+              message: "The assistant never adds or changes text in the book, so it can't import the book's data layer (AST-2).",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

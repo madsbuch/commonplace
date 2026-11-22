@@ -19,4 +19,5 @@ export const DEVICE_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
   SETTING_KEYS.lastPage,
 ]);
 
-export const DEFAULT_ASSISTANT_MODEL = "anthropic/claude-sonnet-4.5";
+/** The assistant's model until the author picks one; must be on OpenRouter's list. */
+export const DEFAULT_ASSISTANT_MODEL = "anthropic/claude-sonnet-5.5";

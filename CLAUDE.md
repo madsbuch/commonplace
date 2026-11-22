@@ -62,6 +62,34 @@ ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
 - No native `confirm`/`alert`/`prompt`: the desktop WebView doesn't show them.
 - Rust: every crate sets `unsafe_code = "forbid"` in its `Cargo.toml`.
 
+## AI
+
+Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat
+completions, streamed, with the author's own key, through the HTTP plugin
+(`https://openrouter.ai/*` is the only host the `http` capability allows).
+Book content leaves the device only that way.
+
+- The key and the assistant's model are synced `settings`
+  (`src/lib/aiSettings.ts`); the model list is fetched live and cached per
+  device (`models_cache`, `models_cache_at`), the cache shown until the fetch
+  returns.
+- Every response that reports its cost is logged in `ai_usage` under its
+  feature (`AI_FEATURES` in `src/lib/aiCost.ts`). A new feature that calls a
+  model gets a name there and passes it as `feature`. `aiCost.ts` is pure (the
+  Costs screen's roll-ups); `aiUsage.ts` reads and writes the ledger.
+- The writing assistant (`src/components/AssistantPanel.tsx`,
+  `src/lib/assistant.ts`) never adds or changes text in the book. It gets the
+  page as Markdown from the page screen, has no tools, and nothing it renders
+  writes to the book. ESLint enforces it: assistant modules can't import
+  `db`, `db/schema`, the book's data modules (`book*`, `blocks*`,
+  `revisions*`), drizzle, the SQL plugin or `invoke`. Keep it that way; the
+  page screen hands it what it needs.
+- Its actions follow the spec's `assistant.actions`, and its topics
+  `book.topics`; `tests/ai-assistant.test.ts` checks both against the spec.
+- Conversations live in the panel's state only; they aren't saved.
+- Links in model output open in the system browser (`openUrl`), never in the
+  app's window.
+
 ## Commands
 
 - `bun run dev`: Vite dev server
