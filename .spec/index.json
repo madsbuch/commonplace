@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
-  "title": "My Book",
-  "summary": "An ever-evolving book of what I find professionally interesting, written in a desktop app.",
+  "title": "Commonplace",
+  "summary": "An ever-evolving book of what I find professionally interesting, written in a desktop and phone app.",
   "description": "A personal book that grows over years rather than being finished. Writing it is also a way to keep thinking and writing by hand while AI does more of both.",
   "stories": [
     {

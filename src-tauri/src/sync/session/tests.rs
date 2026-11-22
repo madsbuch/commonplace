@@ -196,7 +196,7 @@ async fn different_versions_of_the_app_do_not_sync() {
     let err = sync_now(&joiner.pool, h.addr).await.unwrap_err();
     // The computer is the older one here; it refuses, and the phone shows the
     // computer's words as they are, so they name the device to update.
-    assert_eq!(err, "Computer has an older version of My Book than Phone: update Computer and they'll sync again");
+    assert_eq!(err, "Computer has an older version of Commonplace than Phone: update Computer and they'll sync again");
 }
 
 #[tokio::test]
@@ -267,7 +267,7 @@ fn timestamps_are_utc_iso() {
 #[tokio::test]
 async fn failed_connections_are_reported_by_the_listener() {
     let h = host().await;
-    // Something that isn't My Book knocks on the port.
+    // Something that isn't Commonplace knocks on the port.
     let mut s = TcpStream::connect(h.addr).await.unwrap();
     tokio::io::AsyncWriteExt::write_all(&mut s, b"GET / HTTP/1.1\r\n\r\n").await.unwrap();
     drop(s);

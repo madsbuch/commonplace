@@ -1,4 +1,4 @@
-# My Book
+# Commonplace
 
 An ever-evolving personal book: a Tauri 2 app (React + TypeScript frontend in
 `src/`, Rust shell in `src-tauri/`) on Android, Linux and macOS, backed by one
@@ -175,6 +175,22 @@ The book syncs peer to peer over the local network, as Tally does
   `library_items.authors` is a display line kept in step with the
   authorships (lists and search read it).
 
+## Look and feel
+
+- The app is Commonplace (`app.name`); the logo is `src/assets/logo.svg`,
+  rendered to `app-icon.png` (`bun run tauri icon app-icon.png` makes the
+  platform icons) and `.spec/assets/logo.png`. The bundle id is still
+  `com.madsbuch.mybook`, so existing data stays where it is.
+- Colours are tokens in `src/App.css`, the spec's `color.*` values, light and
+  dark. `src/lib/theme.ts` sets `data-theme` on `<html>` before the first
+  paint (the choice is per device, in localStorage), animates a switch with
+  View Transitions (a circle from the button pressed) or a colour
+  cross-fade where they're missing, and respects reduced motion. Mantine and
+  BlockNote take the theme from `useColorScheme()`, never from the system.
+- Fonts are bundled (`@fontsource-variable/literata` for the book,
+  `@fontsource-variable/inter` for the interface), imported in `main.tsx`.
+- `Ctrl+K` / `⌘K` opens the page search (`src/components/QuickOpen.tsx`).
+
 ## AI
 
 Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat
@@ -190,16 +206,28 @@ Book content leaves the device only that way.
   feature (`AI_FEATURES` in `src/lib/aiCost.ts`). A new feature that calls a
   model gets a name there and passes it as `feature`. `aiCost.ts` is pure (the
   Costs screen's roll-ups); `aiUsage.ts` reads and writes the ledger.
-- The writing assistant (`src/components/AssistantPanel.tsx`,
-  `src/lib/assistant.ts`) never adds or changes text in the book. It gets the
-  page as Markdown from the page screen, has no tools, and nothing it renders
-  writes to the book. ESLint enforces it: assistant modules can't import
-  `db`, `db/schema`, the book's data modules (`book*`, `blocks*`,
-  `revisions*`), drizzle, the SQL plugin or `invoke`. Keep it that way; the
-  page screen hands it what it needs.
-- Its actions follow the spec's `assistant.actions`, and its topics
-  `book.topics`; `tests/ai-assistant.test.ts` checks both against the spec.
-- Conversations live in the panel's state only; they aren't saved.
+- The assistant is a chat (`src/lib/assistantRunner.ts`, a state machine
+  outside React, like Tally's): transcripts are rows of `chats` (JSON,
+  OpenAI-style, tool calls included) saved after every round; sync splits a
+  chat continued on two devices at once (SYN-20, the engine's `chats` rule).
+  It opens beside every screen (`AssistantDock`, on the chat last open on
+  this device) and on its own at `/chats/<id>`. A question another device
+  saved, unanswered, in the last 10 minutes waits for that device's answer.
+- It reads by itself through tools (`src/lib/assistantTools.ts`):
+  `look_at_screen` (from `src/lib/currentView.ts`: the address, the block the
+  cursor is in, the PDF page in view), pages, the library, PDF text, people
+  and institutions. Every read goes through `src/lib/lookup.ts`, which
+  exposes no writes. It writes only its chats and its memory
+  (`assistant_memory`, `src/lib/memory.ts`), which every turn carries.
+- It never adds or changes anything in the book or the library. ESLint
+  enforces it: assistant modules (`assistant*`, `entities`, the chat
+  components) can't import `db`, `db/schema`, `book*`, `blocks*`,
+  `revisions*`, `library*`, `people*`, drizzle, the SQL plugin or `invoke`.
+- Ids in its answers (`blk_`, `lib_`, `person_`, `institution_`) render as
+  chips with live titles (`src/components/Markdown.tsx`, `EntityChip.tsx`).
+- Its ways of helping follow the spec's `assistant.actions` (`spec` field;
+  `label` is the button's wording) and its topics `book.topics`;
+  `tests/ai-assistant.test.ts` checks both against the spec.
 - Links in model output open in the system browser (`openUrl`), never in the
   app's window.
 
@@ -207,7 +235,7 @@ Book content leaves the device only that way.
 
 - `bun run dev`: Vite dev server
 - `bun run tauri dev`: the app in development. It always runs as
-  "My Book Dev" with data of its own, never as the real app:
+  "Commonplace Dev" with data of its own, never as the real app:
   - desktop: `scripts/tauri.mjs` adds `src-tauri/tauri.dev.conf.json`
     (`com.madsbuch.mybook.dev`); a debug build started any other way under
     the real identifier refuses to start (`src-tauri/src/lib.rs`);

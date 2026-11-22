@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Desktop app",
-  "summary": "The book is written and read in a Tauri app on phone and desktop.",
+  "summary": "Commonplace: the book is written and read in a Tauri app on phone and desktop.",
   "order": 5,
-  "description": "A local-first app holds the book, so it works offline and the data stays on the author's devices.",
+  "description": "A local-first app holds the book, so it works offline and the data stays on the author's devices. It is called Commonplace, after the commonplace book: a personal book of what one finds worth keeping, added to for a lifetime.",
   "requirements": [
     {
       "id": "APP-1",
@@ -12,6 +12,27 @@
     {
       "id": "APP-2",
       "text": "The app runs on every platform in `app.platforms`."
+    },
+    {
+      "id": "APP-3",
+      "text": "The app is called `app.name` and shows the logo in the figure as its icon and in its sidebar."
+    },
+    {
+      "id": "APP-4",
+      "text": "The app has a light and a dark theme, made of the `color.*` values; it follows the system's setting unless the author picks one, on each device."
+    },
+    {
+      "id": "APP-5",
+      "text": "A change between the light and the dark theme animates over `theme.transition`, whoever made it; when the system asks for reduced motion, it switches at once."
+    },
+    {
+      "id": "APP-6",
+      "text": "The book's text is set in `font.book`, and the app's own interface in `font.ui`, both bundled with the app."
+    },
+    {
+      "id": "APP-7",
+      "text": "From any screen, `Ctrl+K` (`⌘K` on macOS) opens a search that jumps to any page.",
+      "level": "should"
     }
   ],
   "values": [
@@ -24,6 +45,86 @@
         "macOS"
       ],
       "description": "The platforms the app is built and released for."
+    },
+    {
+      "id": "app.name",
+      "type": "text",
+      "value": "Commonplace",
+      "description": "What the app is called."
+    },
+    {
+      "id": "theme.transition",
+      "type": "duration",
+      "value": "480ms",
+      "description": "How long a change between light and dark takes."
+    },
+    {
+      "id": "font.book",
+      "type": "font",
+      "value": "Literata, Iowan Old Style, Georgia, serif",
+      "description": "Page titles and the book's text."
+    },
+    {
+      "id": "font.ui",
+      "type": "font",
+      "value": "Inter, system-ui, sans-serif",
+      "description": "Everything else."
+    },
+    {
+      "id": "color.paper",
+      "type": "color",
+      "value": "#faf7f1",
+      "dark": "#15171c",
+      "description": "The background of screens."
+    },
+    {
+      "id": "color.ink",
+      "type": "color",
+      "value": "#1e2230",
+      "dark": "#e9e6df",
+      "description": "Text."
+    },
+    {
+      "id": "color.muted",
+      "type": "color",
+      "value": "#676b78",
+      "dark": "#9a9ea8",
+      "description": "Secondary text."
+    },
+    {
+      "id": "color.line",
+      "type": "color",
+      "value": "#e6e0d4",
+      "dark": "#2b2f38",
+      "description": "Borders and rules."
+    },
+    {
+      "id": "color.sidebar",
+      "type": "color",
+      "value": "#f3efe6",
+      "dark": "#1b1e24",
+      "description": "The sidebar and the assistant beside a screen."
+    },
+    {
+      "id": "color.hover",
+      "type": "color",
+      "value": "#ebe5d8",
+      "dark": "#262a32",
+      "description": "What the pointer is over, and the current item in a list."
+    },
+    {
+      "id": "color.accent",
+      "type": "color",
+      "value": "#b4532a",
+      "dark": "#e0895f",
+      "description": "Links, chips, the main button and the logo's ribbon."
+    }
+  ],
+  "figures": [
+    {
+      "src": "assets/logo.png",
+      "alt": "Three nested arcs in cream forming a C, like the edges of a book's pages, with a terracotta ribbon, on deep ink blue",
+      "caption": "The Commonplace logo."
     }
   ]
 }

@@ -5,7 +5,7 @@
 // (com.madsbuch.mybook). A desktop `tauri dev` with that identifier would open
 // the real database — and with sync, whatever an unfinished build does to it
 // would reach every device. So `dev` on the desktop always gets
-// src-tauri/tauri.dev.conf.json: "My Book Dev", com.madsbuch.mybook.dev, a
+// src-tauri/tauri.dev.conf.json: "Commonplace Dev", com.madsbuch.mybook.dev, a
 // folder of its own.
 //
 // Android is kept apart differently: debug builds get the package
@@ -29,7 +29,7 @@ const desktopDev = args[0] === "dev";
 const overridesConfig = args.some((a) => a === "--config" || a === "-c" || a.startsWith("--config="));
 if (desktopDev && !overridesConfig) {
   args.push("--config", join(root, DEV_CONFIG));
-  console.error(`tauri dev: running as "My Book Dev" with its own data (${DEV_CONFIG}).`);
+  console.error(`tauri dev: running as "Commonplace Dev" with its own data (${DEV_CONFIG}).`);
 }
 
 const cli = join(root, "node_modules", ".bin", process.platform === "win32" ? "tauri.cmd" : "tauri");

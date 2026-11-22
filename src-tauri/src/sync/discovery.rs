@@ -16,7 +16,7 @@ use tokio::net::UdpSocket;
 use tokio::time::{timeout, Instant};
 
 // Spec: SYN-5, SYN-6
-/// Tally uses 47821/47822; My Book stays clear of them so both run side by side.
+/// Tally uses 47821/47822; Commonplace stays clear of them so both run side by side.
 pub const PORT: u16 = 47831;
 const QUERY: &str = "MYBOOK/1 Q";
 const REPLY: &str = "MYBOOK/1 R";

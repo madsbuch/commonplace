@@ -1,4 +1,4 @@
-# My Book
+# Commonplace
 
 An ever-evolving book of what I find professionally interesting: type theory, ontologies, epistemology, probabilistic reasoning and programming.
 
@@ -12,7 +12,7 @@ Needs [Bun](https://bun.sh), Rust, and [Tauri's system dependencies](https://tau
 
 ```sh
 bun install
-bun run tauri dev     # runs as "My Book Dev", with its own data
+bun run tauri dev     # runs as "Commonplace Dev", with its own data
 bun test              # includes the spec check
 bun run build         # typecheck, lint, bundle
 ```

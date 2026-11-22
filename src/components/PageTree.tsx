@@ -206,11 +206,9 @@ export function PageTree() {
   return (
     <div className={drag ? "page-tree is-dragging" : "page-tree"}>
       <div className="tree-header">
-        <NavLink to="/" className="tree-title">
-          My Book
-        </NavLink>
-        <button type="button" className="tree-new" onClick={() => void newPage(null)}>
-          + New page
+        <span className="tree-title">Pages</span>
+        <button type="button" className="tree-new" title="New page" onClick={() => void newPage(null)}>
+          + New
         </button>
       </div>
       {loaded && tree.length === 0 ? <p className="muted tree-empty">No pages yet.</p> : null}

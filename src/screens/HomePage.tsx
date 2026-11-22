@@ -23,7 +23,7 @@ export default function HomePage() {
 
   return (
     <div className="screen">
-      <h1>My Book</h1>
+      <h1>Commonplace</h1>
       <p className="muted">
         An ever-evolving book of what I find interesting: type theory, ontologies, epistemology, probabilistic reasoning
         and programming.

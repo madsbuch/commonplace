@@ -7,7 +7,16 @@
   "requirements": [
     {
       "id": "DEV-1",
-      "text": "Development builds run as \"My Book Dev\", with their own app identifier and data folder."
+      "text": "Development builds run as \"Commonplace Dev\", with their own app identifier and data folder.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Development builds run as \"My Book Dev\", with their own app identifier and data folder.",
+          "reason": "The app is now called Commonplace.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "DEV-2",

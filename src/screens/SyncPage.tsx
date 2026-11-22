@@ -29,7 +29,7 @@ async function scanWithPhone(): Promise<string | null> {
   const { scan, Format, checkPermissions, requestPermissions } = await import("@tauri-apps/plugin-barcode-scanner");
   let perm = await checkPermissions();
   if (perm !== "granted") perm = await requestPermissions();
-  if (perm !== "granted") throw new Error("My Book needs the camera to scan the code.");
+  if (perm !== "granted") throw new Error("Commonplace needs the camera to scan the code.");
   const r = await scan({ formats: [Format.QRCode], windowed: false });
   return r.content || null;
 }

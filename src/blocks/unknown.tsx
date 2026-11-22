@@ -22,7 +22,7 @@ export const unknownBlockSpec = createReactBlockSpec(
   {
     render: ({ block }) => (
       <div className="unknown-block" contentEditable={false}>
-        A “{block.props.storedType}” block. It needs a newer version of My Book to show.
+        A “{block.props.storedType}” block. It needs a newer version of Commonplace to show.
       </div>
     ),
   },

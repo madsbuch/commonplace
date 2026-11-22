@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "My Book",
+  "productName": "Commonplace",
   "version": "0.1.0",
   "identifier": "com.madsbuch.mybook",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "My Book",
+        "title": "Commonplace",
         "width": 1200,
         "height": 860,
         "minWidth": 380,

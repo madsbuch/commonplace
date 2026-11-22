@@ -232,7 +232,7 @@ async fn key_known(pool: &SqlitePool, key: &[u8]) -> Result<bool> {
 /// The refusal when two devices run different versions, which reads right on
 /// either of them and says which one to update.
 fn older_version(older: &str, newer: &str) -> String {
-    format!("{older} has an older version of My Book than {newer}: update {older} and they'll sync again")
+    format!("{older} has an older version of Commonplace than {newer}: update {older} and they'll sync again")
 }
 
 // Spec: SYN-8, SYN-19
@@ -606,7 +606,7 @@ impl PairingOffer {
     }
 
     pub fn decode(s: &str) -> Result<PairingOffer> {
-        let body = s.trim().strip_prefix(OFFER_PREFIX).ok_or("not a My Book pairing code")?;
+        let body = s.trim().strip_prefix(OFFER_PREFIX).ok_or("not a Commonplace pairing code")?;
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(body)
             .map_err(|_| "the pairing code is damaged")?;
@@ -811,7 +811,7 @@ pub async fn serve(pool: &SqlitePool, mut stream: TcpStream, slot: &PairingSlot)
             let hello = hello(pool, &me).await?;
             server_session(&mut ch, pool, &hello, theirs).await
         }
-        _ => Err("not a My Book connection".into()),
+        _ => Err("not a Commonplace connection".into()),
     }
 }
 

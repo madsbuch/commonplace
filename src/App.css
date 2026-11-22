@@ -1,26 +1,82 @@
+/* Spec: APP-4 — the palette is the spec's `color.*` values (light, then dark). */
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --bg: #fbfaf7;
-  --fg: #1f2328;
-  --muted: #6e7781;
-  --line: #e4e1da;
-  --sidebar: #f3f1ec;
-  --accent: #8a4b2f;
-  --hover: #ebe8e1;
-  --sidebar-width: 260px;
+  --bg: #faf7f1; /* color.paper */
+  --fg: #1e2230; /* color.ink */
+  --muted: #676b78; /* color.muted */
+  --line: #e6e0d4; /* color.line */
+  --sidebar: #f3efe6; /* color.sidebar */
+  --hover: #ebe5d8; /* color.hover */
+  --accent: #b4532a; /* color.accent */
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --shadow: 0 1px 2px rgb(30 34 48 / 0.06), 0 8px 24px rgb(30 34 48 / 0.08);
+  /* Spec: APP-6 — font.book and font.ui, bundled (src/main.tsx). */
+  --font-book: "Literata Variable", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sidebar-width: 264px;
+  --theme-ms: 480ms; /* theme.transition */
+  color-scheme: light;
+  font-family: var(--font-ui);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1b1d21;
-    --fg: #e6e6e6;
-    --muted: #9198a1;
-    --line: #2f333a;
-    --sidebar: #22252a;
-    --accent: #d9926c;
-    --hover: #2c3036;
+  :root:not([data-theme="light"]) {
+    --bg: #15171c;
+    --fg: #e9e6df;
+    --muted: #9a9ea8;
+    --line: #2b2f38;
+    --sidebar: #1b1e24;
+    --hover: #262a32;
+    --accent: #e0895f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+    color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #15171c;
+  --fg: #e9e6df;
+  --muted: #9a9ea8;
+  --line: #2b2f38;
+  --sidebar: #1b1e24;
+  --hover: #262a32;
+  --accent: #e0895f;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
+}
+
+/* Spec: APP-5 — switching themes. With View Transitions: the new theme grows
+   out of the button pressed (lib/theme.ts animates the circle), or fades in
+   when the system switched. Without: every colour eases into the new one. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--theme-ms);
+}
+:root.theme-reveal::view-transition-old(root),
+:root.theme-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+:root.theme-reveal::view-transition-new(root) {
+  z-index: 1;
+}
+:root.theme-fade,
+:root.theme-fade *,
+:root.theme-fade *::before,
+:root.theme-fade *::after {
+  transition:
+    background-color var(--theme-ms) ease,
+    color var(--theme-ms) ease,
+    border-color var(--theme-ms) ease,
+    fill var(--theme-ms) ease,
+    box-shadow var(--theme-ms) ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -999,4 +1055,351 @@ button.danger {
 }
 .memory-add input {
   flex: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Identity and polish                                                  */
+/* ------------------------------------------------------------------ */
+
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+button,
+.button-link,
+.tree-row,
+.sidebar a,
+.library-row,
+.picker-list button {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.screen h1,
+.entity-name,
+.home-pages,
+.library-title,
+.page-block-title,
+.brand-name {
+  font-family: var(--font-book);
+}
+.screen h1 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* The book's text */
+.page-title {
+  font-family: var(--font-book);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.bn-container {
+  --bn-font-family: var(--font-book);
+  --bn-colors-editor-text: var(--fg);
+  --bn-colors-menu-text: var(--fg);
+  --bn-colors-hovered-background: var(--hover);
+  --bn-colors-selected-background: var(--accent-soft);
+  --bn-colors-border: var(--line);
+  --bn-colors-side-menu: var(--muted);
+}
+.bn-container .bn-editor {
+  font-family: var(--font-book);
+  font-size: 17px;
+  line-height: 1.65;
+}
+.bn-container .bn-editor h1,
+.bn-container .bn-editor h2,
+.bn-container .bn-editor h3 {
+  letter-spacing: -0.01em;
+}
+.bn-container .bn-editor code,
+.bn-container .bn-editor pre {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+.bn-menu-dropdown,
+.bn-suggestion-menu,
+.bn-toolbar {
+  font-family: var(--font-ui);
+}
+
+/* Sidebar */
+.sidebar {
+  gap: 2px;
+}
+.brand {
+  padding: 14px 14px 8px;
+}
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.logo {
+  display: block;
+  border-radius: 7px;
+}
+.brand-name {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.quick-open-button {
+  margin: 4px 10px 8px;
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--muted);
+  background: var(--bg);
+  border-color: var(--line);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+.quick-open-button span {
+  flex: 1;
+  text-align: left;
+}
+kbd {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 5px;
+  background: var(--sidebar);
+}
+.nav-main,
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 8px;
+}
+.nav-main a,
+.sidebar-footer a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--fg);
+}
+.sidebar-footer a {
+  color: var(--muted);
+}
+.nav-main a:hover,
+.sidebar-footer a:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.nav-main a.active,
+.sidebar-footer a.active {
+  background: var(--hover);
+  color: var(--fg);
+  font-weight: 600;
+}
+.nav-main a svg,
+.sidebar-footer a svg {
+  color: var(--muted);
+  flex: none;
+}
+.nav-main a.active svg {
+  color: var(--accent);
+}
+.sidebar-footer {
+  padding-top: 8px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+.page-tree {
+  padding-top: 10px;
+}
+.tree-header {
+  padding: 6px 8px 4px 12px;
+}
+.tree-title {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.tree-new {
+  border: none;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.tree-new:hover {
+  color: var(--accent);
+}
+.tree-link.active {
+  color: var(--fg);
+}
+.tree-row:has(.tree-link.active) {
+  background: var(--hover);
+}
+
+/* Theme switch */
+.theme-switch {
+  display: flex;
+  gap: 2px;
+  margin: 8px 2px 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+}
+.theme-switch button {
+  flex: 1;
+  justify-content: center;
+  border: none;
+  padding: 5px 0;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.theme-switch button[aria-checked="true"] {
+  background: var(--hover);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* The assistant button */
+.dock-toggle {
+  gap: 6px;
+  padding: 9px 16px 9px 13px;
+}
+
+/* Buttons */
+.button-primary {
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.page-actions button,
+.page-actions .button-link {
+  border-color: transparent;
+  color: var(--muted);
+}
+.page-actions button:hover,
+.page-actions .button-link:hover {
+  color: var(--fg);
+  border-color: var(--line);
+}
+.page-actions button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--line);
+}
+
+/* Dialogs and the page search */
+.dialog {
+  box-shadow: var(--shadow);
+  border-radius: 12px;
+}
+.dialog-backdrop {
+  backdrop-filter: blur(2px);
+  animation: fade-in 120ms ease;
+}
+.dialog {
+  animation: rise-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+.quick-open {
+  width: min(560px, 100%);
+  padding: 8px;
+}
+.quick-open-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+.quick-open-field input {
+  flex: 1;
+  font: inherit;
+  font-size: 16px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+}
+.picker-list button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.picker-list button.active {
+  background: var(--hover);
+}
+.quick-under {
+  font-size: 12.5px;
+}
+
+/* Lists and screens */
+.library-row {
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.library-row:hover .library-title {
+  color: var(--accent);
+}
+.screen {
+  animation: screen-in 180ms ease;
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .dialog,
+  .dialog-backdrop {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .brand {
+    padding-left: 54px;
+  }
+  .sidebar .tree-header {
+    padding-left: 12px;
+  }
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }

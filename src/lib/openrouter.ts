@@ -22,7 +22,7 @@ const BASE = "https://openrouter.ai/api/v1";
 /** Headers OpenRouter uses for app attribution. */
 const APP_HEADERS = {
   "HTTP-Referer": "https://github.com/madsbuch/my-book",
-  "X-Title": "My Book",
+  "X-Title": "Commonplace",
 };
 
 export class OpenRouterError extends Error {

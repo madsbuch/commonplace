@@ -209,14 +209,14 @@ pub fn run() {
             // A development build never runs as the real app: it would open
             // the real database, and with sync, whatever unfinished code does
             // to it would reach every device. `bun run tauri dev` runs it as
-            // "My Book Dev" (scripts/tauri.mjs); anything else is stopped here.
+            // "Commonplace Dev" (scripts/tauri.mjs); anything else is stopped here.
             // Spec: DEV-2
             #[cfg(all(debug_assertions, desktop))]
             if app.config().identifier == PRODUCTION_IDENTIFIER {
                 eprintln!(
-                    "\nThis is a development build running as the real My Book ({PRODUCTION_IDENTIFIER}),\n\
+                    "\nThis is a development build running as the real Commonplace ({PRODUCTION_IDENTIFIER}),\n\
                      which would open your real database. Start it with `bun run tauri dev`,\n\
-                     which runs it as \"My Book Dev\" with its own data.\n"
+                     which runs it as \"Commonplace Dev\" with its own data.\n"
                 );
                 std::process::exit(1);
             }
