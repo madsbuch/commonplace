@@ -1,0 +1,58 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 61 >>
+stream
+BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 1) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+6 0 obj
+<< /Length 61 >>
+stream
+BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 2) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R /Resources << /Font << /F1 9 0 R >> >> >>
+endobj
+8 0 obj
+<< /Length 61 >>
+stream
+BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 3) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Title (On Computable Numbers) /Author (Alan Turing) /CreationDate (D:19360528120000Z) >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000364 00000 n 
+0000000490 00000 n 
+0000000601 00000 n 
+0000000727 00000 n 
+0000000838 00000 n 
+0000000908 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R /Info 10 0 R >>
+startxref
+1017
+%%EOF

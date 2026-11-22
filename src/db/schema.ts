@@ -231,3 +231,40 @@ export const bookDevices = sqliteTable("book_devices", {
   platform: text("platform").notNull(),
   addedAt: text("added_at").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// The library (src/lib/library.ts)
+// ---------------------------------------------------------------------------
+
+// Spec: LIB-1, LIB-3
+/** A paper or book in the library: its details. Its PDF is in `library_files`. */
+export const libraryItems = sqliteTable(
+  "library_items",
+  {
+    id: rowId("library_items"),
+    /** "paper" | "book" (`library.kinds`). */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    /** As written ("Ada Lovelace, Charles Babbage"). */
+    authors: text("authors").notNull().default(""),
+    year: integer("year"),
+    filename: text("filename").notNull(),
+    fileSize: integer("file_size").notNull(),
+    pages: integer("pages"),
+    addedAt: text("added_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("library_items_added").on(t.addedAt)],
+);
+
+// Spec: LIB-7
+/**
+ * A library item's PDF, byte for byte. Kept apart from `library_items` so
+ * listing the library never reads megabytes. Synced like everything else.
+ */
+export const libraryFiles = sqliteTable("library_files", {
+  /** The item's id: one file per item. */
+  itemId: text("item_id").primaryKey(),
+  mediaType: text("media_type").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+});

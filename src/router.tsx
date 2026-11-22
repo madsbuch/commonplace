@@ -9,6 +9,8 @@ const HistoryPage = lazy(() => import("./screens/HistoryPage"));
 const SettingsPage = lazy(() => import("./screens/SettingsPage"));
 const SyncPage = lazy(() => import("./screens/SyncPage"));
 const CostsPage = lazy(() => import("./screens/CostsPage"));
+const LibraryPage = lazy(() => import("./screens/LibraryPage"));
+const LibraryItemPage = lazy(() => import("./screens/LibraryItemPage"));
 
 function screen(node: ReactNode) {
   return <Suspense fallback={null}>{node}</Suspense>;
@@ -19,6 +21,7 @@ function screen(node: ReactNode) {
  * - `/`: the book's front (reopens the last page)
  * - `/page/:id`: a page, `#blk_…` scrolls to one of its blocks
  * - `/page/:id/history`: the page as it was
+ * - `/library`, `/library/:id`: the papers and books, and one of them
  * - `/settings`, `/sync`, `/costs`
  */
 export const router = createBrowserRouter([
@@ -28,6 +31,8 @@ export const router = createBrowserRouter([
       { path: "/", element: screen(<HomePage />) },
       { path: "/page/:id", element: screen(<PagePage />) },
       { path: "/page/:id/history", element: screen(<HistoryPage />) },
+      { path: "/library", element: screen(<LibraryPage />) },
+      { path: "/library/:id", element: screen(<LibraryItemPage />) },
       { path: "/settings", element: screen(<SettingsPage />) },
       { path: "/sync", element: screen(<SyncPage />) },
       { path: "/costs", element: screen(<CostsPage />) },

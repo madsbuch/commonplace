@@ -136,6 +136,23 @@ The book syncs peer to peer over the local network, as Tally does
 - `tsconfig.json` leaves `exactOptionalPropertyTypes` off: BlockNote's types
   don't hold under it.
 
+## The library
+
+- Papers and books (`src/lib/library.ts`): details in `library_items`, the
+  PDF's bytes in `library_files` (one per item, kept apart so listing never
+  reads megabytes). Both sync; removing an item deletes both rows.
+- The bytes go through Rust (`src-tauri/src/library.rs`) as raw IPC bodies:
+  `invoke("library_save_file", bytes, { headers })` and
+  `library_read_file` answering with `tauri::ipc::Response`. The SQL plugin
+  can only pass JSON. Writes made in Rust don't announce themselves, so the
+  caller calls `notifyTablesChanged`.
+- pdf.js (`src/lib/pdf.ts`, legacy build for the Android WebView) runs in a
+  bundled worker; its fonts, character maps, colour profiles and wasm decoders
+  are served from `/pdfjs/` by a plugin in `vite.config.ts`. The CSP allows
+  `'wasm-unsafe-eval'` for those decoders.
+- Details come from the PDF's own metadata when added (XMP first, then the
+  info dictionary); a PDF of 120 pages or more starts out as a book.
+
 ## AI
 
 Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat

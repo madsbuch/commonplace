@@ -41,12 +41,28 @@ function bindable(values: unknown): Bindable[] {
 
 if (import.meta.main) {
   const db = openBookDb(process.argv[2] ?? ":memory:");
-  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type" };
+  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type, x-item-id, x-media-type" };
   Bun.serve({
     port: PORT,
     async fetch(req) {
       if (req.method === "OPTIONS") return new Response(null, { headers: cors });
       const url = new URL(req.url);
+      if (url.pathname === "/raw") {
+        // A command whose argument is raw bytes (Tauri's binary IPC body).
+        const cmd = url.searchParams.get("cmd");
+        const bytes = new Uint8Array(await req.arrayBuffer());
+        if (cmd === "library_save_file") {
+          const head = new TextDecoder().decode(bytes.slice(0, 1024));
+          if (!head.includes("%PDF-")) return Response.json({ err: "the file isn't a PDF" }, { headers: cors });
+          db.query("INSERT OR REPLACE INTO library_files (item_id, media_type, data) VALUES (?, ?, ?)").run(
+            req.headers.get("x-item-id"),
+            req.headers.get("x-media-type") ?? "application/pdf",
+            bytes,
+          );
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        return Response.json({ err: `no raw command ${cmd ?? ""}` }, { headers: cors });
+      }
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -55,6 +71,14 @@ if (import.meta.main) {
       const { cmd, args } = z.object({ cmd: z.string(), args: z.record(z.string(), z.unknown()) }).parse(await req.json());
       try {
         let out: unknown = null;
+        if (cmd === "library_read_file") {
+          // Answered as raw bytes, as tauri::ipc::Response is.
+          const row = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(
+            db.query("SELECT data FROM library_files WHERE item_id = ?").get(String(args["itemId"])) ?? undefined,
+          );
+          if (!row) return Response.json({ err: "no PDF on this device" }, { headers: cors });
+          return new Response(row.data, { headers: { ...cors, "content-type": "application/octet-stream" } });
+        }
         if (cmd === "plugin:sql|load") out = args["db"];
         else if (cmd === "plugin:sql|execute") {
           const r = db.query(positional(String(args["query"]))).run(...bindable(args["values"]));

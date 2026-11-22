@@ -22,6 +22,7 @@ export function Layout() {
       >
         <PageTree />
         <div className="sidebar-footer">
+          <NavLink to="/library">Library</NavLink>
           <NavLink to="/sync">Sync</NavLink>
           <NavLink to="/costs">AI costs</NavLink>
           <NavLink to="/settings">Settings</NavLink>

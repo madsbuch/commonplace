@@ -1,6 +1,7 @@
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+mod library;
 mod sync;
 #[cfg(test)]
 mod test_db;
@@ -34,6 +35,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0001_sync.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "library",
+            sql: include_str!("../migrations/0002_library.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -46,6 +53,30 @@ async fn db_pool(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
         Some(DbPool::Sqlite(pool)) => Ok(pool.clone()),
         _ => Err("database not loaded".into()),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Library (src/library.rs): PDFs in and out, as raw bytes
+// ---------------------------------------------------------------------------
+
+/// Stores a library item's PDF: the bytes are the request body, the item's id
+/// and media type its `x-item-id` and `x-media-type` headers.
+#[tauri::command]
+async fn library_save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the PDF's bytes as the request body".into());
+    };
+    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let item_id = header("x-item-id").ok_or("missing x-item-id")?;
+    let media_type = header("x-media-type").unwrap_or_else(|| "application/pdf".into());
+    library::save(&db_pool(&app).await?, &item_id, &media_type, bytes).await
+}
+
+/// A library item's PDF, as raw bytes (an ArrayBuffer on the JS side).
+#[tauri::command]
+async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<tauri::ipc::Response, String> {
+    let bytes = library::read(&db_pool(&app).await?, &item_id).await?;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +221,8 @@ pub fn run() {
             sync_join,
             sync_now,
             sync_remove_device,
+            library_save_file,
+            library_read_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

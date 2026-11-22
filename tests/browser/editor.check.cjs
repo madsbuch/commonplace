@@ -153,6 +153,31 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("a block dragged onto a page in the sidebar moves there", item[0]?.page === "Probability", JSON.stringify(item));
     check("and leaves the page it came from", !(await page.locator(".bn-editor").innerText()).includes("an item"));
 
+    // Spec: LIB-2, LIB-4, LIB-5, LIB-6, LIB-8
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(800);
+    await page.locator("input[type=file]").setInputFiles(join(__dirname, "fixtures", "on-computable-numbers.pdf"));
+    await page.waitForURL(/\/library\/lib_/, { timeout: 10000 });
+    await page.waitForTimeout(1500);
+    const lib = await q("SELECT i.title, i.authors, i.year, i.kind, i.pages, length(f.data) AS size FROM library_items i JOIN library_files f ON f.item_id = i.id");
+    check("an uploaded PDF is in the library with its file", lib.length === 1 && lib[0].size === 1316, JSON.stringify(lib));
+    check(
+      "its title, authors and year come from the PDF",
+      lib[0]?.title === "On Computable Numbers" && lib[0]?.authors === "Alan Turing" && lib[0]?.year === 1936,
+      JSON.stringify(lib[0]),
+    );
+    check("the PDF is drawn in the viewer", (await page.locator(".pdf-page canvas").count()) >= 1);
+    check("the viewer counts its pages", (await page.locator(".pdf-toolbar").innerText()).includes("of 3"));
+    await page.getByRole("button", { name: "Details" }).click();
+    await page.locator(".library-details select").selectOption("book");
+    await page.waitForTimeout(500);
+    check("the author can change an item's details", (await q("SELECT kind FROM library_items"))[0]?.kind === "book");
+    await page.getByRole("button", { name: "Remove" }).click();
+    await page.getByRole("button", { name: "Really remove?" }).click();
+    await page.waitForURL(/\/library$/);
+    const left = await q("SELECT (SELECT count(*) FROM library_items) AS items, (SELECT count(*) FROM library_files) AS files");
+    check("removing an item removes its PDF", left[0].items === 0 && left[0].files === 0, JSON.stringify(left));
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();
