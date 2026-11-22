@@ -2752,6 +2752,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 name = "my-book"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "futures-core",
  "futures-util",
  "hex",
@@ -2771,6 +2772,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-opener",
  "tauri-plugin-sql",
+ "tauri-plugin-sync-background",
  "tokio",
 ]
 
@@ -5167,6 +5169,17 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "tauri-plugin-sync-background"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

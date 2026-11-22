@@ -5,6 +5,7 @@ import { MantineProvider } from "@mantine/core";
 import "@mantine/core/styles.css";
 import "katex/dist/katex.min.css";
 import { router } from "./router";
+import "./lib/syncBoot";
 import "./App.css";
 
 const root = document.getElementById("root");
