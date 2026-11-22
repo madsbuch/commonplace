@@ -90,11 +90,13 @@ async function load(chatId: string): Promise<void> {
     // Re-check when the other device's time is up.
     elsewhereTimer = setTimeout(() => void load(chatId), Math.min(until - Date.now() + 500, ANSWERING_ELSEWHERE_MS));
   }
+  const unanswered = until === 0 && awaitsAnswer(chat.messages);
   set({
     title: chat.summary.title,
     messages: chat.messages,
-    status: until > 0 ? "elsewhere" : awaitsAnswer(chat.messages) ? "error" : "idle",
-    error: until === 0 && awaitsAnswer(chat.messages) ? "This question wasn't answered." : null,
+    status: until > 0 ? "elsewhere" : unanswered ? "error" : "idle",
+    // A turn that failed here keeps its own reason; one found unanswered says so.
+    error: unanswered ? (state.status === "error" && state.error ? state.error : "This question wasn't answered.") : null,
     streaming: "",
     activeTools: [],
   });

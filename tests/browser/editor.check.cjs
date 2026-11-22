@@ -46,7 +46,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await waitFor(APP);
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
     const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("pageerror", (e) => errors.push(process.env.CHECK_SHOTS ? `${e.message}\n${e.stack}` : e.message));
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     await page.addInitScript({ path: join(__dirname, "fake-tauri-init.js") });
 
@@ -127,7 +127,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("the earliest moment shows the page before its blocks", (await page.locator(".history-page").innerText()).includes("empty"));
 
     // Spec: PAGE-4
-    await page.getByRole("button", { name: "+ New page" }).click();
+    await page.locator(".tree-new").click();
     await page.waitForTimeout(600);
     await page.locator(".page-title").fill("Probability");
     await page.waitForTimeout(800);
@@ -262,7 +262,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(2500);
     const asked = (await requests()).slice(before);
     const toolResult = JSON.stringify(asked[1]?.messages ?? []);
-    check("the assistant sees the page on screen and the block the cursor is in", toolResult.includes("Introduction") && toolResult.includes("cursor_block"), toolResult.slice(0, 160));
+    check("the assistant sees the page on screen and the block the cursor is in", toolResult.includes("# Simple types") && toolResult.includes("cursor_block"), JSON.stringify((asked[1]?.messages ?? []).filter((m) => m.role === "tool")).slice(0, 400) + ` | ${asked.length} requests`);
     check("an id in its answer shows as a chip with the title", (await page.locator(".assistant .entity-chip").allInnerTexts()).join() === "Simple types");
     check("the tools it used are shown with the answer", (await page.locator(".assistant .chat-activity").innerText()).includes("the screen"));
     const chats1 = await q("SELECT id, title, messages FROM chats");
@@ -309,7 +309,9 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.locator(".chat-screen textarea").fill("And one more thing?");
     await page.locator(".chat-screen textarea").press("Enter");
     await page.waitForTimeout(1500);
-    check("a failed turn says so and offers a retry", (await page.locator(".chat-screen .assistant-error").innerText()).includes("bad day"));
+    const failedText = await page.locator(".chat-screen").innerText();
+    if (process.env.CHECK_SHOTS && !failedText.includes("bad day")) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "failed-turn.png") });
+    check("a failed turn says so and offers a retry", failedText.includes("bad day"), failedText.slice(-300));
     await page.locator(".chat-screen .assistant-error button", { hasText: "Retry" }).click();
     await page.waitForTimeout(1500);
     check("retrying answers the question", (await page.locator(".chat-screen").innerText()).includes("Second time lucky."));

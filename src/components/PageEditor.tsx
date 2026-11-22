@@ -135,7 +135,8 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
   const moveOut = useCallback(
     async (editorBlockId: string, targetPageId: string) => {
       await flush();
-      await moveBlockToPage(dbId(editorBlockId), targetPageId);
+      // Out of the snapshot and the editor first: then neither a save nor a
+      // reload set off by the move itself can bring it back or trip over it.
       const gone = new Set<string>();
       const collect = (id: string) => {
         gone.add(id);
@@ -143,7 +144,8 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
       };
       collect(dbId(editorBlockId));
       for (const id of gone) snapshot.current.delete(id);
-      editor.removeBlocks([editorBlockId]);
+      if (editor.getBlock(editorBlockId)) editor.removeBlocks([editorBlockId]);
+      await moveBlockToPage(dbId(editorBlockId), targetPageId);
     },
     [editor, flush],
   );

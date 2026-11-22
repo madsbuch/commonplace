@@ -16,13 +16,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri-plugin-opener = "~2.7"
 serde = { version = "1", features = ["derive"] }
 # preserve_order keeps SELECT column order in plugin-sql row objects,
 # which Drizzle's sqlite-proxy relies on for positional row mapping.
 serde_json = { version = "1", features = ["preserve_order"] }
-tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
-tauri-plugin-http = "2.5.9"
+tauri-plugin-sql = { version = "~2.6", features = ["sqlite"] }
+tauri-plugin-http = "~2.8"
 # Sync (src/sync/), as in Tally.
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["sqlite"] }
