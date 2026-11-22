@@ -1,0 +1,57 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "People and institutions",
+  "summary": "Authors and institutions are linked across the library, so each can be opened.",
+  "order": 1,
+  "description": "The same authors and institutions turn up across many papers and books. Each is one record that every item links to, so following a person or a place shows everything the library has from them.",
+  "stories": [
+    {
+      "id": "US-11",
+      "as": "an author following the people and places behind ideas",
+      "want": "to click an author or an institution and see everything I have from them",
+      "soThat": "I can follow a line of work",
+      "requirements": [
+        "#PPL-1",
+        "#PPL-2",
+        "#PPL-3",
+        "#PPL-4"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "PPL-1",
+      "text": "Every author of an item is a person in the library, and every institution an author is listed with on an item is an institution in the library."
+    },
+    {
+      "id": "PPL-2",
+      "text": "A new item's authors and institutions are linked to existing ones when exactly one existing person or institution has a matching name: the same words ignoring case, accents and punctuation, or for a person the same surname with matching given names or initials."
+    },
+    {
+      "id": "PPL-3",
+      "text": "A person shows every item they wrote, the institutions they were listed with, and the people they wrote with."
+    },
+    {
+      "id": "PPL-4",
+      "text": "An institution shows every item with an author listed there, and those authors."
+    },
+    {
+      "id": "PPL-5",
+      "text": "The author can mark two people, or two institutions, as the same, and they become one everywhere.",
+      "related": [
+        "#SYN-11"
+      ]
+    },
+    {
+      "id": "PPL-6",
+      "text": "The author can rename a person or an institution."
+    },
+    {
+      "id": "PPL-7",
+      "text": "The author can add and remove an item's authors and their institutions, choosing existing people and institutions or new ones."
+    }
+  ],
+  "related": [
+    "library"
+  ]
+}

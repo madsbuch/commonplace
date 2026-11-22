@@ -11,7 +11,7 @@ import { fetch } from "@tauri-apps/plugin-http";
 import { recordAiUsage } from "./aiUsage";
 import type { AiFeature } from "./aiCost";
 import { fieldsOf } from "./guards";
-import { parseChatChunk, parseChatResponse, parseModelsResponse } from "./schemas";
+import { parseChatChunk, parseChatResponse, parseJson, parseModelsResponse } from "./schemas";
 import type { ChatMessage, ChatResponse, ORModel } from "./schemas";
 
 export type { ChatMessage, ORModel } from "./schemas";
@@ -248,6 +248,72 @@ export async function chat(apiKey: string, model: string, messages: ChatMessage[
       continue;
     }
     return state.text;
+  }
+  throw lastError;
+}
+
+/** Part of a message to a model: text, or an image (a data URL). */
+export type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
+/** A message whose content may mix text and images. */
+export interface RichMessage {
+  role: "system" | "user";
+  content: string | ContentPart[];
+}
+
+export interface JsonSchemaFormat {
+  /** A name for the schema, as OpenRouter's structured outputs want one. */
+  name: string;
+  /** A JSON Schema the answer must follow (strict: every property required, no others). */
+  schema: Record<string, unknown>;
+}
+
+// Spec: AI-1, AI-3
+/**
+ * One completion whose answer is JSON following `format` (structured
+ * outputs), not streamed. Returns the parsed JSON, still unchecked: parse it
+ * with a schema. Retries like `chat`.
+ */
+export async function chatJson(
+  apiKey: string,
+  model: string,
+  messages: RichMessage[],
+  format: JsonSchemaFormat,
+  opts: { feature: AiFeature; signal?: AbortSignal },
+): Promise<unknown> {
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    usage: { include: true },
+    response_format: { type: "json_schema", json_schema: { name: format.name, strict: true, schema: format.schema } },
+  };
+  let lastError: Error = new OpenRouterError("OpenRouter request failed", 0);
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+    if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
+    let res: Response;
+    try {
+      res = await post(apiKey, body, opts.signal);
+    } catch (e) {
+      if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
+      lastError = e instanceof Error ? e : new Error(String(e));
+      continue;
+    }
+    const json = parseChatResponse(await res.json().catch(() => ({})));
+    logUsage(opts.feature, model, usageOf(json));
+    if (!res.ok || json.error) {
+      const err = new OpenRouterError(json.error?.message ?? `HTTP ${res.status}`, res.status);
+      if (res.ok || !RETRYABLE_STATUS.has(res.status)) throw err;
+      lastError = err;
+      continue;
+    }
+    // Some models wrap the JSON in a code fence despite the format.
+    const text = contentToText(json.choices?.[0]?.message?.content).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+    try {
+      return parseJson(text);
+    } catch {
+      lastError = new OpenRouterError("The model's answer wasn't JSON", res.status);
+    }
   }
   throw lastError;
 }

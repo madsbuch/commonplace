@@ -38,7 +38,7 @@ export const LOCAL_TABLES = [
  * blocks before their revisions, so a device joining mid-way through has
  * whole pages, not orphans.
  */
-const FIRST = ["book_devices", "book_revocations", "settings", "blocks", "revisions", "library_items"];
+const FIRST = ["book_devices", "book_revocations", "settings", "blocks", "revisions", "library_items", "people", "institutions", "authorships", "affiliations"];
 const LAST = ["library_files"];
 
 /** Milliseconds since the epoch, from julianday (no unixepoch('subsec') on 3.39). */

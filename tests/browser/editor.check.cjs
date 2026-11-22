@@ -153,30 +153,100 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("a block dragged onto a page in the sidebar moves there", item[0]?.page === "Probability", JSON.stringify(item));
     check("and leaves the page it came from", !(await page.locator(".bn-editor").innerText()).includes("an item"));
 
-    // Spec: LIB-2, LIB-4, LIB-5, LIB-6, LIB-8
+    // Spec: LIB-2, LIB-4, LIB-6, LIB-10, LIB-12, PPL-1, AI-3
+    await q(`INSERT INTO settings (key, value) VALUES ('openrouter_api_key', 'sk-test')`);
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({
+        answer: {
+          title: "On Computable Numbers, with an Application to the Entscheidungsproblem",
+          authors: [{ name: "A. M. Turing", institutions: ["University of Cambridge"] }],
+          year: 1936,
+          kind: "paper",
+        },
+      }),
+    });
     await page.goto(APP + "/library");
     await page.waitForTimeout(800);
     await page.locator("input[type=file]").setInputFiles(join(__dirname, "fixtures", "on-computable-numbers.pdf"));
     await page.waitForURL(/\/library\/lib_/, { timeout: 10000 });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2500);
     const lib = await q("SELECT i.title, i.authors, i.year, i.kind, i.pages, length(f.data) AS size FROM library_items i JOIN library_files f ON f.item_id = i.id");
-    check("an uploaded PDF is in the library with its file", lib.length === 1 && lib[0].size === 1316, JSON.stringify(lib));
-    check(
-      "its title, authors and year come from the PDF",
-      lib[0]?.title === "On Computable Numbers" && lib[0]?.authors === "Alan Turing" && lib[0]?.year === 1936,
-      JSON.stringify(lib[0]),
-    );
+    check("an uploaded PDF is in the library with its file", lib.length === 1 && lib[0].size > 1000, JSON.stringify(lib));
+    check("the model's title and year are on the item", lib[0]?.title.startsWith("On Computable Numbers, with") && lib[0]?.year === 1936, JSON.stringify(lib[0]));
+    const sent = await (await fetch(`${FAKE}/fake-requests`)).json();
+    const ask = JSON.stringify(sent[0] ?? {});
+    check("the model is asked with the first pages' text and a JSON schema", ask.includes("On Computable Numbers - page 3") && ask.includes("json_schema") && ask.includes("claude-haiku"), ask.slice(0, 200));
+    const people1 = await q("SELECT p.name, i.name AS inst FROM authorships s JOIN people p ON p.id = s.person_id LEFT JOIN affiliations a ON a.authorship_id = s.id LEFT JOIN institutions i ON i.id = a.institution_id");
+    check("its authors and their institutions are linked records", people1.length === 1 && people1[0].name === "A. M. Turing" && people1[0].inst === "University of Cambridge", JSON.stringify(people1));
+    check("reading details is in the usage ledger", (await q("SELECT count(*) AS n FROM ai_usage WHERE feature = 'library_details'"))[0].n === 1);
     check("the PDF is drawn in the viewer", (await page.locator(".pdf-page canvas").count()) >= 1);
     check("the viewer counts its pages", (await page.locator(".pdf-toolbar").innerText()).includes("of 3"));
+    const first = page.url();
+
+    // Spec: PPL-2, PPL-3, PPL-4
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({
+        answer: {
+          title: "Computing Machinery and Intelligence",
+          authors: [
+            { name: "Alan Turing", institutions: ["university of cambridge"] },
+            { name: "Alonzo Church", institutions: ["Princeton University"] },
+          ],
+          year: 1950,
+          kind: "paper",
+        },
+      }),
+    });
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.locator("input[type=file]").setInputFiles(join(__dirname, "fixtures", "computing-machinery.pdf"));
+    await page.waitForURL((u) => /\/library\/lib_/.test(u.toString()) && u.toString() !== first, { timeout: 10000 });
+    await page.waitForTimeout(2500);
+    const sent2 = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json())[1] ?? {});
+    check("a PDF without text is sent as images of its first pages", sent2.includes("image_url") && sent2.includes("data:image/jpeg"), sent2.slice(0, 120));
+    const counts = await q("SELECT (SELECT count(*) FROM people) AS people, (SELECT count(*) FROM institutions) AS insts");
+    check("a new item's authors and institutions link to existing ones", counts[0].people === 2 && counts[0].insts === 2, JSON.stringify(counts));
+    await page.locator(".item-authors a", { hasText: "Turing" }).first().click();
+    await page.waitForURL(/\/library\/people\//);
+    await page.waitForTimeout(800);
+    const personText = await page.locator(".entity-screen").innerText();
+    check("a person shows everything they wrote", personText.includes("On Computable Numbers") && personText.includes("Computing Machinery"), personText.slice(0, 200));
+    check("and who they wrote with, and where", personText.includes("Alonzo Church") && personText.includes("University of Cambridge"));
+    await page.locator(".entity-screen a", { hasText: "University of Cambridge" }).click();
+    await page.waitForURL(/\/library\/institutions\//);
+    await page.waitForTimeout(800);
+    const instText = await page.locator(".entity-screen").innerText();
+    check("an institution shows its items and people", instText.includes("Computing Machinery") && instText.includes("Turing") && !instText.includes("Church"), instText.slice(0, 200));
+
+    // Spec: PPL-5
+    const second = (await q("SELECT id FROM library_items WHERE title = 'Computing Machinery and Intelligence'"))[0].id;
+    await q(`INSERT INTO people (id, name, created_at, updated_at) VALUES ('person_00000000000000000000000000', 'Turing the Second', '2026-01-01', '2026-01-01')`);
+    await q(`INSERT INTO authorships (id, item_id, person_id, position, created_at) VALUES ('authorship_00000000000000000000000000', '${second}', 'person_00000000000000000000000000', 9, '2026-01-01')`);
+    await page.goto(APP + "/library/people/person_00000000000000000000000000");
+    await page.waitForTimeout(800);
+    await page.getByRole("button", { name: "Same person as…" }).click();
+    await page.locator(".merge-box input").fill("Turing");
+    await page.waitForTimeout(300);
+    await page.locator(".name-picker-list button", { hasText: "A. M. Turing" }).click();
+    await page.waitForTimeout(800);
+    const merged = await q("SELECT merged_into FROM people WHERE id = 'person_00000000000000000000000000'");
+    check("two people marked the same become one", merged[0]?.merged_into?.startsWith("person_") && page.url().includes(merged[0].merged_into), JSON.stringify(merged));
+    check("the merged person's items show under the one", (await page.locator(".entity-screen").innerText()).includes("Computing Machinery"));
+
+    // Spec: LIB-5, LIB-8
+    await page.goto(APP + "/library/" + second);
+    await page.waitForTimeout(800);
     await page.getByRole("button", { name: "Details" }).click();
     await page.locator(".library-details select").selectOption("book");
     await page.waitForTimeout(500);
-    check("the author can change an item's details", (await q("SELECT kind FROM library_items"))[0]?.kind === "book");
-    await page.getByRole("button", { name: "Remove" }).click();
+    check("the author can change an item's details", (await q(`SELECT kind FROM library_items WHERE id = '${second}'`))[0]?.kind === "book");
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
     await page.getByRole("button", { name: "Really remove?" }).click();
     await page.waitForURL(/\/library$/);
-    const left = await q("SELECT (SELECT count(*) FROM library_items) AS items, (SELECT count(*) FROM library_files) AS files");
-    check("removing an item removes its PDF", left[0].items === 0 && left[0].files === 0, JSON.stringify(left));
+    const left = await q(`SELECT (SELECT count(*) FROM library_items WHERE id = '${second}') AS items, (SELECT count(*) FROM library_files WHERE item_id = '${second}') AS files, (SELECT count(*) FROM authorships WHERE item_id = '${second}') AS ships`);
+    check("removing an item removes its PDF and its authorships", left[0].items === 0 && left[0].files === 0 && left[0].ships === 0, JSON.stringify(left));
 
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {

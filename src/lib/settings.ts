@@ -21,3 +21,8 @@ export const DEVICE_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
 
 /** The assistant's model until the author picks one; must be on OpenRouter's list. */
 export const DEFAULT_ASSISTANT_MODEL = "anthropic/claude-sonnet-5.5";
+
+// Spec: LIB-10
+/** The model that reads a new library item's details (`library.details-model`). */
+export const DEFAULT_DETAILS_MODEL = "anthropic/claude-haiku-5.5";
+export const DETAILS_MODEL_KEY = "library_details_model";

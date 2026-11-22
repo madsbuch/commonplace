@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AuthorsEditor } from "../components/AuthorsEditor";
 import { PdfViewer } from "../components/PdfViewer";
+import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
 import { getItem, hasFile, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, removeItem, updateItem, type LibraryItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 
@@ -8,14 +10,12 @@ import { useTablesVersion } from "../lib/live";
 function Details(props: { item: LibraryItem }) {
   const { item } = props;
   const [title, setTitle] = useState(item.title);
-  const [authors, setAuthors] = useState(item.authors);
   const [year, setYear] = useState(item.year === null ? "" : String(item.year));
 
   useEffect(() => {
     setTitle(item.title);
-    setAuthors(item.authors);
     setYear(item.year === null ? "" : String(item.year));
-  }, [item.title, item.authors, item.year]);
+  }, [item.title, item.year]);
 
   const parsedYear = (): number | null => {
     const n = Number(year.trim());
@@ -27,10 +27,6 @@ function Details(props: { item: LibraryItem }) {
       <label>
         <span>Title</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => void updateItem(item.id, { title })} />
-      </label>
-      <label>
-        <span>Authors</span>
-        <input value={authors} placeholder="Unknown" onChange={(e) => setAuthors(e.target.value)} onBlur={() => void updateItem(item.id, { authors })} />
       </label>
       <div className="library-details-row">
         <label>
@@ -60,11 +56,26 @@ function Details(props: { item: LibraryItem }) {
           </select>
         </label>
       </div>
+      <AuthorsEditor itemId={item.id} editing />
     </div>
   );
 }
 
-// Spec: LIB-5, LIB-6, LIB-8
+/** What the model is doing with this item's details, if anything. */
+function DetailsStatusLine(props: { itemId: string }) {
+  const status = useDetailsStatus(props.itemId);
+  if (!status) return null;
+  if (status.state === "reading") return <p className="details-status">Reading the details…</p>;
+  if (status.state === "no-key")
+    return (
+      <p className="details-status">
+        The details came from the PDF itself. <Link to="/settings">Add an OpenRouter key</Link> to have a model read them.
+      </p>
+    );
+  return <p className="details-status failed">Reading the details failed: {status.message}</p>;
+}
+
+// Spec: LIB-5, LIB-6, LIB-8, LIB-11
 /** One paper or book: its details, editable, and its PDF. */
 export default function LibraryItemPage() {
   const { id = "" } = useParams();
@@ -121,7 +132,22 @@ export default function LibraryItemPage() {
           )}
         </div>
       </div>
-      {showDetails ? <Details item={item} /> : null}
+      <div className="item-head">
+        <AuthorsEditor itemId={item.id} editing={false} />
+        <p className="item-meta muted">{[item.year, KIND_NAMES[item.kind], item.pages ? `${item.pages} pages` : null].filter(Boolean).join(" · ")}</p>
+        <DetailsStatusLine itemId={item.id} />
+      </div>
+      {showDetails ? (
+        <>
+          <Details item={item} />
+          <div className="details-actions">
+            <button type="button" onClick={() => void readDetails(item.id)}>
+              Read details again
+            </button>
+            <span className="muted">The model reads the first pages and replaces the details above.</span>
+          </div>
+        </>
+      ) : null}
       {fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (

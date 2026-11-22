@@ -9,27 +9,39 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 9 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 61 >>
+<< /Length 528 >>
 stream
 BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 1) Tj ET
+BT /F1 11 Tf 72 680 Td (We describe the computable numbers: the real numbers whose expressions as a decimal) Tj ET
+BT /F1 11 Tf 72 664 Td (are calculable by finite means. Although the subject of this paper is ostensibly the) Tj ET
+BT /F1 11 Tf 72 648 Td (computable numbers, it is almost equally easy to define and investigate computable) Tj ET
+BT /F1 11 Tf 72 632 Td (functions of an integral variable or a real or computable variable, computable predicates.) Tj ET
 endstream
 endobj
 5 0 obj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 9 0 R >> >> >>
 endobj
 6 0 obj
-<< /Length 61 >>
+<< /Length 528 >>
 stream
 BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 2) Tj ET
+BT /F1 11 Tf 72 680 Td (We describe the computable numbers: the real numbers whose expressions as a decimal) Tj ET
+BT /F1 11 Tf 72 664 Td (are calculable by finite means. Although the subject of this paper is ostensibly the) Tj ET
+BT /F1 11 Tf 72 648 Td (computable numbers, it is almost equally easy to define and investigate computable) Tj ET
+BT /F1 11 Tf 72 632 Td (functions of an integral variable or a real or computable variable, computable predicates.) Tj ET
 endstream
 endobj
 7 0 obj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R /Resources << /Font << /F1 9 0 R >> >> >>
 endobj
 8 0 obj
-<< /Length 61 >>
+<< /Length 528 >>
 stream
 BT /F1 24 Tf 72 720 Td (On Computable Numbers - page 3) Tj ET
+BT /F1 11 Tf 72 680 Td (We describe the computable numbers: the real numbers whose expressions as a decimal) Tj ET
+BT /F1 11 Tf 72 664 Td (are calculable by finite means. Although the subject of this paper is ostensibly the) Tj ET
+BT /F1 11 Tf 72 648 Td (computable numbers, it is almost equally easy to define and investigate computable) Tj ET
+BT /F1 11 Tf 72 632 Td (functions of an integral variable or a real or computable variable, computable predicates.) Tj ET
 endstream
 endobj
 9 0 obj
@@ -45,14 +57,14 @@ xref
 0000000058 00000 n 
 0000000127 00000 n 
 0000000253 00000 n 
-0000000364 00000 n 
-0000000490 00000 n 
-0000000601 00000 n 
-0000000727 00000 n 
-0000000838 00000 n 
-0000000908 00000 n 
+0000000832 00000 n 
+0000000958 00000 n 
+0000001537 00000 n 
+0000001663 00000 n 
+0000002242 00000 n 
+0000002312 00000 n 
 trailer
 << /Size 11 /Root 1 0 R /Info 10 0 R >>
 startxref
-1017
+2421
 %%EOF

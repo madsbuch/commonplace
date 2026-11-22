@@ -19,7 +19,7 @@ before editing the spec).
   idea; don't bring one back without asking.
 - What isn't decided stays out of the spec. Ask instead of guessing.
 - Requirement id prefixes: `BOOK-` (book), `PAGE-` (pages), `BLK-` (blocks),
-  `PAR-`/`HEAD-`/`LIST-`/`CODE-` (block types), `LNK-` (links), `LIB-` (library), `AST-`
+  `PAR-`/`HEAD-`/`LIST-`/`CODE-` (block types), `LNK-` (links), `LIB-` (library), `PPL-` (people and institutions), `AST-`
   (assistant), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
   `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
   (sync triggers), `ID-` (row ids). Stories use `US-`. Requirements keep their
@@ -150,8 +150,25 @@ The book syncs peer to peer over the local network, as Tally does
   bundled worker; its fonts, character maps, colour profiles and wasm decoders
   are served from `/pdfjs/` by a plugin in `vite.config.ts`. The CSP allows
   `'wasm-unsafe-eval'` for those decoders.
-- Details come from the PDF's own metadata when added (XMP first, then the
-  info dictionary); a PDF of 120 pages or more starts out as a book.
+- Details are read by a model when an item is added (`src/lib/libraryDetails.ts`,
+  in the background after the upload): the first three pages' text, or JPEGs
+  of them for a scan, go to OpenRouter with a strict JSON schema
+  (`chatJson` in `src/lib/openrouter.ts`); the prompt, schema and answer
+  parsing are in `src/lib/libraryDetailsModel.ts`. The default model is
+  `anthropic/claude-haiku-5.5`, changeable in Settings (synced). Without a
+  key, or when the call fails, the PDF's own metadata stands (XMP first,
+  then the info dictionary; a PDF of 120 pages or more starts as a book).
+  Logged in the ledger as `library_details`.
+- Authors and institutions are records (`people`, `institutions`), linked to
+  items through `authorships` (ordered) and `affiliations` (an author's
+  institutions on one item). New names link to an existing record when
+  exactly one matches (`src/lib/peopleModel.ts`: same normalised words, or
+  for people the same surname with agreeing first names or initials).
+  Merging sets `merged_into` instead of rewriting links, so links made
+  concurrently elsewhere still land; readers resolve chains, and a cycle
+  from merges on two devices resolves to its smallest id everywhere.
+  `library_items.authors` is a display line kept in step with the
+  authorships (lists and search read it).
 
 ## AI
 

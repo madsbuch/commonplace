@@ -268,3 +268,53 @@ export const libraryFiles = sqliteTable("library_files", {
   mediaType: text("media_type").notNull(),
   data: blob("data", { mode: "buffer" }).notNull(),
 });
+
+// Spec: PPL-1, PPL-5
+/**
+ * An author, linked from every item they wrote (`authorships`). Two people
+ * found to be the same are merged by pointing one at the other
+ * (`merged_into`) rather than rewriting the links: a link added on another
+ * device to the merged one, before it heard of the merge, still arrives at
+ * the right person. Chains and cycles are resolved on reading
+ * (src/lib/people.ts).
+ */
+export const people = sqliteTable("people", {
+  id: rowId("people"),
+  name: text("name").notNull(),
+  mergedInto: text("merged_into"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** An institution authors are listed with. Merged the way people are. */
+export const institutions = sqliteTable("institutions", {
+  id: rowId("institutions"),
+  name: text("name").notNull(),
+  mergedInto: text("merged_into"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/** A person as an author of an item, in the item's author order. */
+export const authorships = sqliteTable(
+  "authorships",
+  {
+    id: rowId("authorships"),
+    itemId: text("item_id").notNull(),
+    personId: text("person_id").notNull(),
+    position: integer("position").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("authorships_item").on(t.itemId), index("authorships_person").on(t.personId)],
+);
+
+/** An institution an author is listed with on one item. */
+export const affiliations = sqliteTable(
+  "affiliations",
+  {
+    id: rowId("affiliations"),
+    authorshipId: text("authorship_id").notNull(),
+    institutionId: text("institution_id").notNull(),
+  },
+  (t) => [index("affiliations_authorship").on(t.authorshipId), index("affiliations_institution").on(t.institutionId)],
+);

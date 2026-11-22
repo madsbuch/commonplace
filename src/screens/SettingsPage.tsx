@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ModelPicker, modelSub } from "../components/ModelPicker";
+import { getDetailsModel, saveDetailsModel } from "../lib/libraryDetails";
 import {
   getApiKey,
   getAssistantModel,
@@ -44,14 +45,17 @@ export default function SettingsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [detailsModel, setDetailsModel] = useState<string | null>(null);
+  const [pickingDetails, setPickingDetails] = useState(false);
   const booted = useRef(false);
 
   useEffect(() => {
     let live = true;
-    void Promise.all([getApiKey(), getAssistantModel()]).then(([key, m]) => {
+    void Promise.all([getApiKey(), getAssistantModel(), getDetailsModel()]).then(([key, m, d]) => {
       if (!live) return;
       setSavedKey(key);
       setModel(m);
+      setDetailsModel(d);
     });
     return () => {
       live = false;
@@ -218,6 +222,35 @@ export default function SettingsPage() {
           )}
         </p>
         {refreshError && <p className="ai-error">Couldn't fetch the model list: {refreshError}</p>}
+      </section>
+
+      {/* Spec: LIB-10 */}
+      <section className="ai-section">
+        <h2>Library details model</h2>
+        <p className="muted ai-small">Reads a new paper's or book's first pages for its title, authors, institutions and year.</p>
+        <div className="ai-row">
+          <div className="model-current">
+            <div className="model-name">{models.find((m) => m.id === detailsModel)?.name ?? detailsModel ?? "…"}</div>
+            <div className="model-sub">{(() => {
+              const m = models.find((x) => x.id === detailsModel);
+              return m ? modelSub(m) : detailsModel;
+            })()}</div>
+          </div>
+          <button type="button" className="ai-button ghost" onClick={() => setPickingDetails((p) => !p)}>
+            {pickingDetails ? "Done" : "Change"}
+          </button>
+        </div>
+        {pickingDetails && (
+          <ModelPicker
+            models={models}
+            selected={detailsModel ?? ""}
+            onSelect={(id) => {
+              setDetailsModel(id);
+              setPickingDetails(false);
+              void saveDetailsModel(id);
+            }}
+          />
+        )}
       </section>
 
       <section className="ai-section">

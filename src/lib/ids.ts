@@ -17,6 +17,10 @@ export const ID_PREFIXES = {
   revisions: "rev",
   ai_usage: "ai_usage",
   library_items: "lib",
+  people: "person",
+  institutions: "institution",
+  authorships: "authorship",
+  affiliations: "affiliation",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;

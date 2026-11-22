@@ -12,6 +12,7 @@ import { execute, nowIso, select } from "./db";
 import { newId } from "./ids";
 import { notifyTablesChanged } from "./live";
 import { isPdf, openPdf, pdfDetails } from "./pdf";
+import { removeItemAuthors } from "./people";
 
 // Spec: LIB-3
 /** `library.kinds` in the spec, as stored. */
@@ -120,6 +121,8 @@ export async function addFile(file: File): Promise<string> {
     ],
   );
   notifyTablesChanged(LIBRARY_TABLES);
+  // The model reads the rest in the background; the item is there meanwhile.
+  void import("./libraryDetails").then(({ readDetails }) => readDetails(id, { bytes, metadataAuthors: details.authors }));
   return id;
 }
 
@@ -143,6 +146,7 @@ export async function updateItem(id: string, patch: { kind?: Kind; title?: strin
 // Spec: LIB-8
 /** Removes an item and its PDF from the library, on every device. */
 export async function removeItem(id: string): Promise<void> {
+  await removeItemAuthors(id);
   await execute(`DELETE FROM library_files WHERE item_id = $1`, [id]);
   await execute(`DELETE FROM library_items WHERE id = $1`, [id]);
 }

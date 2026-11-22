@@ -8,12 +8,13 @@
  * tested without a database. Adapted from Tally.
  */
 
-export const AI_FEATURES = ["assistant", "connection_test"] as const;
+export const AI_FEATURES = ["assistant", "library_details", "connection_test"] as const;
 
 export type AiFeature = (typeof AI_FEATURES)[number];
 
 const FEATURE_INFO: Record<AiFeature, { label: string; detail: string }> = {
   assistant: { label: "Writing assistant", detail: "Questions, critique and quizzes about a page" },
+  library_details: { label: "Library details", detail: "Reading a new paper's or book's title, authors and year" },
   connection_test: { label: "Connection tests", detail: "Testing the API key in Settings" },
 };
 

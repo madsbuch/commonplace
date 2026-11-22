@@ -16,6 +16,16 @@
         "#LIB-6",
         "#LIB-7"
       ]
+    },
+    {
+      "id": "US-12",
+      "as": "an author adding papers in bulk",
+      "want": "their details filled in for me",
+      "soThat": "I never type in a title or an author list",
+      "requirements": [
+        "#LIB-4",
+        "#LIB-11"
+      ]
     }
   ],
   "requirements": [
@@ -33,7 +43,19 @@
     },
     {
       "id": "LIB-4",
-      "text": "When an item is added, its title, authors and year are taken from the PDF's own metadata where the PDF has them."
+      "text": "When an item is added, a model reads its first pages and fills in its title, authors, the authors' institutions, its year and its kind.",
+      "history": [
+        {
+          "version": 1,
+          "text": "When an item is added, its title, authors and year are taken from the PDF's own metadata where the PDF has them.",
+          "reason": "The author won't type details in, and a PDF's own metadata is often missing or wrong.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2,
+      "related": [
+        "library/people"
+      ]
     },
     {
       "id": "LIB-5",
@@ -57,6 +79,28 @@
     {
       "id": "LIB-8",
       "text": "The author can remove an item, and its PDF with it, from the library."
+    },
+    {
+      "id": "LIB-9",
+      "text": "Where no model can be asked (no key, no network), an item's details are taken from the PDF's own metadata."
+    },
+    {
+      "id": "LIB-10",
+      "text": "Details are read with `library.details-model` unless the author chose another model.",
+      "related": [
+        "#AI-1"
+      ]
+    },
+    {
+      "id": "LIB-11",
+      "text": "The model reads an item's details when it is added, and again only when the author asks."
+    },
+    {
+      "id": "LIB-12",
+      "text": "Only the text of an item's first `library.details-pages` pages goes to the model, or images of them when the PDF has no text.",
+      "related": [
+        "#AI-6"
+      ]
     }
   ],
   "values": [
@@ -75,6 +119,19 @@
       "value": 100,
       "unit": "MB",
       "description": "The largest PDF the library takes, so one file always fits a sync message."
+    },
+    {
+      "id": "library.details-model",
+      "type": "text",
+      "value": "anthropic/claude-haiku-5.5",
+      "description": "The model that reads a new item's details, until the author picks another."
+    },
+    {
+      "id": "library.details-pages",
+      "type": "number",
+      "value": 3,
+      "unit": "pages",
+      "description": "How many of a PDF's first pages the model reads for its details."
     }
   ]
 }

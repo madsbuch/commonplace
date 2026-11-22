@@ -11,6 +11,8 @@ const SyncPage = lazy(() => import("./screens/SyncPage"));
 const CostsPage = lazy(() => import("./screens/CostsPage"));
 const LibraryPage = lazy(() => import("./screens/LibraryPage"));
 const LibraryItemPage = lazy(() => import("./screens/LibraryItemPage"));
+const PersonPage = lazy(() => import("./screens/PersonPage"));
+const InstitutionPage = lazy(() => import("./screens/InstitutionPage"));
 
 function screen(node: ReactNode) {
   return <Suspense fallback={null}>{node}</Suspense>;
@@ -22,6 +24,7 @@ function screen(node: ReactNode) {
  * - `/page/:id`: a page, `#blk_…` scrolls to one of its blocks
  * - `/page/:id/history`: the page as it was
  * - `/library`, `/library/:id`: the papers and books, and one of them
+ * - `/library/people/:id`, `/library/institutions/:id`: a person, an institution
  * - `/settings`, `/sync`, `/costs`
  */
 export const router = createBrowserRouter([
@@ -33,6 +36,8 @@ export const router = createBrowserRouter([
       { path: "/page/:id/history", element: screen(<HistoryPage />) },
       { path: "/library", element: screen(<LibraryPage />) },
       { path: "/library/:id", element: screen(<LibraryItemPage />) },
+      { path: "/library/people/:id", element: screen(<PersonPage />) },
+      { path: "/library/institutions/:id", element: screen(<InstitutionPage />) },
       { path: "/settings", element: screen(<SettingsPage />) },
       { path: "/sync", element: screen(<SyncPage />) },
       { path: "/costs", element: screen(<CostsPage />) },

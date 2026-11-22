@@ -8,6 +8,7 @@
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
+import { parseJson } from "../../src/lib/schemas";
 
 const PORT = Number(process.env["FAKE_TAURI_PORT"] ?? 1430);
 const root = new URL("../../", import.meta.url);
@@ -39,6 +40,53 @@ function bindable(values: unknown): Bindable[] {
   });
 }
 
+/**
+ * Tauri's HTTP plugin, stood in for: requests to OpenRouter get canned
+ * answers (the model's reply set with POST /fake-model), and every chat
+ * request is kept for the checks to read (GET /fake-requests).
+ */
+interface PendingResponse {
+  bytes: Uint8Array;
+  sent: boolean;
+}
+const requests = new Map<number, { url: string; body: string }>();
+const responses = new Map<number, PendingResponse>();
+const chatRequests: unknown[] = [];
+let modelAnswer: unknown = { title: "A title", authors: [], year: null, kind: "paper" };
+let nextRid = 1;
+
+function httpCommand(cmd: string, args: Record<string, unknown>): unknown {
+  if (cmd === "plugin:http|fetch") {
+    const config = z.object({ url: z.string(), data: z.array(z.number()).nullable().optional() }).parse(args["clientConfig"]);
+    const rid = nextRid++;
+    requests.set(rid, { url: config.url, body: config.data ? new TextDecoder().decode(Uint8Array.from(config.data)) : "" });
+    return rid;
+  }
+  if (cmd === "plugin:http|fetch_send") {
+    const rid = z.number().parse(args["rid"]);
+    const req = requests.get(rid);
+    let body: unknown = { data: [] };
+    if (req?.url.endsWith("/chat/completions")) {
+      const sent = parseJson(req.body);
+      chatRequests.push(sent);
+      body = {
+        choices: [{ message: { content: JSON.stringify(modelAnswer) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1200, completion_tokens: 80, cost: 0.00016 },
+      };
+    }
+    const out = nextRid++;
+    responses.set(out, { bytes: new TextEncoder().encode(JSON.stringify(body)), sent: false });
+    return { status: 200, statusText: "OK", url: req?.url ?? "", headers: [["content-type", "application/json"]], rid: out };
+  }
+  if (cmd === "plugin:http|fetch_read_body") {
+    const r = responses.get(z.number().parse(args["rid"]));
+    if (!r || r.sent) return [1];
+    r.sent = true;
+    return [...r.bytes, 0];
+  }
+  return null;
+}
+
 if (import.meta.main) {
   const db = openBookDb(process.argv[2] ?? ":memory:");
   const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type, x-item-id, x-media-type" };
@@ -63,6 +111,11 @@ if (import.meta.main) {
         }
         return Response.json({ err: `no raw command ${cmd ?? ""}` }, { headers: cors });
       }
+      if (url.pathname === "/fake-model") {
+        modelAnswer = z.object({ answer: z.unknown() }).parse(await req.json()).answer;
+        return Response.json({ ok: true }, { headers: cors });
+      }
+      if (url.pathname === "/fake-requests") return Response.json(chatRequests, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -79,6 +132,7 @@ if (import.meta.main) {
           if (!row) return Response.json({ err: "no PDF on this device" }, { headers: cors });
           return new Response(row.data, { headers: { ...cors, "content-type": "application/octet-stream" } });
         }
+        if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
         if (cmd === "plugin:sql|load") out = args["db"];
         else if (cmd === "plugin:sql|execute") {
           const r = db.query(positional(String(args["query"]))).run(...bindable(args["values"]));
