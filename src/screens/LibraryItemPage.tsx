@@ -151,7 +151,7 @@ export default function LibraryItemPage() {
       {fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (
-        <PdfViewer load={load} />
+        <PdfViewer load={load} itemId={id} />
       ) : null}
     </div>
   );

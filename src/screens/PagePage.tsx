@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AssistantPanel } from "../components/AssistantPanel";
 import { PageEditor } from "../components/PageEditor";
 import { PagePicker } from "../components/PagePicker";
-import { createPage, deletePage, loadPage, movePage, pageMarkdown, renamePage, type LoadedPage } from "../lib/book";
+import { createPage, deletePage, loadPage, movePage, renamePage, type LoadedPage } from "../lib/book";
+import { toggleDock, useDockOpen } from "../lib/dock";
 import { setSetting } from "../lib/db";
 import { flushOpenEditor } from "../lib/editorBridge";
 import { pagePath } from "../lib/navigation";
@@ -68,7 +68,7 @@ export default function PagePage() {
   const navigate = useNavigate();
   const index = usePageIndex();
   const [loaded, setLoaded] = useState<LoadedPage | null | "missing">(null);
-  const [assistant, setAssistant] = useState(false);
+  const assistant = useDockOpen();
   const [moving, setMoving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const title = index.titles.get(id) ?? (loaded && loaded !== "missing" ? loaded.title : UNTITLED);
@@ -86,11 +86,6 @@ export default function PagePage() {
     };
   }, [id]);
 
-  const getPageMarkdown = useCallback(async () => {
-    await flushOpenEditor();
-    return pageMarkdown(id);
-  }, [id]);
-
   if (loaded === "missing") {
     return (
       <div className="screen">
@@ -104,7 +99,7 @@ export default function PagePage() {
   const crumbs = breadcrumbs(index, id).slice(0, -1);
 
   return (
-    <div className={assistant ? "page-with-assistant" : undefined}>
+    <div>
       <div className="screen page-screen">
         <div className="page-bar">
           <nav className="crumbs" aria-label="Breadcrumbs">
@@ -116,7 +111,7 @@ export default function PagePage() {
             ))}
           </nav>
           <div className="page-actions">
-            <button type="button" onClick={() => setAssistant((a) => !a)} aria-pressed={assistant}>
+            <button type="button" onClick={toggleDock} aria-pressed={assistant}>
               Assistant
             </button>
             <Link to={`${pagePath(id)}/history`} className="button-link">
@@ -162,9 +157,6 @@ export default function PagePage() {
           </>
         )}
       </div>
-      {assistant ? (
-        <AssistantPanel pageId={id} pageTitle={title} getPageMarkdown={getPageMarkdown} onClose={() => setAssistant(false)} />
-      ) : null}
       {moving ? (
         <PagePicker
           title="Move page into"

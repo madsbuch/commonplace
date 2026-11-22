@@ -11,7 +11,6 @@ import { z } from "zod";
 import { execute, nowIso, select } from "./db";
 import { newId } from "./ids";
 import { notifyTablesChanged } from "./live";
-import { isPdf, openPdf, pdfDetails } from "./pdf";
 import { removeItemAuthors } from "./people";
 
 // Spec: LIB-3
@@ -78,6 +77,10 @@ export async function hasFile(id: string): Promise<boolean> {
   return (await select(`SELECT 1 AS one FROM library_files WHERE item_id = $1`, [id])).length > 0;
 }
 
+function isPdf(file: File): boolean {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
 /** Why `file` can't be added, or null. */
 export function problemWith(file: File): string | null {
   if (!isPdf(file)) return `${file.name} isn't a PDF.`;
@@ -96,7 +99,8 @@ export async function addFile(file: File): Promise<string> {
   const problem = problemWith(file);
   if (problem) throw new Error(problem);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  // pdf.js takes over the buffer it's given: hand it a copy.
+  // pdf.js loads when first needed, and takes over the buffer it's given: hand it a copy.
+  const { openPdf, pdfDetails } = await import("./pdf");
   const pdf = await openPdf(bytes.slice());
   const details = await pdfDetails(pdf.doc);
   pdf.close();

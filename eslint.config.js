@@ -110,12 +110,20 @@ export default tseslint.config(
     },
   },
   {
-    // Spec: AST-2
-    // The writing assistant never adds or changes text in the book. Its
-    // modules can't reach the book's data at all: the page comes in as text
-    // from the page screen, and the only thing they write (through
-    // lib/openrouter.ts) is the usage ledger.
-    files: ["src/components/AssistantPanel.tsx", "src/lib/assistant*.ts"],
+    // Spec: AST-2, ATL-5
+    // The assistant never adds or changes anything in the book or the
+    // library. Its modules can't reach their data layers at all: they read
+    // through lib/lookup.ts, which has no writes, and write only their chats
+    // (lib/chats.ts), their memory (lib/memory.ts) and, through
+    // lib/openrouter.ts, the usage ledger.
+    files: [
+      "src/lib/assistant*.ts",
+      "src/lib/entities.ts",
+      "src/components/ChatView.tsx",
+      "src/components/AssistantDock.tsx",
+      "src/components/Markdown.tsx",
+      "src/components/EntityChip.tsx",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -127,8 +135,8 @@ export default tseslint.config(
           ],
           patterns: [
             {
-              regex: "(^|/)(db|book[^/]*|blocks[^/]*|revisions[^/]*)(\\.ts)?$|(^|/)db/",
-              message: "The assistant never adds or changes text in the book, so it can't import the book's data layer (AST-2).",
+              regex: "(^|/)(db|book[^/]*|blocks[^/]*|revisions[^/]*|library[^/]*|people[^/]*)(\\.ts)?$|(^|/)db/",
+              message: "The assistant never changes the book or the library: read them through lib/lookup.ts (AST-2, ATL-5).",
             },
           ],
         },

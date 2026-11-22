@@ -160,3 +160,57 @@ const UsageRowSchema = z.object({
 export function parseUsageRows(raw: unknown): z.infer<typeof UsageRowSchema>[] {
   return z.array(UsageRowSchema).parse(raw);
 }
+
+// ---------------------------------------------------------------------------
+// Chat transcripts (persisted in `chats.messages`; OpenAI-style messages)
+// ---------------------------------------------------------------------------
+
+export const ToolCallSchema = z.object({
+  id: z.string(),
+  type: z.literal("function"),
+  function: z.object({ name: z.string(), arguments: z.string() }),
+});
+export type ToolCall = z.infer<typeof ToolCallSchema>;
+
+/** One message of a chat transcript: the author's, the assistant's (maybe calling tools), or a tool's result. */
+export const TranscriptMessageSchema = z.discriminatedUnion("role", [
+  z.object({ role: z.literal("user"), content: z.string(), action: z.string().optional() }),
+  z.object({ role: z.literal("assistant"), content: z.string().nullable(), tool_calls: z.array(ToolCallSchema).optional() }),
+  z.object({ role: z.literal("tool"), tool_call_id: z.string(), content: z.string() }),
+]);
+export type TranscriptMessage = z.infer<typeof TranscriptMessageSchema>;
+
+// Spec: CHAT-1
+/** A stored transcript; strict, so a corrupt one shows up as null rather than as a wrong chat. */
+export function parseTranscript(raw: string): TranscriptMessage[] | null {
+  try {
+    const r = z.array(TranscriptMessageSchema).safeParse(parseJson(raw));
+    return r.success ? r.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A tool call's arguments: an object, or `{}` when the model sent something else. */
+export function parseToolArgs(raw: string): Record<string, unknown> {
+  try {
+    const r = z.record(z.string(), z.unknown()).safeParse(parseJson(raw));
+    return r.success ? r.data : {};
+  } catch {
+    return {};
+  }
+}
+
+const ToolCallDeltaSchema = z.object({
+  index: z.number().catch(0),
+  id: z.string().optional().catch(undefined),
+  function: z.object({ name: z.string().optional().catch(undefined), arguments: z.string().optional().catch(undefined) }).optional().catch(undefined),
+});
+
+/** The tool-call pieces in one streamed chunk (forgiving: a malformed piece is dropped). */
+export function parseToolCallDeltas(chunk: unknown): z.infer<typeof ToolCallDeltaSchema>[] {
+  const r = z
+    .object({ choices: z.array(z.object({ delta: z.object({ tool_calls: z.array(ToolCallDeltaSchema).optional() }).optional() })).optional() })
+    .safeParse(chunk);
+  return r.success ? (r.data.choices?.[0]?.delta?.tool_calls ?? []) : [];
+}

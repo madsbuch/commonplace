@@ -13,6 +13,9 @@ const LibraryPage = lazy(() => import("./screens/LibraryPage"));
 const LibraryItemPage = lazy(() => import("./screens/LibraryItemPage"));
 const PersonPage = lazy(() => import("./screens/PersonPage"));
 const InstitutionPage = lazy(() => import("./screens/InstitutionPage"));
+const ChatsPage = lazy(() => import("./screens/ChatsPage"));
+const ChatPage = lazy(() => import("./screens/ChatPage"));
+const MemoryPage = lazy(() => import("./screens/MemoryPage"));
 
 function screen(node: ReactNode) {
   return <Suspense fallback={null}>{node}</Suspense>;
@@ -25,6 +28,7 @@ function screen(node: ReactNode) {
  * - `/page/:id/history`: the page as it was
  * - `/library`, `/library/:id`: the papers and books, and one of them
  * - `/library/people/:id`, `/library/institutions/:id`: a person, an institution
+ * - `/chats`, `/chats/:id`, `/memory`: the assistant's chats, one chat, its memory
  * - `/settings`, `/sync`, `/costs`
  */
 export const router = createBrowserRouter([
@@ -38,6 +42,9 @@ export const router = createBrowserRouter([
       { path: "/library/:id", element: screen(<LibraryItemPage />) },
       { path: "/library/people/:id", element: screen(<PersonPage />) },
       { path: "/library/institutions/:id", element: screen(<InstitutionPage />) },
+      { path: "/chats", element: screen(<ChatsPage />) },
+      { path: "/chats/:id", element: screen(<ChatPage />) },
+      { path: "/memory", element: screen(<MemoryPage />) },
       { path: "/settings", element: screen(<SettingsPage />) },
       { path: "/sync", element: screen(<SyncPage />) },
       { path: "/costs", element: screen(<CostsPage />) },

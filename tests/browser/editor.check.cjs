@@ -248,6 +248,80 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const left = await q(`SELECT (SELECT count(*) FROM library_items WHERE id = '${second}') AS items, (SELECT count(*) FROM library_files WHERE item_id = '${second}') AS files, (SELECT count(*) FROM authorships WHERE item_id = '${second}') AS ships`);
     check("removing an item removes its PDF and its authorships", left[0].items === 0 && left[0].files === 0 && left[0].ships === 0, JSON.stringify(left));
 
+    // Spec: CHAT-1, CHAT-3, CHAT-6, CHAT-7, ATL-1
+    const chat = (replies) => fetch(`${FAKE}/fake-chat`, { method: "POST", body: JSON.stringify({ replies }) });
+    const requests = async () => (await fetch(`${FAKE}/fake-requests`)).json();
+    const before = (await requests()).length;
+    await chat([{ tools: [{ name: "look_at_screen" }] }, { text: `It defines the identity: ${parent}.` }]);
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    await page.locator(".bn-editor h1").click();
+    await page.getByRole("button", { name: "Open the assistant" }).click();
+    await page.locator(".assistant textarea").fill("What is this page about?");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(2500);
+    const asked = (await requests()).slice(before);
+    const toolResult = JSON.stringify(asked[1]?.messages ?? []);
+    check("the assistant sees the page on screen and the block the cursor is in", toolResult.includes("Introduction") && toolResult.includes("cursor_block"), toolResult.slice(0, 160));
+    check("an id in its answer shows as a chip with the title", (await page.locator(".assistant .entity-chip").allInnerTexts()).join() === "Simple types");
+    check("the tools it used are shown with the answer", (await page.locator(".assistant .chat-activity").innerText()).includes("the screen"));
+    const chats1 = await q("SELECT id, title, messages FROM chats");
+    check("the chat is kept, titled by its first question", chats1.length === 1 && chats1[0].title === "What is this page about?" && JSON.parse(chats1[0].messages).length === 4, JSON.stringify(chats1.map((c) => c.title)));
+
+    // Spec: ATL-1, ATL-3
+    const libId = (await q("SELECT id FROM library_items LIMIT 1"))[0].id;
+    await chat([{ tools: [{ name: "look_at_screen" }, { name: "read_pdf_pages", arguments: { item_id: libId, from_page: 2, to_page: 3 } }] }, { text: "Done." }]);
+    await page.goto(APP + "/library/" + libId);
+    await page.waitForTimeout(1500);
+    await page.locator(".assistant textarea").fill("Explain the page I'm on.");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(2500);
+    const libAsk = JSON.stringify((await requests()).slice(-1)[0]?.messages ?? []);
+    check("on a library item it sees the PDF page in view, with its text", libAsk.includes("pdf_page_in_view") && libAsk.includes("page 1"), libAsk.slice(-300));
+    check("it reads other pages of the PDF", libAsk.includes("page 3") && libAsk.includes("pages_in_pdf"));
+
+    // Spec: MEM-1, MEM-2, MEM-3, MEM-4
+    await chat([{ tools: [{ name: "remember", arguments: { kind: "preference", text: "Be blunt about weak arguments." } }] }, { text: "Noted." }]);
+    await page.locator(".assistant textarea").fill("Remember: be blunt about weak arguments.");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(2000);
+    check("it keeps what it's asked to remember", (await q("SELECT text FROM assistant_memory"))[0]?.text === "Be blunt about weak arguments.");
+    await chat([{ text: "Hello again." }]);
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await page.waitForTimeout(300);
+    await page.locator(".assistant textarea").fill("Hi");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(1500);
+    check("a new chat starts with the memory", JSON.stringify((await requests()).slice(-1)[0]?.messages ?? []).includes("Be blunt about weak arguments."));
+    await page.goto(APP + "/memory");
+    await page.waitForTimeout(800);
+    check("the memory is shown on its own screen", (await page.locator(".memory-entry textarea").first().inputValue()) === "Be blunt about weak arguments.");
+
+    // Spec: CHAT-2, CHAT-4
+    await chat([{ error: "The model is having a bad day" }, { text: "Second time lucky." }]);
+    await page.goto(APP + "/chats");
+    await page.waitForTimeout(800);
+    check("the chats are listed", (await page.locator(".chat-row").count()) === 2);
+    await page.locator(".chat-row a", { hasText: "What is this page about?" }).click();
+    await page.waitForURL(/\/chats\/chat_/);
+    await page.waitForTimeout(800);
+    check("a chat has its own address, and shows its thread", (await page.locator(".chat-screen .assistant-turn").count()) >= 6);
+    await page.locator(".chat-screen textarea").fill("And one more thing?");
+    await page.locator(".chat-screen textarea").press("Enter");
+    await page.waitForTimeout(1500);
+    check("a failed turn says so and offers a retry", (await page.locator(".chat-screen .assistant-error").innerText()).includes("bad day"));
+    await page.locator(".chat-screen .assistant-error button", { hasText: "Retry" }).click();
+    await page.waitForTimeout(1500);
+    check("retrying answers the question", (await page.locator(".chat-screen").innerText()).includes("Second time lucky."));
+
+    // Spec: CHAT-1
+    await page.goto(APP + "/chats");
+    await page.waitForTimeout(600);
+    await page.locator(".chat-row").first().getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("button", { name: "Really delete?" }).click();
+    await page.waitForTimeout(600);
+    check("a chat can be deleted, and the memory stays", (await q("SELECT count(*) AS n FROM chats"))[0].n === 1 && (await q("SELECT count(*) AS n FROM assistant_memory"))[0].n === 1);
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

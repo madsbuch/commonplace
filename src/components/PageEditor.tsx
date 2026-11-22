@@ -21,6 +21,7 @@ import { dbId, editorId } from "../blocks/ids";
 import { applySave, loadPage, moveBlockToPage, searchLinkTargets, type LoadedPage } from "../lib/book";
 import { planSave, type DocBlock, type Snapshot } from "../lib/bookModel";
 import { registerEditor, setDraggedBlock } from "../lib/editorBridge";
+import { setCursorBlock } from "../lib/currentView";
 import { useTablesVersion } from "../lib/live";
 import { go, pagePath } from "../lib/navigation";
 import { useColorScheme } from "../lib/theme";
@@ -274,6 +275,14 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
         slashMenu={false}
         sideMenu={false}
         onChange={schedule}
+        onSelectionChange={() => {
+          // Spec: ATL-1
+          try {
+            setCursorBlock(dbId(editor.getTextCursorPosition().block.id));
+          } catch {
+            setCursorBlock(null);
+          }
+        }}
         onBlur={() => {
           const s = stale.current;
           stale.current = null;

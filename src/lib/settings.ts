@@ -9,6 +9,8 @@ export const SETTING_KEYS = {
   modelsCacheAt: "models_cache_at",
   /** The page last open, to reopen on start (this device only). */
   lastPage: "last_page",
+  /** The chat last open, which the assistant opens on (this device only). */
+  lastChat: "last_chat",
 } as const;
 
 // Spec: SYN-15
@@ -17,6 +19,7 @@ export const DEVICE_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
   SETTING_KEYS.modelsCache,
   SETTING_KEYS.modelsCacheAt,
   SETTING_KEYS.lastPage,
+  SETTING_KEYS.lastChat,
 ]);
 
 /** The assistant's model until the author picks one; must be on OpenRouter's list. */

@@ -140,3 +140,29 @@ export function parseRowId(raw: string | undefined | null, prefix: IdPrefix): st
   if (UUID.test(raw)) return typeIdOf(prefix, raw);
   return parseTypeId(raw)?.prefix === prefix ? raw : null;
 }
+
+const IN_TEXT = new RegExp(
+  `(^|[^A-Za-z0-9_])((?:${[...PREFIX_LIST].sort((a, b) => b.length - a.length).join("|")})_[0-7][0-9a-hjkmnp-tv-z]{25})(?![A-Za-z0-9_])`,
+  "g",
+);
+
+// Spec: CHAT-7
+/**
+ * Text cut where ids of ours appear in it: plain strings between the ids,
+ * `{ id }` for each one, not inside a longer word. (No lookbehind: older
+ * macOS WebKit can't parse one.) As in Tally.
+ */
+export function splitTypeIds(text: string): (string | { id: string })[] {
+  const out: (string | { id: string })[] = [];
+  let at = 0;
+  for (const m of text.matchAll(IN_TEXT)) {
+    const lead = m[1] ?? "";
+    const id = m[2] ?? "";
+    const start = (m.index ?? 0) + lead.length;
+    if (start > at) out.push(text.slice(at, start));
+    out.push({ id });
+    at = start + id.length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}

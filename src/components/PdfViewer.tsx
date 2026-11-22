@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { openPdf, type OpenPdf, type PdfDocument } from "../lib/pdf";
+import { setPdfInView } from "../lib/currentView";
 
 /** How far outside the view a page starts rendering, so scrolling finds it drawn. */
 const RENDER_MARGIN = "1200px 0px";
@@ -72,7 +73,7 @@ function PdfPage(props: { doc: PdfDocument; number: number; scale: number; size:
  * A PDF, page under page, drawn with pdf.js as pages come into view. Zoom is
  * relative to the width of the view: 1 fits a page to it.
  */
-export function PdfViewer(props: { load: () => Promise<Uint8Array> }) {
+export function PdfViewer(props: { load: () => Promise<Uint8Array>; itemId?: string }) {
   const [pdf, setPdf] = useState<OpenPdf | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +81,15 @@ export function PdfViewer(props: { load: () => Promise<Uint8Array> }) {
   const [width, setWidth] = useState(0);
   const [current, setCurrent] = useState(1);
   const scroller = useRef<HTMLDivElement>(null);
-  const { load } = props;
+  const { load, itemId } = props;
+
+  // Spec: ATL-1
+  // Tell the assistant which page of which PDF is in view.
+  useEffect(() => {
+    if (!pdf || !itemId) return;
+    setPdfInView({ itemId, page: current, doc: pdf.doc });
+  }, [pdf, itemId, current]);
+  useEffect(() => () => setPdfInView(null), []);
 
   useEffect(() => {
     let live = true;

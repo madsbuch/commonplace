@@ -53,6 +53,34 @@ const requests = new Map<number, { url: string; body: string }>();
 const responses = new Map<number, PendingResponse>();
 const chatRequests: unknown[] = [];
 let modelAnswer: unknown = { title: "A title", authors: [], year: null, kind: "paper" };
+
+/** Scripted replies for streamed chat rounds, taken in order (POST /fake-chat). */
+const ReplySchema = z.union([
+  z.object({ text: z.string() }),
+  z.object({ tools: z.array(z.object({ name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() })) }),
+  z.object({ error: z.string() }),
+]);
+let chatReplies: z.infer<typeof ReplySchema>[] = [];
+
+/** One streamed round as server-sent events, the way OpenRouter sends it. */
+function sse(reply: z.infer<typeof ReplySchema>): string {
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
+  let out = ": OPENROUTER PROCESSING\n\n";
+  if ("text" in reply) {
+    // In two pieces, as a stream would.
+    const half = Math.ceil(reply.text.length / 2);
+    out += ev({ choices: [{ delta: { content: reply.text.slice(0, half) } }] });
+    out += ev({ choices: [{ delta: { content: reply.text.slice(half) } }] });
+  } else if ("tools" in reply) {
+    reply.tools.forEach((c, index) => {
+      const args = JSON.stringify(c.arguments ?? {});
+      out += ev({ choices: [{ delta: { tool_calls: [{ index, id: `call_${index}_${Date.now()}`, type: "function", function: { name: c.name, arguments: args.slice(0, 3) } }] } }] });
+      out += ev({ choices: [{ delta: { tool_calls: [{ index, function: { arguments: args.slice(3) } }] } }] });
+    });
+  }
+  out += ev({ choices: [{ delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0004 } });
+  return out + "data: [DONE]\n\n";
+}
 let nextRid = 1;
 
 function httpCommand(cmd: string, args: Record<string, unknown>): unknown {
@@ -66,6 +94,17 @@ function httpCommand(cmd: string, args: Record<string, unknown>): unknown {
     const rid = z.number().parse(args["rid"]);
     const req = requests.get(rid);
     let body: unknown = { data: [] };
+    if (req?.url.endsWith("/chat/completions") && req.body.includes('"stream":true')) {
+      chatRequests.push(parseJson(req.body));
+      const reply = chatReplies.shift() ?? { text: "(no scripted reply)" };
+      const out = nextRid++;
+      if ("error" in reply) {
+        responses.set(out, { bytes: new TextEncoder().encode(JSON.stringify({ error: { message: reply.error } })), sent: false });
+        return { status: 400, statusText: "Bad Request", url: req.url, headers: [["content-type", "application/json"]], rid: out };
+      }
+      responses.set(out, { bytes: new TextEncoder().encode(sse(reply)), sent: false });
+      return { status: 200, statusText: "OK", url: req.url, headers: [["content-type", "text/event-stream"]], rid: out };
+    }
     if (req?.url.endsWith("/chat/completions")) {
       const sent = parseJson(req.body);
       chatRequests.push(sent);
@@ -113,6 +152,10 @@ if (import.meta.main) {
       }
       if (url.pathname === "/fake-model") {
         modelAnswer = z.object({ answer: z.unknown() }).parse(await req.json()).answer;
+        return Response.json({ ok: true }, { headers: cors });
+      }
+      if (url.pathname === "/fake-chat") {
+        chatReplies = z.object({ replies: z.array(ReplySchema) }).parse(await req.json()).replies;
         return Response.json({ ok: true }, { headers: cors });
       }
       if (url.pathname === "/fake-requests") return Response.json(chatRequests, { headers: cors });

@@ -11,7 +11,8 @@ import { fetch } from "@tauri-apps/plugin-http";
 import { recordAiUsage } from "./aiUsage";
 import type { AiFeature } from "./aiCost";
 import { fieldsOf } from "./guards";
-import { parseChatChunk, parseChatResponse, parseJson, parseModelsResponse } from "./schemas";
+import { parseChatChunk, parseChatResponse, parseJson, parseModelsResponse, parseToolCallDeltas } from "./schemas";
+import type { ToolCall, TranscriptMessage } from "./schemas";
 import type { ChatMessage, ChatResponse, ORModel } from "./schemas";
 
 export type { ChatMessage, ORModel } from "./schemas";
@@ -248,6 +249,129 @@ export async function chat(apiKey: string, model: string, messages: ChatMessage[
       continue;
     }
     return state.text;
+  }
+  throw lastError;
+}
+
+// ---------------------------------------------------------------------------
+// Rounds with tools (chats): streamed text, and tool calls assembled from
+// their streamed pieces.
+// ---------------------------------------------------------------------------
+
+/** A tool the model may call: its name, what it's for, and its arguments' JSON Schema. */
+export interface ToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** What one round produced: text, and the tools the model wants called (none: it has answered). */
+export interface Round {
+  text: string;
+  toolCalls: ToolCall[];
+}
+
+/** Folds the tool-call pieces of a streamed chunk into the calls so far. */
+export function foldToolCalls(calls: ToolCall[], raw: unknown): ToolCall[] {
+  const out = [...calls];
+  for (const d of parseToolCallDeltas(raw)) {
+    const cur = out[d.index] ?? { id: "", type: "function" as const, function: { name: "", arguments: "" } };
+    out[d.index] = {
+      id: d.id ?? cur.id,
+      type: "function",
+      function: {
+        name: cur.function.name + (d.function?.name ?? ""),
+        arguments: cur.function.arguments + (d.function?.arguments ?? ""),
+      },
+    };
+  }
+  return out;
+}
+
+// Spec: AI-1, AI-3, AI-6
+/**
+ * One round of a chat with tools, streamed: `onText` hears the answer as it
+ * grows. Retries like `chat` before anything has streamed.
+ */
+export async function chatRound(
+  apiKey: string,
+  model: string,
+  messages: readonly (TranscriptMessage | { role: "system"; content: string })[],
+  tools: readonly ToolDef[],
+  opts: ChatOptions,
+): Promise<Round> {
+  const body: Record<string, unknown> = {
+    model,
+    // The author's action names are for the screen, not the model.
+    messages: messages.map((m) => (m.role === "user" ? { role: "user", content: m.content } : m)),
+    stream: true,
+    usage: { include: true },
+    ...(tools.length > 0
+      ? { tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) }
+      : {}),
+  };
+  if (model.startsWith("anthropic/")) body["cache_control"] = { type: "ephemeral" };
+
+  let lastError: Error = new OpenRouterError("OpenRouter request failed", 0);
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+    if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
+    let res: Response;
+    try {
+      res = await post(apiKey, body, opts.signal);
+    } catch (e) {
+      if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
+      lastError = e instanceof Error ? e : new Error(String(e));
+      continue;
+    }
+    if (!res.ok) {
+      const json = parseChatResponse(await res.json().catch(() => ({})));
+      logUsage(opts.feature, model, usageOf(json));
+      const err = new OpenRouterError(json.error?.message ?? `HTTP ${res.status}`, res.status);
+      if (!RETRYABLE_STATUS.has(res.status)) throw err;
+      lastError = err;
+      continue;
+    }
+    let state = emptyStreamState();
+    let calls: ToolCall[] = [];
+    const take = (data: string[]) => {
+      for (const d of data) {
+        let raw: unknown;
+        try {
+          raw = parseJson(d);
+        } catch {
+          continue;
+        }
+        calls = foldToolCalls(calls, raw);
+        const chunk = parseChatChunk(d);
+        if (chunk) state = foldChunk(state, chunk);
+      }
+      opts.onText?.(state.text);
+    };
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { data, rest } = splitSse(buffer);
+        buffer = rest;
+        if (data.length > 0) take(data);
+      }
+      take(splitSse(`${buffer}${decoder.decode()}\n\n`).data);
+    } else {
+      take(splitSse(`${await res.text()}\n\n`).data);
+    }
+    logUsage(opts.feature, model, state.usage);
+    if (state.error) throw new OpenRouterError(state.error, res.status);
+    const toolCalls = calls.filter((c) => c.function.name !== "").map((c, i) => ({ ...c, id: c.id || `call_${i}` }));
+    if (state.text.trim() === "" && toolCalls.length === 0) {
+      lastError = new OpenRouterError("The model returned an empty answer", res.status);
+      continue;
+    }
+    return { text: state.text, toolCalls };
   }
   throw lastError;
 }
