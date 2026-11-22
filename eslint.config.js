@@ -12,7 +12,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "src-tauri/**", "node_modules/**"] },
+  { ignores: ["dist/**", "src-tauri/**", "node_modules/**", ".claude/**"] },
   {
     files: ["**/*.{ts,tsx}"],
     extends: [tseslint.configs.base],

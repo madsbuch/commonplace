@@ -21,7 +21,8 @@
     "noFallthroughCasesInSwitch": true,
     /* Extra strictness beyond `strict` */
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    /* exactOptionalPropertyTypes is off: BlockNote's published types (its block,
+       style and prop schemas) don't hold under it, and the editor is built on them. */
     "noImplicitReturns": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
