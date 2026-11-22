@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Paragraph",
+  "summary": "A block of running text.",
+  "order": 1,
+  "requirements": [
+    {
+      "id": "PAR-1",
+      "text": "A paragraph block holds one paragraph of text."
+    },
+    {
+      "id": "PAR-2",
+      "text": "Text that doesn't start with a Markdown block shortcut becomes a paragraph block."
+    }
+  ]
+}

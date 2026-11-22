@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "List item",
+  "summary": "One item of a bulleted or numbered list.",
+  "order": 3,
+  "requirements": [
+    {
+      "id": "LIST-1",
+      "text": "A list item block is either bulleted or numbered."
+    }
+  ]
+}

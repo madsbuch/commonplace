@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Revisions",
+  "summary": "Every change to a block is kept and can be read later.",
+  "order": 4,
+  "stories": [
+    {
+      "id": "US-5",
+      "as": "an author whose understanding keeps changing",
+      "want": "to see what a note said before",
+      "soThat": "I can trace how my thinking evolved",
+      "requirements": [
+        "#BOOK-5",
+        "#BOOK-6"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "BOOK-5",
+      "text": "Every saved change to a block is kept as a revision.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Every saved change to a note is kept as a revision.",
+          "reason": "Content is stored as blocks, so revisions are kept per block.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
+    },
+    {
+      "id": "BOOK-6",
+      "text": "The author can read any earlier revision of a page.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The author can read any earlier revision of a note.",
+          "reason": "The book is organised as a tree of pages instead of a flat set of notes.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
+    }
+  ]
+}

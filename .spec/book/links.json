@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Links",
+  "summary": "Text can link to any page or to a single block.",
+  "order": 3,
+  "stories": [
+    {
+      "id": "US-4",
+      "as": "someone writing about ideas that cross fields",
+      "want": "to link ideas wherever they connect",
+      "soThat": "the book shows how the topics relate",
+      "requirements": [
+        "#LNK-1",
+        "#LNK-2"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "LNK-1",
+      "text": "A block's text can link inline to any page."
+    },
+    {
+      "id": "LNK-2",
+      "text": "A block's text can link to a single block on any page."
+    },
+    {
+      "id": "LNK-3",
+      "text": "A link still reaches its target after the target is moved."
+    }
+  ]
+}

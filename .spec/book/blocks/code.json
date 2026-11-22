@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Code",
+  "summary": "A block of source code in a named language.",
+  "order": 4,
+  "stories": [
+    {
+      "id": "US-6",
+      "as": "an author writing about formal subjects",
+      "want": "to write maths and code alongside prose",
+      "soThat": "formal ideas are stated precisely",
+      "requirements": [
+        "#BOOK-7",
+        "#BOOK-8",
+        "#BOOK-9"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "CODE-1",
+      "text": "A code block names its language."
+    },
+    {
+      "id": "BOOK-9",
+      "text": "Code blocks in the languages in `book.code-languages` are shown with syntax highlighting."
+    }
+  ],
+  "values": [
+    {
+      "id": "book.code-languages",
+      "type": "list",
+      "value": [
+        "Lean"
+      ],
+      "description": "Languages whose code blocks the book highlights."
+    }
+  ]
+}

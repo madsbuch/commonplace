@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Heading",
+  "summary": "A section title within a page.",
+  "order": 2,
+  "requirements": [
+    {
+      "id": "HEAD-1",
+      "text": "A heading block has a level from 1 to `heading.levels`."
+    }
+  ],
+  "values": [
+    {
+      "id": "heading.levels",
+      "type": "number",
+      "value": 3,
+      "unit": "levels"
+    }
+  ]
+}

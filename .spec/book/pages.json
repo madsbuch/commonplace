@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Pages",
+  "summary": "The book is a tree of pages the author arranges.",
+  "order": 1,
+  "stories": [
+    {
+      "id": "US-7",
+      "as": "an author organising a growing book",
+      "want": "to nest pages inside pages",
+      "soThat": "the structure grows with the content",
+      "requirements": [
+        "#PAGE-1",
+        "#PAGE-2",
+        "#PAGE-4"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "PAGE-1",
+      "text": "The book is a tree of pages; a page can contain other pages."
+    },
+    {
+      "id": "PAGE-2",
+      "text": "Pages under the same parent are in an order the author sets, and the book reads in tree order."
+    },
+    {
+      "id": "PAGE-3",
+      "text": "A page is a block in its parent page's content.",
+      "related": [
+        "book/blocks"
+      ]
+    },
+    {
+      "id": "PAGE-4",
+      "text": "The author can drag a page to another place in the tree."
+    },
+    {
+      "id": "PAGE-5",
+      "text": "Moving a page keeps its content, revisions and links.",
+      "related": [
+        "#LNK-3"
+      ]
+    }
+  ]
+}
