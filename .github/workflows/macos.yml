@@ -65,8 +65,7 @@ jobs:
           path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
-      # The Android workflow owns the "latest" tag; this only adds the DMG to the
-      # same release, creating it if this job happens to finish first.
+      # Adds the DMG to the "latest" release, creating it if this job finishes first.
       - name: Publish DMG to "latest" release
         if: github.ref == 'refs/heads/main'
         env:
