@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Writing assistant",
+  "summary": "An assistant in the app that helps the author write the book.",
+  "order": 2,
+  "description": "The assistant supports the author's own work on the book. It exists to make writing better, not to replace the writing.",
+  "requirements": [
+    {
+      "id": "AST-1",
+      "text": "The app has an assistant that helps the author write the book.",
+      "related": ["#US-2"]
+    }
+  ]
+}

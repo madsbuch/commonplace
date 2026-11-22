@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Sync",
+  "summary": "Instances of the app sync their databases over the local network.",
+  "order": 5,
+  "description": "The author uses the app on more than one machine and wants the same book on each, without a cloud service in between.",
+  "stories": [
+    {
+      "id": "US-3",
+      "as": "an author who writes on more than one machine",
+      "want": "the same book on each of them",
+      "soThat": "I can pick up wherever I left off",
+      "requirements": ["#SYN-1"]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "SYN-1",
+      "text": "Two instances of the app on the same local network can sync their databases with each other.",
+      "related": ["#STO-1"]
+    }
+  ]
+}

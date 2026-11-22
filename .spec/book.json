@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "The book",
+  "summary": "What the book covers and how it grows.",
+  "order": 1,
+  "description": "The content itself. The book is never done: chapters are added and revised as interests and understanding change.",
+  "requirements": [
+    {
+      "id": "BOOK-1",
+      "text": "The book covers the topics in `book.topics`."
+    },
+    {
+      "id": "BOOK-2",
+      "text": "Any part of the book can be revised at any time; there is no finished or published state that locks it."
+    }
+  ],
+  "values": [
+    {
+      "id": "book.topics",
+      "type": "list",
+      "value": ["Type theory", "Ontologies", "Epistemology", "Probabilistic reasoning", "Programming"],
+      "description": "The fields the book is about."
+    }
+  ]
+}

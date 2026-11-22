@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "My Book",
+  "summary": "An ever-evolving book of what I find professionally interesting, written in a desktop app.",
+  "description": "A personal book that grows over years rather than being finished. Writing it is also a way to keep thinking and writing by hand while AI does more of both.",
+  "stories": [
+    {
+      "id": "US-1",
+      "as": "a professional with interests that span several fields",
+      "want": "one book that collects and develops what I find interesting",
+      "soThat": "my understanding builds up in one place instead of scattering",
+      "requirements": ["#BOOK-1", "#BOOK-2"]
+    },
+    {
+      "id": "US-2",
+      "as": "a professional working in the era of AI",
+      "want": "to keep doing the thinking and writing myself",
+      "soThat": "my skills don't atrophy",
+      "requirements": ["#AST-1"]
+    }
+  ]
+}

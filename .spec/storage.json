@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Storage",
+  "summary": "Each instance keeps the whole book in one SQLite database.",
+  "order": 4,
+  "description": "One database file per instance keeps the book easy to back up, inspect and sync.",
+  "requirements": [
+    {
+      "id": "STO-1",
+      "text": "Each instance of the app stores all of its data in a single SQLite database."
+    }
+  ]
+}
