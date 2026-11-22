@@ -1478,3 +1478,62 @@ kbd {
   cursor: default;
   user-select: none;
 }
+
+/* Settings: rows into the pages nested in it */
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 8px 0 28px;
+  background: var(--bg);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: var(--fg);
+  border-bottom: 1px solid var(--line);
+}
+.settings-row:last-child {
+  border-bottom: none;
+}
+a.settings-row:hover {
+  background: var(--hover);
+}
+.settings-row.static {
+  flex-wrap: wrap;
+}
+.settings-row-icon {
+  color: var(--muted);
+  display: flex;
+}
+.settings-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.settings-row-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+.settings-row-line {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-row-end {
+  color: var(--muted);
+  font-size: 20px;
+}
+.settings-row .theme-switch {
+  margin: 0;
+  width: 132px;
+}

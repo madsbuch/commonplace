@@ -362,6 +362,21 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(600);
     check("a chat can be deleted, and the memory stays", (await q("SELECT count(*) AS n FROM chats"))[0].n === 1 && (await q("SELECT count(*) AS n FROM assistant_memory"))[0].n === 1);
 
+    // Spec: APP-8
+    await page.goto(APP + "/settings");
+    await page.waitForTimeout(800);
+    const settingsRows = await page.locator(".settings-row-title").allInnerTexts();
+    check("Settings leads to the pages nested in it", ["Sync", "AI costs"].every((r) => settingsRows.includes(r)), settingsRows.join(", "));
+    check("each row says how that part stands", (await page.locator(".settings-row", { hasText: "AI costs" }).innerText()).includes("this month"));
+    await page.locator(".settings-row", { hasText: "AI costs" }).click();
+    await page.waitForURL(/\/settings\/costs$/);
+    await page.getByRole("link", { name: "← Settings" }).click();
+    await page.waitForURL(/\/settings$/);
+    await page.goto(APP + "/sync");
+    await page.waitForURL(/\/settings\/sync$/);
+    const back = await page.getByRole("link", { name: "← Settings" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
+    check("a nested page leads back, and the old address leads to it", back);
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

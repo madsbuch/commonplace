@@ -1,3 +1,4 @@
+import { BackToSettings } from "../components/SettingsRows";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -86,6 +87,7 @@ export default function CostsPage() {
 
   return (
     <div className="screen ai-screen">
+      <BackToSettings />
       <h1>AI costs</h1>
       <p className="muted">
         What the assistant has cost, from what OpenRouter reported for each answer, on all your devices.{" "}

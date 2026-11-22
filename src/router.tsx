@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 
 // Each screen is its own chunk, loaded when first opened.
@@ -29,7 +29,8 @@ function screen(node: ReactNode) {
  * - `/library`, `/library/:id`: the papers and books, and one of them
  * - `/library/people/:id`, `/library/institutions/:id`: a person, an institution
  * - `/chats`, `/chats/:id`, `/memory`: the assistant's chats, one chat, its memory
- * - `/settings`, `/sync`, `/costs`
+ * - `/settings`, and nested in it `/settings/sync` and `/settings/costs`
+ *   (`/sync` and `/costs` lead there)
  */
 export const router = createBrowserRouter([
   {
@@ -46,8 +47,11 @@ export const router = createBrowserRouter([
       { path: "/chats/:id", element: screen(<ChatPage />) },
       { path: "/memory", element: screen(<MemoryPage />) },
       { path: "/settings", element: screen(<SettingsPage />) },
-      { path: "/sync", element: screen(<SyncPage />) },
-      { path: "/costs", element: screen(<CostsPage />) },
+      // Spec: APP-8
+      { path: "/settings/sync", element: screen(<SyncPage />) },
+      { path: "/settings/costs", element: screen(<CostsPage />) },
+      { path: "/sync", element: <Navigate to="/settings/sync" replace /> },
+      { path: "/costs", element: <Navigate to="/settings/costs" replace /> },
     ],
   },
 ]);

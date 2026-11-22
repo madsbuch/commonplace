@@ -4,7 +4,7 @@ import { installSelectionTracking, setPath } from "../lib/currentView";
 import { toggleDock, useDockOpen } from "../lib/dock";
 import { setNavigate } from "../lib/navigation";
 import { AssistantDock } from "./AssistantDock";
-import { ChatIcon, CostIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon, SyncIcon } from "./Icons";
+import { ChatIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon } from "./Icons";
 import { Logo } from "./Logo";
 import { PageTree } from "./PageTree";
 import { QUICK_OPEN_KEYS, QuickOpen } from "./QuickOpen";
@@ -75,14 +75,6 @@ export function Layout() {
         </div>
         <PageTree />
         <div className="sidebar-footer">
-          <NavLink to="/sync">
-            <SyncIcon />
-            Sync
-          </NavLink>
-          <NavLink to="/costs">
-            <CostIcon />
-            AI costs
-          </NavLink>
           <NavLink to="/settings">
             <SettingsIcon />
             Settings

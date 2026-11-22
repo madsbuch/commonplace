@@ -1,3 +1,4 @@
+import { BackToSettings } from "../components/SettingsRows";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Alert, Button, Group, Loader, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
@@ -211,6 +212,7 @@ export default function SyncPage() {
 
   return (
     <div className="screen">
+      <BackToSettings />
       <Title order={1} mb="xs">
         Sync
       </Title>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ModelPicker, modelSub } from "../components/ModelPicker";
+import { SettingsRows } from "../components/SettingsRows";
 import { getDetailsModel, saveDetailsModel } from "../lib/libraryDetails";
 import {
   getApiKey,
@@ -128,6 +128,7 @@ export default function SettingsPage() {
   return (
     <div className="screen ai-screen">
       <h1>Settings</h1>
+      <SettingsRows />
 
       <section className="ai-section">
         <h2>OpenRouter</h2>
@@ -253,12 +254,6 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <section className="ai-section">
-        <h2>More</h2>
-        <p>
-          <Link to="/costs">AI costs</Link> · <Link to="/sync">Sync</Link>
-        </p>
-      </section>
     </div>
   );
 }

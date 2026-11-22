@@ -33,6 +33,10 @@
       "id": "APP-7",
       "text": "From any screen, `Ctrl+K` (`⌘K` on macOS) opens a search that jumps to any page.",
       "level": "should"
+    },
+    {
+      "id": "APP-8",
+      "text": "Settings is a page of rows, each opening a page nested in it, `/settings/sync` and `/settings/costs` among them; each row says in a line how that part stands, and each nested page leads back to Settings."
     }
   ],
   "values": [
