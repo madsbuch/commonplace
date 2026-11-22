@@ -142,6 +142,17 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const moved = await q(`SELECT parent_id FROM blocks WHERE json_extract(props,'$.title') = 'Probability'`);
     check("dropping a page onto another puts it inside", moved[0]?.parent_id === parent, JSON.stringify(moved));
 
+    // Spec: BLK-4
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    await page.locator(".bn-block-content", { hasText: "an item" }).first().hover();
+    await page.waitForTimeout(300);
+    await page.locator(".bn-side-menu [draggable='true']").first().dragTo(page.locator(".tree-row", { hasText: "Probability" }));
+    await page.waitForTimeout(1200);
+    const item = await q(`SELECT json_extract(pg.props,'$.title') AS page FROM blocks b JOIN blocks pg ON pg.id = b.parent_id WHERE b.content LIKE '%an item%'`);
+    check("a block dragged onto a page in the sidebar moves there", item[0]?.page === "Probability", JSON.stringify(item));
+    check("and leaves the page it came from", !(await page.locator(".bn-editor").innerText()).includes("an item"));
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();
