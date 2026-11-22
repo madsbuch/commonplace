@@ -87,6 +87,11 @@ The book syncs peer to peer over the local network, as Tally does
 - Concurrent changes to a row resolve to the later clock, whole row. That's
   why a block is a row of its own and every save also inserts a `revisions`
   row: two devices editing the same block keep both edits as revisions.
+- Chats are the one exception (`chats` in `src-tauri/src/sync/engine.rs`):
+  a chat continued on two devices at once is split, the losing side kept as
+  a new chat titled "<title> (continued in parallel)". Its id is a `chat_`
+  TypeID derived from the losing version (`src-tauri/src/type_id.rs`, which
+  must agree with `src/lib/ids.ts`), so every device makes the same one.
 - No foreign keys between synced tables: rows arrive one at a time in any
   order. (Sync does handle cascades and unique columns, should a table need
   them; the Rust tests cover both with tables of their own.)

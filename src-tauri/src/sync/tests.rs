@@ -6,14 +6,16 @@
 //! deleted, each save with its revision; settings; AI usage) and sync in
 //! random pairs, with small batches and connections dropped half-way, for
 //! many seeds. Afterwards every device must hold exactly the same data and
-//! versions, and no revision may have been lost: every save is kept.
+//! versions, no revision may have been lost (every save is kept), and no chat
+//! turn may have been lost unless a deletion had seen it (a chat continued on
+//! two devices at once is split, not overwritten).
 
 use super::engine::{self, ApplyStats, Batch, Digest};
 use crate::test_db::{migrated_db, Scratch};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use sqlx::SqlitePool;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 pub(crate) struct Device {
     pub(crate) pool: SqlitePool,
@@ -152,6 +154,24 @@ fn pick<'a>(rng: &mut StdRng, v: &'a [String]) -> Option<&'a String> {
     }
 }
 
+/// What the chats check watches: every turn ever written, and the turns a
+/// deletion had seen when it removed them.
+#[derive(Default)]
+struct Turns {
+    written: BTreeSet<String>,
+    deleted_knowingly: HashSet<String>,
+}
+
+fn turns_of(messages: &str) -> Vec<String> {
+    let v: serde_json::Value = serde_json::from_str(messages).unwrap();
+    v.as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_string()).collect()
+}
+
+async fn chat_turns(pool: &SqlitePool) -> BTreeSet<String> {
+    let all: Vec<String> = sqlx::query_scalar("SELECT messages FROM chats").fetch_all(pool).await.unwrap();
+    all.iter().flat_map(|m| turns_of(m)).collect()
+}
+
 /// Saves a block as the app does: the block's row, and a revision of it.
 async fn save(rng: &mut StdRng, p: &SqlitePool, block: &str, set: &str, saved: &mut BTreeSet<String>) {
     exec(p, &format!("UPDATE blocks SET {set} WHERE id = '{block}'")).await;
@@ -161,10 +181,10 @@ async fn save(rng: &mut StdRng, p: &SqlitePool, block: &str, set: &str, saved: &
 }
 
 /// One random edit of the kind the app makes. `saved` collects the id of
-/// every revision written, which must all survive.
-async fn random_edit(rng: &mut StdRng, d: &Device, saved: &mut BTreeSet<String>, n: usize) {
+/// every revision written, which must all survive; `turns` every chat turn.
+async fn random_edit(rng: &mut StdRng, d: &Device, saved: &mut BTreeSet<String>, turns: &mut Turns, n: usize) {
     let p = &d.pool;
-    match rng.gen_range(0..12) {
+    match rng.gen_range(0..16) {
         0 => {
             // A new top-level page.
             let id = uuid(rng);
@@ -235,6 +255,33 @@ async fn random_edit(rng: &mut StdRng, d: &Device, saved: &mut BTreeSet<String>,
             )
             .await;
         }
+        12 => {
+            // A new chat.
+            let id = uuid(rng);
+            let turn = format!("{}:{n}:first", d.id);
+            turns.written.insert(turn.clone());
+            exec(p, &format!("INSERT INTO chats (id, title, messages, created_at, updated_at) VALUES ('{id}', 'chat {n}', '[\"{turn}\"]', 'now', 'now')")).await;
+        }
+        13 | 14 => {
+            // A chat continued: the same chat on several devices conflicts.
+            if let Some(id) = pick(rng, &ids(p, "SELECT id FROM chats").await) {
+                let messages: String = sqlx::query_scalar("SELECT messages FROM chats WHERE id = ?").bind(id).fetch_one(p).await.unwrap();
+                let mut t = turns_of(&messages);
+                let turn = format!("{}:{n}:turn", d.id);
+                turns.written.insert(turn.clone());
+                t.push(turn);
+                let json = serde_json::to_string(&t).unwrap();
+                sqlx::query("UPDATE chats SET messages = ?, updated_at = 'now' WHERE id = ?").bind(json).bind(id).execute(p).await.unwrap();
+            }
+        }
+        15 => {
+            // A chat deleted: the turns it held go knowingly.
+            if let Some(id) = pick(rng, &ids(p, "SELECT id FROM chats").await) {
+                let messages: String = sqlx::query_scalar("SELECT messages FROM chats WHERE id = ?").bind(id).fetch_one(p).await.unwrap();
+                turns.deleted_knowingly.extend(turns_of(&messages));
+                exec(p, &format!("DELETE FROM chats WHERE id = '{id}'")).await;
+            }
+        }
         _ => {
             // A long block: big rows still go, one per batch if need be.
             if let Some(id) = pick(rng, &ids(p, "SELECT id FROM blocks WHERE type <> 'page'").await) {
@@ -254,7 +301,7 @@ async fn settle(devices: &[Device]) {
             for j in 0..devices.len() {
                 if i != j {
                     let s = engine::pull_all(&devices[i].pool, &devices[j].pool, 7, 16 * 1024).await.unwrap();
-                    changed += s.applied + s.conflicts + s.unique_merges;
+                    changed += s.applied + s.conflicts + s.forks + s.unique_merges;
                 }
             }
         }
@@ -294,9 +341,10 @@ async fn run_history(seed: u64, devices_n: usize, steps: usize) {
         devices.push(device().await);
     }
     let mut saved = BTreeSet::new();
+    let mut turns = Turns::default();
     for n in 0..steps {
         let d = rng.gen_range(0..devices_n);
-        random_edit(&mut rng, &devices[d], &mut saved, n).await;
+        random_edit(&mut rng, &devices[d], &mut saved, &mut turns, n).await;
         if rng.gen_bool(0.25) {
             let a = rng.gen_range(0..devices_n);
             let b = (a + rng.gen_range(1..devices_n)) % devices_n;
@@ -320,18 +368,25 @@ async fn run_history(seed: u64, devices_n: usize, steps: usize) {
         assert!(kept.contains(r), "seed {seed}: revision {r} was lost");
     }
 
+    // Spec: SYN-20
+    // No chat turn lost, unless a deletion had seen it.
+    let kept_turns = chat_turns(&devices[0].pool).await;
+    for t in &turns.written {
+        assert!(kept_turns.contains(t) || turns.deleted_knowingly.contains(t), "seed {seed}: turn {t} was lost");
+    }
+
     // Quiet once settled: nothing more moves, in either direction.
     for i in 0..devices_n {
         for j in 0..devices_n {
             if i != j {
                 let s = engine::pull_all(&devices[i].pool, &devices[j].pool, 50, 1 << 20).await.unwrap();
-                assert_eq!(s.applied + s.conflicts, 0, "seed {seed}: still moving after settling");
+                assert_eq!(s.applied + s.conflicts + s.forks, 0, "seed {seed}: still moving after settling");
             }
         }
     }
 }
 
-// Spec: SYN-11, SYN-12
+// Spec: SYN-11, SYN-12, SYN-20
 #[tokio::test(flavor = "multi_thread")]
 async fn random_histories_converge_between_two_devices() {
     for seed in 0..25 {
@@ -353,6 +408,81 @@ async fn random_histories_converge_between_three_devices() {
 
 async fn content(pool: &SqlitePool, id: &str) -> String {
     sqlx::query_scalar("SELECT content FROM blocks WHERE id = ?").bind(id).fetch_one(pool).await.unwrap()
+}
+
+async fn chat_rows(pool: &SqlitePool) -> Vec<(String, String, String)> {
+    sqlx::query_as("SELECT id, title, messages FROM chats ORDER BY title").fetch_all(pool).await.unwrap()
+}
+
+const INSERT_PLAN: &str = "INSERT INTO chats (id, title, messages, created_at, updated_at) VALUES ('c', 'Plan', '[\"q1\"]', 'now', 'now')";
+
+// Spec: SYN-20
+#[tokio::test]
+async fn a_chat_continued_on_both_devices_is_split_in_two() {
+    let (a, b) = (device().await, device().await);
+    exec(&a.pool, INSERT_PLAN).await;
+    sync_pair(&a, &b).await;
+    exec(&a.pool, "UPDATE chats SET messages = '[\"q1\",\"phone q\"]' WHERE id = 'c'").await;
+    exec(&b.pool, "UPDATE chats SET messages = '[\"q1\",\"mac q\"]' WHERE id = 'c'").await;
+    let (x, y) = sync_pair(&a, &b).await;
+    assert_eq!(x.forks + y.forks, 1);
+    let devices = [a, b];
+    settle(&devices).await;
+    assert_identical(&devices).await;
+    let kept = chat_turns(&devices[0].pool).await;
+    assert!(kept.contains("phone q") && kept.contains("mac q"), "{kept:?}");
+}
+
+// Spec: SYN-20
+#[tokio::test]
+async fn a_split_chat_comes_out_the_same_on_both_devices() {
+    let (a, b) = (device().await, device().await);
+    exec(&a.pool, INSERT_PLAN).await;
+    sync_pair(&a, &b).await;
+    exec(&a.pool, "UPDATE chats SET messages = '[\"q1\",\"phone\"]' WHERE id = 'c'").await;
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    exec(&b.pool, "UPDATE chats SET messages = '[\"q1\",\"mac\"]' WHERE id = 'c'").await;
+    let devices = [a, b];
+    settle(&devices).await;
+    assert_identical(&devices).await;
+    let chats = chat_rows(&devices[0].pool).await;
+    assert_eq!(chats.len(), 2, "{chats:?}");
+    // The later edit (the Mac's) keeps the chat; the phone's becomes its own.
+    assert_eq!(chats[0], ("c".into(), "Plan".into(), "[\"q1\",\"mac\"]".into()));
+    assert_eq!(chats[1].1, "Plan (continued in parallel)");
+    // A chat id like any other: `chat_` and 26 digits of TypeID base32.
+    let (prefix, suffix) = chats[1].0.split_once('_').unwrap();
+    assert_eq!(prefix, "chat", "{}", chats[1].0);
+    assert!(suffix.len() == 26 && suffix.bytes().all(|c| b"0123456789abcdefghjkmnpqrstvwxyz".contains(&c)), "{}", chats[1].0);
+    assert_eq!(chats[1].2, "[\"q1\",\"phone\"]");
+}
+
+// Spec: SYN-20
+#[tokio::test]
+async fn a_chat_continued_on_one_device_just_moves_along() {
+    let (a, b) = (device().await, device().await);
+    exec(&a.pool, INSERT_PLAN).await;
+    sync_pair(&a, &b).await;
+    exec(&a.pool, "UPDATE chats SET messages = '[\"q1\",\"a1\"]' WHERE id = 'c'").await;
+    exec(&a.pool, "UPDATE chats SET messages = '[\"q1\",\"a1\",\"q2\"]' WHERE id = 'c'").await;
+    let (_, y) = sync_pair(&a, &b).await;
+    assert_eq!((y.forks, y.conflicts), (0, 0));
+    assert_eq!(chat_rows(&b.pool).await, vec![("c".into(), "Plan".into(), "[\"q1\",\"a1\",\"q2\"]".into())]);
+}
+
+// Spec: SYN-20
+#[tokio::test]
+async fn a_chat_deleted_on_one_device_and_continued_on_the_other_is_kept() {
+    let (a, b) = (device().await, device().await);
+    exec(&a.pool, INSERT_PLAN).await;
+    sync_pair(&a, &b).await;
+    exec(&b.pool, "UPDATE chats SET messages = '[\"q1\",\"mac\"]' WHERE id = 'c'").await;
+    exec(&a.pool, "DELETE FROM chats WHERE id = 'c'").await;
+    let devices = [a, b];
+    settle(&devices).await;
+    assert_identical(&devices).await;
+    let kept = chat_turns(&devices[0].pool).await;
+    assert!(kept.contains("mac"), "{kept:?}");
 }
 
 // Spec: SYN-14

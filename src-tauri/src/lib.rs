@@ -3,6 +3,7 @@ use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
 mod library;
 mod sync;
+mod type_id;
 #[cfg(test)]
 mod test_db;
 
