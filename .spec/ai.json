@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "AI models and costs",
+  "summary": "The author's own OpenRouter key, their choice of model, and what it costs.",
+  "order": 3,
+  "stories": [
+    {
+      "id": "US-9",
+      "as": "an author paying for my own AI usage",
+      "want": "to see what the assistant costs me",
+      "soThat": "I can choose a cheaper model where it does just as well",
+      "requirements": [
+        "#AI-3",
+        "#AI-4"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "AI-1",
+      "text": "Model calls go to OpenRouter with an API key the author supplies."
+    },
+    {
+      "id": "AI-5",
+      "text": "The OpenRouter key and model choice sync to the book's devices like other settings.",
+      "related": [
+        "#SYN-10"
+      ]
+    },
+    {
+      "id": "AI-2",
+      "text": "The model list is fetched live from OpenRouter, shown from a cache until the fetch returns."
+    },
+    {
+      "id": "AI-3",
+      "text": "Every model response that reports its cost is recorded in a usage ledger under the feature that made it."
+    },
+    {
+      "id": "AI-4",
+      "text": "The app shows AI spend in total, by feature, by model and over time."
+    },
+    {
+      "id": "AI-6",
+      "text": "Book content is sent to no third party but OpenRouter, for the model the author chose."
+    }
+  ],
+  "related": [
+    "assistant"
+  ]
+}

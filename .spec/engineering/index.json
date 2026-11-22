@@ -2,5 +2,43 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Engineering",
   "summary": "How the app is built where that has to hold.",
-  "order": 6
+  "order": 7,
+  "description": "Rules that hold across the whole code base.",
+  "requirements": [
+    {
+      "id": "ENG-1",
+      "text": "The frontend is React and TypeScript in a Tauri 2 shell; SQLite runs in Rust and the frontend queries it through drizzle."
+    },
+    {
+      "id": "ENG-2",
+      "text": "`bun run build` typechecks `src/`, lints everything and bundles, and fails on any type or lint error."
+    },
+    {
+      "id": "ENG-3",
+      "text": "`bun test` checks the spec: schema, unique ids, references, histories, and that every `Spec:` citation in the code names a requirement."
+    },
+    {
+      "id": "ENG-4",
+      "text": "CI runs `bun test` and `bun run build` on every push."
+    },
+    {
+      "id": "ENG-5",
+      "text": "On every push to main, CI builds the app for every platform in `app.platforms` and publishes the builds to the `latest` release.",
+      "related": [
+        "#APP-2"
+      ]
+    },
+    {
+      "id": "ENG-6",
+      "text": "Frontend packages are installed only once they have been published for `deps.minimum-age`."
+    }
+  ],
+  "values": [
+    {
+      "id": "deps.minimum-age",
+      "type": "duration",
+      "value": "14d",
+      "description": "How long a package version must have been published before it is installed."
+    }
+  ]
 }

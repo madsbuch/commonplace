@@ -1,0 +1,112 @@
+// Enforcement home for the project's JSON-boundary rule (see CLAUDE.md):
+// all external JSON must be parsed through a zod schema in src/lib/schemas.ts,
+// so raw `JSON.parse` is banned everywhere else. Runs as part of `bun run build`
+// (and therefore in CI) and standalone via `bun run lint`.
+//
+// The config is deliberately minimal — a parser, the boundary rules, and a ban
+// on native dialogs (they don't show in the desktop app) — so a lint failure
+// always means one of those was broken, not style noise. Grow it
+// intentionally if more rules are wanted.
+import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
+import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
+
+export default tseslint.config(
+  { ignores: ["dist/**", "src-tauri/**", "node_modules/**"] },
+  {
+    files: ["**/*.{ts,tsx}"],
+    extends: [tseslint.configs.base],
+    plugins: { "react-hooks": reactHooks, "eslint-comments": eslintComments },
+    linterOptions: { reportUnusedDisableDirectives: "error" },
+    rules: {
+      // None of the rules below may be switched off with a comment — only
+      // the hooks dependency check, whose exceptions are judgment calls.
+      "eslint-comments/no-restricted-disable": [
+        "error",
+        // gitignore-style patterns: "*" swallows the "react-hooks/" folder,
+        // so it's reopened before the one rule is let through.
+        "*",
+        "!react-hooks",
+        "react-hooks/*",
+        "!react-hooks/exhaustive-deps",
+      ],
+      "eslint-comments/no-unlimited-disable": "error",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "JSON",
+          property: "parse",
+          message:
+            "Raw JSON.parse is banned outside src/lib/schemas.ts — route external JSON " +
+            "through parseJson + a zod schema there (see CLAUDE.md).",
+        },
+        // The desktop app's WebView shows none of these, and confirm()
+        // answers "no": deletes silently did nothing on the computer.
+        ...["confirm", "alert", "prompt"].map((property) => ({
+          object: "window",
+          property,
+          message: "Native dialogs don't show in the desktop app — use an in-app dialog instead.",
+        })),
+      ],
+      // The other half of the boundary rule: a type argument or an `as` on
+      // what a command, a query or a fetch hands back claims a shape nobody
+      // checked. Parse it through src/lib/schemas.ts instead.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='invoke'][typeArguments]",
+          message:
+            "invoke<T>() is an unchecked claim about what the command returns — " +
+            "parse its result with a schema from src/lib/schemas.ts (see CLAUDE.md).",
+        },
+        {
+          selector: "TSAsExpression[expression.type='AwaitExpression']",
+          message:
+            "Casting an awaited result skips validation — parse it with a schema " +
+            "from src/lib/schemas.ts (see CLAUDE.md).",
+        },
+      ],
+      "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        { "ts-expect-error": true, "ts-ignore": true, "ts-nocheck": true, "ts-check": false },
+      ],
+      "no-restricted-globals": [
+        "error",
+        ...["confirm", "alert", "prompt"].map((name) => ({
+          name,
+          message: "Native dialogs don't show in the desktop app — use an in-app dialog instead.",
+        })),
+      ],
+    },
+  },
+  {
+    // The one sanctioned JSON.parse (parseJson) lives here; the dialog bans still apply.
+    files: ["src/lib/schemas.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        ...["confirm", "alert", "prompt"].map((property) => ({
+          object: "window",
+          property,
+          message: "Native dialogs don't show in the desktop app — use an in-app dialog instead.",
+        })),
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-unsafe-argument": "error",
+    },
+  },
+);

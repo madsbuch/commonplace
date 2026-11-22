@@ -1,0 +1,33 @@
+{
+  "name": "my-book",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && tsc --noEmit -p tsconfig.node.json && eslint . && vite build",
+    "lint": "eslint .",
+    "test": "bun test",
+    "preview": "vite preview",
+    "tauri": "bun scripts/tauri.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "~2.12.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
+    "@tauri-apps/cli": "~2.12.4",
+    "@types/bun": "^1.4.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5"
+  }
+}

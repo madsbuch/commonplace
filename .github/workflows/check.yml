@@ -1,0 +1,23 @@
+name: Check
+
+# Spec: ENG-4
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test (includes the spec check)
+        run: bun test
+
+      - name: Typecheck, lint and bundle
+        run: bun run build

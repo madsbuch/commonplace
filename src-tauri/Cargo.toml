@@ -1,0 +1,24 @@
+[package]
+name = "my-book"
+version = "0.1.0"
+description = "My Book — an ever-evolving book"
+authors = ["Mads Buch"]
+edition = "2021"
+
+[lib]
+# The `_lib` suffix keeps the lib name apart from the bin name
+# (https://github.com/rust-lang/cargo/issues/8519).
+name = "my_book_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints.rust]
+# No unsafe Rust; see CLAUDE.md.
+unsafe_code = "forbid"
