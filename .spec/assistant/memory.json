@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Memory",
+  "summary": "What the assistant remembers across chats, readable and editable by the author.",
+  "order": 3,
+  "description": "Some things hold for every conversation: how the author wants to be helped, what they're working on, what to push them on. They're kept apart from chats so a new chat starts with them.",
+  "stories": [
+    {
+      "id": "US-15",
+      "as": "an author who works with the assistant over months",
+      "want": "it to remember what I told it",
+      "soThat": "I don't explain myself again in every chat",
+      "requirements": [
+        "#MEM-1",
+        "#MEM-2"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "MEM-1",
+      "text": "The assistant keeps a memory apart from chats, of what the author asks it to remember or tells it about how they want to be helped."
+    },
+    {
+      "id": "MEM-2",
+      "text": "Every turn carries the memory, and deleting a chat keeps it."
+    },
+    {
+      "id": "MEM-3",
+      "text": "The memory is shown on a screen where the author can edit and delete each entry."
+    },
+    {
+      "id": "MEM-4",
+      "text": "The assistant can add, change and remove memory entries, and nothing else it writes outside its chats.",
+      "related": [
+        "#ATL-5"
+      ]
+    }
+  ]
+}

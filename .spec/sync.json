@@ -124,6 +124,13 @@
     {
       "id": "SYN-19",
       "text": "Development and release builds never sync with each other."
+    },
+    {
+      "id": "SYN-20",
+      "text": "A chat continued on two devices at once is split, the losing side kept as a new chat, so no turn is lost.",
+      "related": [
+        "#SYN-11"
+      ]
     }
   ],
   "values": [

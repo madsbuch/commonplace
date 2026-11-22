@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Tools",
+  "summary": "What the assistant can look at by itself: the screen, the book and the library, never changing them.",
+  "order": 2,
+  "description": "The assistant fetches what it needs instead of being handed a page: what the author is looking at, and anything in the book or the library.",
+  "requirements": [
+    {
+      "id": "ATL-1",
+      "text": "The assistant can see what the author is looking at: the screen; the page, library item, person or institution on it; the block the cursor is in on a page; and the PDF page in view."
+    },
+    {
+      "id": "ATL-2",
+      "text": "The assistant can search the book and read any page."
+    },
+    {
+      "id": "ATL-3",
+      "text": "The assistant can search the library and read an item's details and the text of its PDF, at most `assistant.pdf-pages-per-read` pages at a time.",
+      "related": [
+        "#AI-6"
+      ]
+    },
+    {
+      "id": "ATL-4",
+      "text": "The assistant can read a person or an institution: their items, and the institutions or people they're linked with.",
+      "related": [
+        "library/people"
+      ]
+    },
+    {
+      "id": "ATL-5",
+      "text": "None of the assistant's tools adds or changes anything in the book or the library.",
+      "related": [
+        "#AST-2"
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": "assistant.pdf-pages-per-read",
+      "type": "number",
+      "value": 10,
+      "unit": "pages",
+      "description": "The most PDF pages one tool call reads."
+    }
+  ]
+}

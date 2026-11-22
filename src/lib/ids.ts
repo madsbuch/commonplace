@@ -21,6 +21,8 @@ export const ID_PREFIXES = {
   institutions: "institution",
   authorships: "authorship",
   affiliations: "affiliation",
+  chats: "chat",
+  assistant_memory: "memory",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;

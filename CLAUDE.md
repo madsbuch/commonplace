@@ -20,7 +20,7 @@ before editing the spec).
 - What isn't decided stays out of the spec. Ask instead of guessing.
 - Requirement id prefixes: `BOOK-` (book), `PAGE-` (pages), `BLK-` (blocks),
   `PAR-`/`HEAD-`/`LIST-`/`CODE-` (block types), `LNK-` (links), `LIB-` (library), `PPL-` (people and institutions), `AST-`
-  (assistant), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
+  (assistant), `CHAT-` (chats), `ATL-` (assistant tools), `MEM-` (memory), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
   `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
   (sync triggers), `ID-` (row ids). Stories use `US-`. Requirements keep their
   id when moved, so older prefixes (e.g. `BOOK-5` under revisions) appear

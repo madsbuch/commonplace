@@ -318,3 +318,38 @@ export const affiliations = sqliteTable(
   },
   (t) => [index("affiliations_authorship").on(t.authorshipId), index("affiliations_institution").on(t.institutionId)],
 );
+
+// ---------------------------------------------------------------------------
+// The assistant's chats and memory (src/lib/chats.ts, src/lib/memory.ts)
+// ---------------------------------------------------------------------------
+
+// Spec: CHAT-1, SYN-20
+/**
+ * A conversation with the assistant: its whole transcript as one JSON array
+ * of OpenAI-style messages (tool calls and results included), rewritten
+ * after every round. One row per chat, so two devices continuing it at once
+ * conflict; sync then keeps the losing side as a chat of its own (the
+ * engine's `chats` rule), so no turn is lost.
+ */
+export const chats = sqliteTable(
+  "chats",
+  {
+    id: rowId("chats"),
+    title: text("title").notNull(),
+    messages: text("messages").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("chats_updated").on(t.updatedAt)],
+);
+
+// Spec: MEM-1
+/** One thing the assistant remembers across chats. */
+export const assistantMemory = sqliteTable("assistant_memory", {
+  id: rowId("assistant_memory"),
+  /** "preference" | "focus" | "note" (src/lib/memory.ts). */
+  kind: text("kind").notNull(),
+  text: text("text").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

@@ -33,12 +33,29 @@
         "Critique writing",
         "Point out gaps in arguments",
         "Suggest sources",
-        "Quiz the author"
+        "Quiz the author",
+        "Answer questions about the book and the library"
       ],
-      "description": "The ways the assistant may help the author."
+      "description": "The ways the assistant may help the author.",
+      "history": [
+        {
+          "value": [
+            "Ask questions",
+            "Critique writing",
+            "Point out gaps in arguments",
+            "Suggest sources",
+            "Quiz the author"
+          ],
+          "reason": "With chats that can read the book and the library, the author asks it about what's there, a paper's argument above all.",
+          "date": "2026-11-22"
+        }
+      ]
     }
   ],
   "related": [
-    "ai"
+    "ai",
+    "assistant/chats",
+    "assistant/tools",
+    "assistant/memory"
   ]
 }

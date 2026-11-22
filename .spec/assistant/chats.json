@@ -1,0 +1,72 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Chats",
+  "summary": "Conversations with the assistant are kept, synced, and can be opened beside any screen.",
+  "order": 1,
+  "description": "The assistant is a conversation that goes on: chats are kept and continued later, on any device, and the current one opens beside whatever the author is looking at.",
+  "stories": [
+    {
+      "id": "US-13",
+      "as": "an author who thinks things through in conversation",
+      "want": "to come back to a chat later, on any device",
+      "soThat": "a line of thought isn't lost when I close the app",
+      "requirements": [
+        "#CHAT-1",
+        "#CHAT-2",
+        "#CHAT-4",
+        "#SYN-20"
+      ]
+    },
+    {
+      "id": "US-14",
+      "as": "an author reading a paper or writing a page",
+      "want": "to ask the assistant about it without leaving it",
+      "soThat": "the question comes while the thought is fresh",
+      "requirements": [
+        "#CHAT-3",
+        "#ATL-1"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "CHAT-1",
+      "text": "Conversations with the assistant are kept as chats, which the author can reopen, continue and delete."
+    },
+    {
+      "id": "CHAT-2",
+      "text": "A chat has its own address, `/chats/<chat id>`."
+    },
+    {
+      "id": "CHAT-3",
+      "text": "The assistant opens beside any screen, on the chat that was last open."
+    },
+    {
+      "id": "CHAT-4",
+      "text": "A turn keeps running when the author leaves the chat's screen, and a turn that failed can be retried."
+    },
+    {
+      "id": "CHAT-5",
+      "text": "While another device is answering a chat's last question, this device waits for that answer instead of answering it too, for at most `chat.answering-elsewhere`.",
+      "related": [
+        "#SYN-20"
+      ]
+    },
+    {
+      "id": "CHAT-6",
+      "text": "The tools the assistant used for an answer are shown with it, folded away."
+    },
+    {
+      "id": "CHAT-7",
+      "text": "An id of a page, block, library item, person or institution in an assistant message shows as a chip with its current title, which opens it."
+    }
+  ],
+  "values": [
+    {
+      "id": "chat.answering-elsewhere",
+      "type": "duration",
+      "value": "10min",
+      "description": "How long a question another device saved, unanswered, counts as being answered there."
+    }
+  ]
+}
