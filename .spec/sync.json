@@ -1,18 +1,21 @@
 {
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Sync",
-  "summary": "Instances of the app sync their databases over the local network.",
+  "summary": "Peer-to-peer sync between the devices of one book, over the local network.",
   "order": 5,
-  "description": "The author uses the app on more than one machine and wants the same book on each, without a cloud service in between.",
+  "description": "The author's phone and computers hold the same book. They sync directly with each other on the local network, without a server.",
   "stories": [
     {
       "id": "US-3",
-      "as": "an author who writes on more than one machine",
+      "as": "an author who writes on more than one device",
       "want": "the same book on each of them",
       "soThat": "I can pick up wherever I left off",
       "requirements": [
         "#SYN-1",
-        "#SYN-2"
+        "#SYN-2",
+        "#SYN-11",
+        "#SYN-12",
+        "#SYN-14"
       ]
     }
   ],
@@ -33,7 +36,105 @@
       "text": "Sync is built on cr-sqlite.",
       "related": [
         "#STO-1"
+      ],
+      "deprecation": {
+        "reason": "Sync follows Tally's design instead: change tracking in SQLite triggers and per-row conflict resolution by hybrid logical clock.",
+        "replacedBy": [
+          "#SYN-11",
+          "engineering/sync-triggers"
+        ],
+        "date": "2026-11-22"
+      }
+    },
+    {
+      "id": "SYN-4",
+      "text": "No book data passes through a server during sync."
+    },
+    {
+      "id": "SYN-5",
+      "text": "Devices find each other by UDP broadcast and by probing each peer's last known address."
+    },
+    {
+      "id": "SYN-6",
+      "text": "A discovery probe names the book by a short tag derived from its id, never by the id itself."
+    },
+    {
+      "id": "SYN-7",
+      "text": "The channel between two devices is encrypted with the Noise protocol over TCP."
+    },
+    {
+      "id": "SYN-8",
+      "text": "A peer is let in only when the key it proved in the handshake belongs to a device of the book."
+    },
+    {
+      "id": "SYN-9",
+      "text": "A new device joins by scanning a pairing QR code, which works for one device and for `sync.pairing-lifetime`."
+    },
+    {
+      "id": "SYN-10",
+      "text": "Every table syncs unless it is explicitly local to the device.",
+      "related": [
+        "engineering/sync-triggers"
       ]
+    },
+    {
+      "id": "SYN-11",
+      "text": "Concurrent changes to a row resolve to the version with the later hybrid logical clock."
+    },
+    {
+      "id": "SYN-12",
+      "text": "Every device reaches the same rows whatever order changes arrive in."
+    },
+    {
+      "id": "SYN-13",
+      "text": "Two rows that collide on a unique column keep the one with the lower id; the other is deleted on every device."
+    },
+    {
+      "id": "SYN-14",
+      "text": "A note edited on two devices before they sync keeps both edits as revisions, so no edit is lost.",
+      "related": [
+        "#BOOK-5"
+      ]
+    },
+    {
+      "id": "SYN-15",
+      "text": "Settings that belong to one device (sync bookmarks, caches) are never synced."
+    },
+    {
+      "id": "SYN-16",
+      "text": "A database restored from an older copy is detected at startup, or at its first sync if its marker was restored with it, and then takes a new device id and syncs from scratch."
+    },
+    {
+      "id": "SYN-17",
+      "text": "On Android, sync also runs while the app is closed."
+    },
+    {
+      "id": "SYN-18",
+      "text": "While the app runs, a desktop device keeps a daily copy of the database for `sync.snapshot-daily`, then one a week back to `sync.snapshot-weekly`."
+    },
+    {
+      "id": "SYN-19",
+      "text": "Development and release builds never sync with each other."
     }
+  ],
+  "values": [
+    {
+      "id": "sync.pairing-lifetime",
+      "type": "duration",
+      "value": "10min"
+    },
+    {
+      "id": "sync.snapshot-daily",
+      "type": "duration",
+      "value": "14d"
+    },
+    {
+      "id": "sync.snapshot-weekly",
+      "type": "duration",
+      "value": "91d"
+    }
+  ],
+  "related": [
+    "engineering/ids"
   ]
 }

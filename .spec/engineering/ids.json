@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Row ids",
+  "summary": "Entity rows are keyed by TypeIDs that every device agrees on.",
+  "order": 2,
+  "requirements": [
+    {
+      "id": "ID-1",
+      "text": "Every entity table is keyed by a TypeID: a per-table prefix and a UUID, `note_01jd4x8m2kf7r9q3vz5w6t0hyc`."
+    },
+    {
+      "id": "ID-2",
+      "text": "Tables without a prefix use a natural key, and no table uses an auto-increment integer."
+    },
+    {
+      "id": "ID-3",
+      "text": "A table's prefix never changes once rows exist."
+    }
+  ],
+  "related": [
+    "#SYN-13"
+  ]
+}
