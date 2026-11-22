@@ -271,6 +271,12 @@ Dependencies install only once published for two weeks (`bunfig.toml`).
 ## CI
 
 - `check.yml`: `bun test` and `bun run build` on every push.
+- Caching: every build caches Rust compiler outputs with sccache (GitHub's
+  cache backend; it keeps each variant of the Tauri crates, which the CLI
+  and Gradle, or the two macOS targets, build differently), the target folder
+  and registry with rust-cache (per platform, kept on failure), Bun's
+  packages, and on Android the NDK and Gradle. A push supersedes a run still
+  going for the same branch (`concurrency`).
 - `android-apk.yml`, `macos.yml`, `linux.yml`: on push to main, build the
   apps and publish them to the `latest` release.
 - `android-apk.yml` also checks the migrations on SQLite 3.39

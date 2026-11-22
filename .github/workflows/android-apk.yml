@@ -6,11 +6,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A newer push supersedes a run still going for the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v5
 
@@ -25,9 +34,20 @@ jobs:
       # build doesn't hinge on services.gradle.org answering in time.
       - uses: gradle/actions/setup-gradle@v5
 
+      # The NDK is a large download; keep it between runs. (ANDROID_HOME is
+      # /usr/local/lib/android/sdk on GitHub's Ubuntu runners.)
+      - name: Cache Android NDK
+        id: ndk
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/28.0.12674087
+          key: android-ndk-28.0.12674087
+
       - name: Install Android NDK
         run: |
-          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.0.12674087"
+          if [ "${{ steps.ndk.outputs.cache-hit }}" != "true" ]; then
+            echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.0.12674087"
+          fi
           echo "NDK_HOME=$ANDROID_HOME/ndk/28.0.12674087" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.12674087" >> "$GITHUB_ENV"
 
@@ -35,15 +55,33 @@ jobs:
         with:
           targets: aarch64-linux-android
 
+      # Compiler outputs, crate by crate, in GitHub's cache. Tauri's build
+      # scripts re-run when the CLI and Gradle (or the two macOS targets)
+      # build with different settings, so cargo's own target folder holds one
+      # variant at a time; sccache keeps them all.
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            tools/sqlite-android-compat
+          shared-key: android
+          # Keep what compiled even when a later step fails.
+          cache-on-failure: true
 
       # Every migration, the sync triggers especially, has to parse and
       # behave on Android 14's SQLite (3.39), the oldest an Android device of
       # ours runs.
       - name: Check migrations on Android's SQLite
         run: cargo run --quiet --manifest-path tools/sqlite-android-compat/Cargo.toml -- .
+
+      # Bun's package cache, keyed on the lockfile.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile

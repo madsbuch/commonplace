@@ -6,11 +6,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A newer push supersedes a run still going for the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
     steps:
       - uses: actions/checkout@v5
 
@@ -25,9 +34,25 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Compiler outputs, crate by crate, in GitHub's cache. Tauri's build
+      # scripts re-run when the CLI and Gradle (or the two macOS targets)
+      # build with different settings, so cargo's own target folder holds one
+      # variant at a time; sccache keeps them all.
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: linux
+          # Keep what compiled even when a later step fails.
+          cache-on-failure: true
+
+      # Bun's package cache, keyed on the lockfile.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
