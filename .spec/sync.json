@@ -91,10 +91,19 @@
     },
     {
       "id": "SYN-14",
-      "text": "A note edited on two devices before they sync keeps both edits as revisions, so no edit is lost.",
+      "text": "A block edited on two devices before they sync keeps both edits as revisions, so no edit is lost.",
       "related": [
         "#BOOK-5"
-      ]
+      ],
+      "history": [
+        {
+          "version": 1,
+          "text": "A note edited on two devices before they sync keeps both edits as revisions, so no edit is lost.",
+          "reason": "Content is stored as blocks: edits to different blocks of a note no longer conflict, and only edits to the same block need keeping.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "SYN-15",

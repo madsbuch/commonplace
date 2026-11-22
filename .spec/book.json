@@ -23,7 +23,16 @@
     },
     {
       "id": "BOOK-5",
-      "text": "Every saved change to a note is kept as a revision."
+      "text": "Every saved change to a block is kept as a revision.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Every saved change to a note is kept as a revision.",
+          "reason": "Content is stored as blocks, so revisions are kept per block.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "BOOK-6",
@@ -31,7 +40,16 @@
     },
     {
       "id": "BOOK-7",
-      "text": "Notes are written in Markdown."
+      "text": "Markdown syntax typed in the editor becomes the matching blocks.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Notes are written in Markdown.",
+          "reason": "Content is stored as blocks, not Markdown text; Markdown remains the way the author writes.",
+          "date": "2026-11-22"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "BOOK-8",
@@ -40,6 +58,17 @@
     {
       "id": "BOOK-9",
       "text": "Code blocks in the languages in `book.code-languages` are shown with syntax highlighting."
+    },
+    {
+      "id": "BOOK-10",
+      "text": "A note's content is an ordered list of blocks, not a Markdown text."
+    },
+    {
+      "id": "BOOK-11",
+      "text": "Each block is its own database row.",
+      "related": [
+        "#SYN-11"
+      ]
     }
   ],
   "values": [
@@ -93,7 +122,8 @@
       "requirements": [
         "#BOOK-7",
         "#BOOK-8",
-        "#BOOK-9"
+        "#BOOK-9",
+        "#BOOK-10"
       ]
     }
   ]
