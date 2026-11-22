@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Sync",
   "summary": "Peer-to-peer sync between the devices of one book, over the local network.",
-  "order": 6,
+  "order": 7,
   "description": "The author's phone and computers hold the same book. They sync directly with each other on the local network, without a server.",
   "stories": [
     {

@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Desktop app",
   "summary": "The book is written and read in a Tauri app on phone and desktop.",
-  "order": 4,
+  "order": 5,
   "description": "A local-first app holds the book, so it works offline and the data stays on the author's devices.",
   "requirements": [
     {

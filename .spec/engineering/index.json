@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Engineering",
   "summary": "How the app is built where that has to hold.",
-  "order": 7,
+  "order": 8,
   "description": "Rules that hold across the whole code base.",
   "requirements": [
     {

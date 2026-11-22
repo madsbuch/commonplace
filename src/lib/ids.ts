@@ -16,6 +16,7 @@ export const ID_PREFIXES = {
   blocks: "blk",
   revisions: "rev",
   ai_usage: "ai_usage",
+  library_items: "lib",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;

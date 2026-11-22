@@ -1,0 +1,80 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Library",
+  "summary": "The papers and books the author reads, as PDFs in the app.",
+  "order": 2,
+  "description": "What the book draws on sits next to it: papers and books, each a PDF with a few details, readable on every device.",
+  "stories": [
+    {
+      "id": "US-10",
+      "as": "an author who reads papers and books to write about them",
+      "want": "my papers and books in the same app as the book",
+      "soThat": "what I read is at hand on every device where I write",
+      "requirements": [
+        "#LIB-1",
+        "#LIB-2",
+        "#LIB-6",
+        "#LIB-7"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "LIB-1",
+      "text": "The library holds papers and books, each with one PDF file."
+    },
+    {
+      "id": "LIB-2",
+      "text": "The author adds an item to the library by uploading a PDF of at most `library.max-file-size`."
+    },
+    {
+      "id": "LIB-3",
+      "text": "Each item has a title, authors, a year and a kind from `library.kinds`."
+    },
+    {
+      "id": "LIB-4",
+      "text": "When an item is added, its title, authors and year are taken from the PDF's own metadata where the PDF has them."
+    },
+    {
+      "id": "LIB-5",
+      "text": "The author can edit an item's details."
+    },
+    {
+      "id": "LIB-6",
+      "text": "An item's PDF can be read in the app on every platform in `app.platforms`.",
+      "related": [
+        "#APP-2"
+      ]
+    },
+    {
+      "id": "LIB-7",
+      "text": "An item's PDF is stored in the database and syncs to the book's devices with the rest of the book.",
+      "related": [
+        "#STO-1",
+        "#SYN-10"
+      ]
+    },
+    {
+      "id": "LIB-8",
+      "text": "The author can remove an item, and its PDF with it, from the library."
+    }
+  ],
+  "values": [
+    {
+      "id": "library.kinds",
+      "type": "list",
+      "value": [
+        "Paper",
+        "Book"
+      ],
+      "description": "What a library item can be."
+    },
+    {
+      "id": "library.max-file-size",
+      "type": "number",
+      "value": 100,
+      "unit": "MB",
+      "description": "The largest PDF the library takes, so one file always fits a sync message."
+    }
+  ]
+}

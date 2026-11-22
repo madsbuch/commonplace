@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Storage",
   "summary": "Each instance keeps the whole book in one SQLite database.",
-  "order": 5,
+  "order": 6,
   "description": "One database file per instance keeps the book easy to back up, inspect and sync.",
   "requirements": [
     {
