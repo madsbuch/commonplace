@@ -28,6 +28,18 @@
     {
       "id": "BOOK-6",
       "text": "The author can read any earlier revision of a note."
+    },
+    {
+      "id": "BOOK-7",
+      "text": "Notes are written in Markdown."
+    },
+    {
+      "id": "BOOK-8",
+      "text": "Inline LaTeX in a note is rendered as typeset maths."
+    },
+    {
+      "id": "BOOK-9",
+      "text": "Code blocks in the languages in `book.code-languages` are shown with syntax highlighting."
     }
   ],
   "values": [
@@ -42,6 +54,14 @@
         "Programming"
       ],
       "description": "The fields the book is about."
+    },
+    {
+      "id": "book.code-languages",
+      "type": "list",
+      "value": [
+        "Lean"
+      ],
+      "description": "Languages whose code blocks the book highlights."
     }
   ],
   "stories": [
@@ -63,6 +83,17 @@
       "requirements": [
         "#BOOK-5",
         "#BOOK-6"
+      ]
+    },
+    {
+      "id": "US-6",
+      "as": "an author writing about formal subjects",
+      "want": "to write maths and code alongside prose",
+      "soThat": "formal ideas are stated precisely",
+      "requirements": [
+        "#BOOK-7",
+        "#BOOK-8",
+        "#BOOK-9"
       ]
     }
   ]
