@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { setPath } from "../lib/currentView";
+import { installSelectionTracking, setPath } from "../lib/currentView";
 import { toggleDock, useDockOpen } from "../lib/dock";
 import { setNavigate } from "../lib/navigation";
 import { AssistantDock } from "./AssistantDock";
@@ -19,7 +19,9 @@ export function Layout() {
   const dock = useDockOpen();
   useEffect(() => setNavigate((to) => void navigate(to)), [navigate]);
   // Spec: ATL-1
-  useEffect(() => setPath(location.pathname), [location.pathname]);
+  useEffect(() => setPath(location.pathname, `${location.pathname}${location.search}${location.hash}`), [location.pathname, location.search, location.hash]);
+  // Spec: ATL-6
+  useEffect(() => installSelectionTracking(), []);
   // Spec: APP-7
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

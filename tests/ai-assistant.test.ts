@@ -10,11 +10,14 @@ import {
   answeringElsewhereUntil,
   awaitsAnswer,
   compactTranscript,
+  forStorage,
+  PICTURE_GONE,
   systemMessages,
   transcriptToUi,
 } from "../src/lib/assistant";
 import { TOOLS, PDF_PAGES_PER_READ } from "../src/lib/assistantTools";
-import { viewOfPath } from "../src/lib/currentView";
+import { ROUTES, viewOfPath } from "../src/lib/currentView";
+import { SCREENSHOT_WIDTH } from "../src/lib/screenshot";
 import { splitTypeIds } from "../src/lib/ids";
 import { foldToolCalls } from "../src/lib/openrouter";
 import { DEFAULT_ASSISTANT_MODEL } from "../src/lib/settings";
@@ -137,5 +140,42 @@ describe("ids and the screen", () => {
     expect(viewOfPath("/library/institutions/institution_1")).toEqual({ kind: "institution", id: "institution_1" });
     expect(viewOfPath("/library?tab=people")).toEqual({ kind: "library", id: null });
     expect(viewOfPath("/")).toEqual({ kind: "home", id: null });
+  });
+});
+
+describe("pictures of the screen", () => {
+  const shot: TranscriptMessage[] = [
+    { role: "user", content: "What's this?" },
+    { role: "assistant", content: null, tool_calls: [call("look_at_screen")] },
+    { role: "tool", tool_call_id: "c1", content: "{}" },
+    { role: "user", content: "The picture of the screen, for look_at_screen.", attachment: "screenshot", image: "data:image/jpeg;base64,AAAA" },
+  ];
+
+  // Spec: ATL-7
+  test("are never stored, only their place", () => {
+    const kept = forStorage(shot);
+    expect(JSON.stringify(kept)).not.toContain("base64");
+    expect(kept[3]).toEqual({ role: "user", content: "The picture of the screen, for look_at_screen.", attachment: "screenshot" });
+    expect(compactTranscript(kept)[3]?.content).toBe(PICTURE_GONE);
+  });
+
+  test("aren't the author's message: the question still waits, and the thread doesn't show them", () => {
+    expect(awaitsAnswer(shot)).toBe(true);
+    expect(transcriptToUi(shot, (n) => n).map((i) => i.kind)).toEqual(["user", "activity"]);
+  });
+
+  // Spec: ATL-8
+  test("are at most `assistant.screenshot-width` wide", () => {
+    expect(`${SCREENSHOT_WIDTH}px`).toBe(z.string().parse(specValue("assistant/tools.json", "assistant.screenshot-width")));
+  });
+});
+
+describe("the address", () => {
+  // Spec: ATL-1
+  test("every route the app has is explained to the assistant", () => {
+    const router = readFileSync(join(import.meta.dir, "..", "src", "router.tsx"), "utf8");
+    const paths = [...router.matchAll(/path: "([^"]+)"/g)].map((m) => (m[1] ?? "").replace(/:\w+/g, "<>"));
+    const explained = ROUTES.map((r) => r.address.replace(/<[^>]+>/g, "<>"));
+    expect(paths.filter((p) => !explained.includes(p))).toEqual([]);
   });
 });

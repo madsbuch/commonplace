@@ -101,6 +101,14 @@
       "related": [
         "#AI-6"
       ]
+    },
+    {
+      "id": "LIB-13",
+      "text": "Text in a PDF can be selected and copied in the viewer.",
+      "level": "should",
+      "related": [
+        "#ATL-6"
+      ]
     }
   ],
   "values": [

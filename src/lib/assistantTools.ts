@@ -5,7 +5,8 @@
 // the memory (MEM-4).
 // ---------------------------------------------------------------------------
 
-import { currentView } from "./currentView";
+import { currentSelection, currentView, ROUTES } from "./currentView";
+import { captureScreen } from "./screenshot";
 import {
   getItem,
   institutionView,
@@ -41,7 +42,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "look_at_screen",
     description:
-      "What the author is looking at right now: the screen, and the page (with its content and the block the cursor is in), library item (with the text of the PDF page in view), person or institution on it. Use it whenever the author says 'this', 'here', 'this page' or 'this paper'.",
+      "What the author is looking at right now: a picture of the screen (when you can see images), its address and what the app's addresses mean, what the author has selected, and the page (with its content and the block the cursor is in), library item (with the text of the PDF page in view), person or institution on it. Use it whenever the author says 'this', 'here', 'this page', 'this paper' or 'what I selected'.",
     parameters: obj({}),
   },
   { name: "list_pages", description: "Every page of the book: id, title and depth in the page tree.", parameters: obj({}) },
@@ -152,10 +153,23 @@ async function itemDetails(id: string) {
   };
 }
 
-// Spec: ATL-1
-async function lookAtScreen(): Promise<unknown> {
+// Spec: ATL-1, ATL-6
+async function lookAtScreen(): Promise<Record<string, unknown>> {
   const v = currentView();
-  const screen = { screen: v.kind, address: v.path };
+  const sel = currentSelection();
+  const screen: Record<string, unknown> = {
+    screen: v.kind,
+    address: v.address,
+    addresses: ROUTES,
+    selection: sel
+      ? {
+          text: sel.text,
+          in: sel.in,
+          ...(sel.blockIds.length > 0 ? { block_ids: sel.blockIds } : {}),
+          ...(sel.pdfPages.length > 0 ? { pdf_pages: sel.pdfPages } : {}),
+        }
+      : null,
+  };
   if ((v.kind === "page" || v.kind === "page-history") && v.id) {
     const cursor = v.cursorBlockId ? await blockInfo(v.cursorBlockId) : null;
     return {
@@ -180,13 +194,36 @@ async function lookAtScreen(): Promise<unknown> {
   return screen;
 }
 
+/** What a tool hands back: text for the model, and maybe a picture to show it. */
+export interface ToolResult {
+  content: string;
+  image?: string;
+}
+
 // Spec: ATL-1, ATL-2, ATL-3, ATL-4, ATL-5, MEM-4
 /** Runs one tool call; the result is text for the model (errors too, so it can recover). */
-export async function runTool(name: string, args: Record<string, unknown>): Promise<string> {
+export async function runTool(name: string, args: Record<string, unknown>, ctx: { canSeeImages: boolean } = { canSeeImages: false }): Promise<ToolResult> {
+  if (name === "look_at_screen") {
+    // Spec: ATL-1, ATL-7
+    try {
+      const looked = await lookAtScreen();
+      const image = ctx.canSeeImages ? await captureScreen() : null;
+      looked["picture"] = image
+        ? "A picture of the screen follows this result."
+        : ctx.canSeeImages
+          ? "The screen couldn't be drawn this time."
+          : "Your model can't read images, so there's no picture.";
+      return image ? { content: out(looked), image } : { content: out(looked) };
+    } catch (e) {
+      return { content: `The tool failed: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+  return { content: await runReadTool(name, args) };
+}
+
+async function runReadTool(name: string, args: Record<string, unknown>): Promise<string> {
   try {
     switch (name) {
-      case "look_at_screen":
-        return out(await lookAtScreen());
       case "list_pages":
         return out(await pageList());
       case "read_page": {

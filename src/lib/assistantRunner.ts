@@ -15,8 +15,9 @@ import {
   compactTranscript,
   systemMessages,
   actionLabel,
+  forStorage,
 } from "./assistant";
-import { getApiKey, getAssistantModel } from "./aiSettings";
+import { getApiKey, getAssistantModel, loadCachedModels } from "./aiSettings";
 import { TOOLS, runTool, toolLabel } from "./assistantTools";
 import { chatVersion, createChat, deleteChat, getChat, lastChatId, rememberLastChat, saveChat, titleFrom } from "./chats";
 import { onTablesChanged } from "./live";
@@ -136,7 +137,8 @@ export async function removeChat(chatId: string): Promise<void> {
 
 async function persist(chatId: string, messages: TranscriptMessage[]): Promise<void> {
   const title = titleFrom(messages, actionLabel);
-  await saveChat(chatId, title, messages);
+  // Spec: ATL-7
+  await saveChat(chatId, title, forStorage(messages));
   if (state.chatId === chatId) set({ title });
 }
 
@@ -151,6 +153,11 @@ async function runTurn(): Promise<void> {
     return;
   }
   const model = await getAssistantModel();
+  // Spec: ATL-7
+  // A model the list says takes only text gets no pictures; one it doesn't know is tried with them.
+  const listed = (await loadCachedModels().catch(() => null))?.models.find((m) => m.id === model);
+  const modalities = listed?.architecture?.input_modalities;
+  const canSeeImages = modalities ? modalities.includes("image") : true;
   controller = new AbortController();
   const signal = controller.signal;
   let messages = [...state.messages];
@@ -172,10 +179,17 @@ async function runTurn(): Promise<void> {
         return;
       }
       messages = [...messages, { role: "assistant", content: result.text.trim() || null, tool_calls: result.toolCalls }];
+      const pictures: string[] = [];
       for (const call of result.toolCalls) {
         if (state.chatId === chatId) set({ activeTools: [...new Set([...state.activeTools, toolLabel(call.function.name)])], streaming: "" });
-        const content = await runTool(call.function.name, parseToolArgs(call.function.arguments));
-        messages = [...messages, { role: "tool", tool_call_id: call.id, content }];
+        const r = await runTool(call.function.name, parseToolArgs(call.function.arguments), { canSeeImages });
+        messages = [...messages, { role: "tool", tool_call_id: call.id, content: r.content }];
+        if (r.image) pictures.push(r.image);
+      }
+      // Spec: ATL-1, ATL-7
+      // Pictures go after the tool results, as the author's side of the round; they're never stored.
+      for (const image of pictures) {
+        messages = [...messages, { role: "user", content: "The picture of the screen, for look_at_screen.", attachment: "screenshot", image }];
       }
       await persist(chatId, messages);
       if (state.chatId === chatId) set({ messages });

@@ -255,7 +255,25 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await chat([{ tools: [{ name: "look_at_screen" }] }, { text: `It defines the identity: ${parent}.` }]);
     await page.goto(url);
     await page.waitForTimeout(1200);
-    await page.locator(".bn-editor h1").click();
+    // Select a word in the editor, then move to the assistant to ask about it.
+    await page.locator(".bn-editor p", { hasText: "identity" }).first().click();
+    await page.evaluate(() => {
+      const p = [...document.querySelectorAll(".bn-editor p")].find((e) => e.textContent?.includes("identity"));
+      const walker = p ? document.createTreeWalker(p, NodeFilter.SHOW_TEXT) : null;
+      for (let n = walker?.nextNode(); n; n = walker?.nextNode()) {
+        const at = n.textContent?.indexOf("identity") ?? -1;
+        if (at >= 0) {
+          const r = document.createRange();
+          r.setStart(n, at);
+          r.setEnd(n, at + "identity".length);
+          const s = window.getSelection();
+          s?.removeAllRanges();
+          s?.addRange(r);
+          return;
+        }
+      }
+    });
+    await page.waitForTimeout(200);
     await page.getByRole("button", { name: "Open the assistant" }).click();
     await page.locator(".assistant textarea").fill("What is this page about?");
     await page.locator(".assistant textarea").press("Enter");
@@ -263,22 +281,42 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const asked = (await requests()).slice(before);
     const toolResult = JSON.stringify(asked[1]?.messages ?? []);
     check("the assistant sees the page on screen and the block the cursor is in", toolResult.includes("# Simple types") && toolResult.includes("cursor_block"), JSON.stringify((asked[1]?.messages ?? []).filter((m) => m.role === "tool")).slice(0, 400) + ` | ${asked.length} requests`);
+    // Spec: ATL-1, ATL-6, ATL-7
+    const look = JSON.parse((asked[1]?.messages ?? []).find((m) => m.role === "tool")?.content ?? "{}");
+    check("it gets the address and what the app's addresses mean", look.address?.startsWith("/page/blk_") && look.addresses?.some((r) => r.address === "/page/<page id>"), JSON.stringify(look).slice(0, 200));
+    check("it sees what the author selected, kept after moving to the assistant", look.selection?.text === "identity" && look.selection?.in === "editor" && look.selection?.block_ids?.length === 1, JSON.stringify(look.selection));
+    const picture = JSON.stringify((asked[1]?.messages ?? []).filter((m) => m.role === "user").slice(-1));
+    check("a picture of the screen goes with the turn", picture.includes('"type":"image_url"') && picture.includes("data:image/jpeg"), picture.slice(0, 160));
     check("an id in its answer shows as a chip with the title", (await page.locator(".assistant .entity-chip").allInnerTexts()).join() === "Simple types");
     check("the tools it used are shown with the answer", (await page.locator(".assistant .chat-activity").innerText()).includes("the screen"));
     const chats1 = await q("SELECT id, title, messages FROM chats");
-    check("the chat is kept, titled by its first question", chats1.length === 1 && chats1[0].title === "What is this page about?" && JSON.parse(chats1[0].messages).length === 4, JSON.stringify(chats1.map((c) => c.title)));
+    check("the chat is kept, titled by its first question", chats1.length === 1 && chats1[0].title === "What is this page about?" && JSON.parse(chats1[0].messages).length === 5, JSON.stringify(chats1.map((c) => c.title)));
+    check("the picture isn't kept in the chat", !chats1[0].messages.includes("data:image"));
 
     // Spec: ATL-1, ATL-3
     const libId = (await q("SELECT id FROM library_items LIMIT 1"))[0].id;
     await chat([{ tools: [{ name: "look_at_screen" }, { name: "read_pdf_pages", arguments: { item_id: libId, from_page: 2, to_page: 3 } }] }, { text: "Done." }]);
     await page.goto(APP + "/library/" + libId);
     await page.waitForTimeout(1500);
+    // Select text in the PDF's text layer.
+    await page.waitForSelector(".textLayer span");
+    await page.evaluate(() => {
+      const span = [...document.querySelectorAll(".textLayer span")].find((e) => e.textContent?.includes("computable"));
+      if (!span?.firstChild) return;
+      const r = document.createRange();
+      r.selectNodeContents(span);
+      const s = window.getSelection();
+      s?.removeAllRanges();
+      s?.addRange(r);
+    });
+    await page.waitForTimeout(200);
     await page.locator(".assistant textarea").fill("Explain the page I'm on.");
     await page.locator(".assistant textarea").press("Enter");
     await page.waitForTimeout(2500);
     const libAsk = JSON.stringify((await requests()).slice(-1)[0]?.messages ?? []);
     check("on a library item it sees the PDF page in view, with its text", libAsk.includes("pdf_page_in_view") && libAsk.includes("page 1"), libAsk.slice(-300));
     check("it reads other pages of the PDF", libAsk.includes("page 3") && libAsk.includes("pages_in_pdf"));
+    check("it sees text selected in a PDF, and on which page", libAsk.includes('\\"in\\": \\"pdf\\"') && libAsk.includes("pdf_pages"), libAsk.match(/selection[^}]*}/)?.[0] ?? "");
 
     // Spec: MEM-1, MEM-2, MEM-3, MEM-4
     await chat([{ tools: [{ name: "remember", arguments: { kind: "preference", text: "Be blunt about weak arguments." } }] }, { text: "Noted." }]);

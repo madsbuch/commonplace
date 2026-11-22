@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { openPdf, type OpenPdf, type PdfDocument } from "../lib/pdf";
+import { openPdf, renderTextLayer, type OpenPdf, type PdfDocument } from "../lib/pdf";
 import { setPdfInView } from "../lib/currentView";
 
 /** How far outside the view a page starts rendering, so scrolling finds it drawn. */
@@ -16,6 +16,7 @@ interface PageSize {
 function PdfPage(props: { doc: PdfDocument; number: number; scale: number; size: PageSize; onVisible: (n: number) => void }) {
   const holder = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const text = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const { doc, number, scale, onVisible } = props;
 
@@ -49,6 +50,15 @@ function PdfPage(props: { doc: PdfDocument; number: number; scale: number; size:
       const task = page.render({ canvas: c, viewport });
       cancel = () => task.cancel();
       await task.promise.catch(() => undefined);
+      // Spec: LIB-13, ATL-6
+      // The page's text over the picture, so it can be selected and copied.
+      const layer = text.current;
+      if (cancelled || !layer) return;
+      const stop = await renderTextLayer(page, page.getViewport({ scale }), layer);
+      cancel = () => {
+        task.cancel();
+        stop();
+      };
     })();
     return () => {
       cancelled = true;
@@ -64,6 +74,7 @@ function PdfPage(props: { doc: PdfDocument; number: number; scale: number; size:
       style={{ width: props.size.width * scale, height: props.size.height * scale }}
     >
       {near ? <canvas ref={canvas} style={{ width: "100%", height: "100%" }} /> : null}
+      {near ? <div ref={text} className="textLayer" /> : null}
     </div>
   );
 }

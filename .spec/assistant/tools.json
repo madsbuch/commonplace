@@ -7,7 +7,16 @@
   "requirements": [
     {
       "id": "ATL-1",
-      "text": "The assistant can see what the author is looking at: the screen; the page, library item, person or institution on it; the block the cursor is in on a page; and the PDF page in view."
+      "text": "The assistant can see what the author is looking at: a picture of the screen, its address with what the app's addresses mean, the page, library item, person or institution on it, the block the cursor is in on a page, and the PDF page in view.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The assistant can see what the author is looking at: the screen; the page, library item, person or institution on it; the block the cursor is in on a page; and the PDF page in view.",
+          "reason": "A description of the screen misses what the author sees; the assistant gets a picture of it, and the address with what the app's addresses mean.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "ATL-2",
@@ -33,6 +42,18 @@
       "related": [
         "#AST-2"
       ]
+    },
+    {
+      "id": "ATL-6",
+      "text": "The assistant can see what the author has selected: text and blocks in the editor, text in a PDF, or other text on screen, also after the author has moved to the assistant to ask about it."
+    },
+    {
+      "id": "ATL-7",
+      "text": "A picture of the screen goes to the model only for the turn it was taken in, is never kept in the chat, and is left out when the assistant's model can't read images."
+    },
+    {
+      "id": "ATL-8",
+      "text": "A picture of the screen leaves out the assistant itself and is at most `assistant.screenshot-width` wide."
     }
   ],
   "values": [
@@ -42,6 +63,12 @@
       "value": 10,
       "unit": "pages",
       "description": "The most PDF pages one tool call reads."
+    },
+    {
+      "id": "assistant.screenshot-width",
+      "type": "dimension",
+      "value": "1280px",
+      "description": "The widest a picture of the screen is sent."
     }
   ]
 }

@@ -174,7 +174,15 @@ export type ToolCall = z.infer<typeof ToolCallSchema>;
 
 /** One message of a chat transcript: the author's, the assistant's (maybe calling tools), or a tool's result. */
 export const TranscriptMessageSchema = z.discriminatedUnion("role", [
-  z.object({ role: z.literal("user"), content: z.string(), action: z.string().optional() }),
+  z.object({
+    role: z.literal("user"),
+    content: z.string(),
+    action: z.string().optional(),
+    // Spec: ATL-7
+    /** A picture of the screen handed over for a tool, not written by the author. Its image is never stored. */
+    attachment: z.literal("screenshot").optional(),
+    image: z.string().optional(),
+  }),
   z.object({ role: z.literal("assistant"), content: z.string().nullable(), tool_calls: z.array(ToolCallSchema).optional() }),
   z.object({ role: z.literal("tool"), tool_call_id: z.string(), content: z.string() }),
 ]);

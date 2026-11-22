@@ -303,7 +303,12 @@ export async function chatRound(
   const body: Record<string, unknown> = {
     model,
     // The author's action names are for the screen, not the model.
-    messages: messages.map((m) => (m.role === "user" ? { role: "user", content: m.content } : m)),
+    messages: messages.map((m) => {
+      if (m.role !== "user") return m;
+      // Spec: ATL-7
+      if (m.image) return { role: "user", content: [{ type: "text", text: m.content }, { type: "image_url", image_url: { url: m.image } }] };
+      return { role: "user", content: m.content };
+    }),
     stream: true,
     usage: { include: true },
     ...(tools.length > 0

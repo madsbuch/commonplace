@@ -214,9 +214,18 @@ Book content leaves the device only that way.
   this device) and on its own at `/chats/<id>`. A question another device
   saved, unanswered, in the last 10 minutes waits for that device's answer.
 - It reads by itself through tools (`src/lib/assistantTools.ts`):
-  `look_at_screen` (from `src/lib/currentView.ts`: the address, the block the
-  cursor is in, the PDF page in view), pages, the library, PDF text, people
-  and institutions. Every read goes through `src/lib/lookup.ts`, which
+  `look_at_screen`, pages, the library, PDF text, people and institutions.
+  `look_at_screen` gives the address with `ROUTES` (what each kind of
+  address shows; a test checks every route in `router.tsx` is there), the
+  author's selection, the block the cursor is in, the PDF page in view
+  (`src/lib/currentView.ts`), and a picture of the screen
+  (`src/lib/screenshot.ts`: drawn from the DOM with modern-screenshot,
+  without the assistant, at most 1280px wide). The picture is sent as a
+  `user` message with `attachment: "screenshot"` after the tool results,
+  only to models that take images, and `forStorage` strips it before the
+  chat is saved. The selection is tracked from `selectionchange` and kept
+  when focus moves into the assistant; PDFs have pdf.js's text layer so
+  their text can be selected. Every read goes through `src/lib/lookup.ts`, which
   exposes no writes. It writes only its chats and its memory
   (`assistant_memory`, `src/lib/memory.ts`), which every turn carries.
 - It never adds or changes anything in the book or the library. ESLint

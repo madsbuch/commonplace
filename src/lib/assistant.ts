@@ -110,15 +110,30 @@ export const KEEP_RESULT_CHARS = 600;
 export function compactTranscript(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
   const end = lastUserIndex(messages);
   return messages.map((m, i) => {
+    if (m.role === "user" && m.attachment !== undefined && m.image === undefined) return { ...m, content: PICTURE_GONE };
     if (i >= end || m.role !== "tool" || m.content.length <= KEEP_RESULT_CHARS) return m;
     return { ...m, content: `${m.content.slice(0, 200)}…\n(Earlier result, shortened. Call the tool again for all of it.)` };
   });
 }
 
+/** A message the author wrote (not a picture of the screen handed over for a tool). */
+function authored(m: TranscriptMessage | undefined): boolean {
+  return m?.role === "user" && m.attachment === undefined;
+}
+
 export function lastUserIndex(messages: readonly TranscriptMessage[]): number {
-  for (let i = messages.length - 1; i >= 0; i--) if (messages[i]?.role === "user") return i;
+  for (let i = messages.length - 1; i >= 0; i--) if (authored(messages[i])) return i;
   return -1;
 }
+
+// Spec: ATL-7
+/** The transcript as it's kept: pictures of the screen are dropped, only their place stays. */
+export function forStorage(messages: readonly TranscriptMessage[]): TranscriptMessage[] {
+  return messages.map((m) => (m.role === "user" && m.image !== undefined ? { role: "user", content: m.content, attachment: "screenshot" } : m));
+}
+
+/** What stands in for a picture of the screen that's no longer there. */
+export const PICTURE_GONE = "(A picture of the screen was here; pictures aren't kept. Call look_at_screen for a fresh one.)";
 
 /** Whether the last question has no answer yet. */
 export function awaitsAnswer(messages: readonly TranscriptMessage[]): boolean {
@@ -157,6 +172,7 @@ export function transcriptToUi(messages: readonly TranscriptMessage[], label: (t
     activity = null;
   };
   for (const m of messages) {
+    if (m.role === "user" && m.attachment !== undefined) continue;
     if (m.role === "user") {
       flush();
       out.push({ kind: "user", text: m.content, action: m.action ? actionLabel(m.action) : null });

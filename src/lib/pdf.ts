@@ -101,3 +101,23 @@ export async function pdfDetails(doc: PdfDocument): Promise<PdfDetails> {
     pages: doc.numPages,
   };
 }
+
+type PdfPage = Awaited<ReturnType<PdfDocument["getPage"]>>;
+type Viewport = ReturnType<PdfPage["getViewport"]>;
+
+// Spec: LIB-13
+/**
+ * pdf.js's text layer over a drawn page: the page's text, invisible but
+ * selectable, laid over the canvas at `viewport`'s (CSS) scale. Returns how
+ * to stop it.
+ */
+export async function renderTextLayer(page: PdfPage, viewport: Viewport, container: HTMLElement): Promise<() => void> {
+  const pdfjs = await loadPdfjs();
+  container.replaceChildren();
+  container.style.setProperty("--total-scale-factor", String(viewport.scale));
+  container.style.setProperty("--scale-round-x", "1px");
+  container.style.setProperty("--scale-round-y", "1px");
+  const layer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container, viewport });
+  await layer.render().catch(() => undefined);
+  return () => layer.cancel();
+}
