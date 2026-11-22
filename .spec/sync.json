@@ -10,14 +10,30 @@
       "as": "an author who writes on more than one machine",
       "want": "the same book on each of them",
       "soThat": "I can pick up wherever I left off",
-      "requirements": ["#SYN-1"]
+      "requirements": [
+        "#SYN-1",
+        "#SYN-2"
+      ]
     }
   ],
   "requirements": [
     {
       "id": "SYN-1",
       "text": "Two instances of the app on the same local network can sync their databases with each other.",
-      "related": ["#STO-1"]
+      "related": [
+        "#STO-1"
+      ]
+    },
+    {
+      "id": "SYN-2",
+      "text": "Sync merges the changes each instance made since they last synced, instead of replacing one database with the other."
+    },
+    {
+      "id": "SYN-3",
+      "text": "Sync is built on cr-sqlite.",
+      "related": [
+        "#STO-1"
+      ]
     }
   ]
 }

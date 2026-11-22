@@ -3,7 +3,7 @@
   "title": "The book",
   "summary": "What the book covers and how it grows.",
   "order": 1,
-  "description": "The content itself. The book is never done: chapters are added and revised as interests and understanding change.",
+  "description": "The content itself. The book is never done: notes are added and revised as interests and understanding change, and chapters arrange them for reading.",
   "requirements": [
     {
       "id": "BOOK-1",
@@ -12,14 +12,58 @@
     {
       "id": "BOOK-2",
       "text": "Any part of the book can be revised at any time; there is no finished or published state that locks it."
+    },
+    {
+      "id": "BOOK-3",
+      "text": "The book's content is a set of notes, and a note can link to any other note."
+    },
+    {
+      "id": "BOOK-4",
+      "text": "A chapter is an ordered arrangement of notes chosen by the author."
+    },
+    {
+      "id": "BOOK-5",
+      "text": "Every saved change to a note is kept as a revision."
+    },
+    {
+      "id": "BOOK-6",
+      "text": "The author can read any earlier revision of a note."
     }
   ],
   "values": [
     {
       "id": "book.topics",
       "type": "list",
-      "value": ["Type theory", "Ontologies", "Epistemology", "Probabilistic reasoning", "Programming"],
+      "value": [
+        "Type theory",
+        "Ontologies",
+        "Epistemology",
+        "Probabilistic reasoning",
+        "Programming"
+      ],
       "description": "The fields the book is about."
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-4",
+      "as": "someone writing about ideas that cross fields",
+      "want": "to link ideas wherever they connect",
+      "soThat": "the book shows how the topics relate",
+      "requirements": [
+        "#BOOK-3",
+        "#BOOK-4"
+      ]
+    },
+    {
+      "id": "US-5",
+      "as": "an author whose understanding keeps changing",
+      "want": "to see what a note said before",
+      "soThat": "I can trace how my thinking evolved",
+      "requirements": [
+        "#BOOK-5",
+        "#BOOK-6"
+      ]
     }
   ]
 }

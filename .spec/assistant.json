@@ -3,12 +3,39 @@
   "title": "Writing assistant",
   "summary": "An assistant in the app that helps the author write the book.",
   "order": 2,
-  "description": "The assistant supports the author's own work on the book. It exists to make writing better, not to replace the writing.",
+  "description": "The assistant supports the author's own work on the book. It challenges and informs the writing; the writing stays the author's.",
   "requirements": [
     {
       "id": "AST-1",
       "text": "The app has an assistant that helps the author write the book.",
-      "related": ["#US-2"]
+      "related": [
+        "#US-2"
+      ]
+    },
+    {
+      "id": "AST-2",
+      "text": "The assistant never adds or changes text in the book.",
+      "related": [
+        "#BOOK-3"
+      ]
+    },
+    {
+      "id": "AST-3",
+      "text": "The assistant helps only in the ways listed in `assistant.actions`."
+    }
+  ],
+  "values": [
+    {
+      "id": "assistant.actions",
+      "type": "list",
+      "value": [
+        "Ask questions",
+        "Critique writing",
+        "Point out gaps in arguments",
+        "Suggest sources",
+        "Quiz the author"
+      ],
+      "description": "The ways the assistant may help the author."
     }
   ]
 }

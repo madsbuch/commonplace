@@ -9,14 +9,21 @@
       "as": "a professional with interests that span several fields",
       "want": "one book that collects and develops what I find interesting",
       "soThat": "my understanding builds up in one place instead of scattering",
-      "requirements": ["#BOOK-1", "#BOOK-2"]
+      "requirements": [
+        "#BOOK-1",
+        "#BOOK-2"
+      ]
     },
     {
       "id": "US-2",
       "as": "a professional working in the era of AI",
       "want": "to keep doing the thinking and writing myself",
       "soThat": "my skills don't atrophy",
-      "requirements": ["#AST-1"]
+      "requirements": [
+        "#AST-1",
+        "#AST-2",
+        "#AST-3"
+      ]
     }
   ]
 }
