@@ -13,6 +13,8 @@ import {
 import type { DocBlock } from "../lib/bookModel";
 import { fieldsOf } from "../lib/guards";
 import { code, codeBlockSpec } from "./code";
+
+export { syntaxHighlighter } from "./code";
 import { heading, HEADING_LEVELS } from "./heading";
 import { list } from "./list";
 import { page, pageBlockSpec } from "./page";

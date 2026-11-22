@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "bun test",
     "preview": "vite preview",
-    "tauri": "bun scripts/tauri.mjs"
+    "tauri": "bun scripts/tauri.mjs",
+    "test:browser": "node tests/browser/editor.check.cjs"
   },
   "dependencies": {
     "@blocknote/code-block": "^0.57.0",

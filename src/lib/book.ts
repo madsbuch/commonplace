@@ -10,12 +10,12 @@
 // ---------------------------------------------------------------------------
 
 import { z } from "zod";
-import { generateKeyBetween } from "fractional-indexing";
 import { execute, nowIso, select } from "./db";
 import { newId } from "./ids";
 import {
   bySiblingOrder,
   canonical,
+  keyBetween,
   contentTree,
   inlineMarkdown,
   PAGE_TYPE,
@@ -311,7 +311,7 @@ async function endPosition(parentId: string | null): Promise<string> {
     );
   const sorted = rows.sort(bySiblingOrder);
   const last = sorted[sorted.length - 1];
-  return generateKeyBetween(last?.position ?? null, null);
+  return keyBetween(last?.position ?? null, null);
 }
 
 function snapshotOfRow(r: BlockRow): Snapshot {
@@ -376,7 +376,7 @@ export async function movePage(pageId: string, newParentPageId: string | null, b
   const at = list.findIndex((s) => s.id === beforeId);
   const lower = at === -1 ? (list[list.length - 1]?.position ?? null) : (list[at - 1]?.position ?? null);
   const upper = at === -1 ? null : (list[at]?.position ?? null);
-  const position = generateKeyBetween(lower, upper);
+  const position = keyBetween(lower, upper);
   const now = nowIso();
   await execute(`UPDATE blocks SET parent_id = $2, position = $3, updated_at = $4 WHERE id = $1`, [pageId, newParentPageId, position, now]);
   await writeRevision(pageId, newParentPageId, { ...snapshotOfRow(row), parentId: newParentPageId, position }, false, now);

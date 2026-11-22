@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
-import { schema, toEditorBlocks } from "../blocks";
+import { schema, syntaxHighlighter, toEditorBlocks } from "../blocks";
 import { pageRevisions } from "../lib/book";
 import { momentsOf, pageAt, type DocBlock, type RevisionRow } from "../lib/bookModel";
 import { useTablesVersion } from "../lib/live";
@@ -13,7 +13,7 @@ import { useColorScheme } from "../lib/theme";
 function ReadOnlyPage(props: { blocks: DocBlock[] }) {
   const scheme = useColorScheme();
   const editor = useCreateBlockNote(
-    { schema, ...(props.blocks.length > 0 ? { initialContent: toEditorBlocks(props.blocks) } : {}) },
+    { schema, extensions: [syntaxHighlighter], ...(props.blocks.length > 0 ? { initialContent: toEditorBlocks(props.blocks) } : {}) },
     [props.blocks],
   );
   return <BlockNoteView editor={editor} editable={false} theme={scheme} sideMenu={false} slashMenu={false} />;
@@ -21,7 +21,7 @@ function ReadOnlyPage(props: { blocks: DocBlock[] }) {
 
 function when(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
 }
 
 // Spec: BOOK-6
@@ -64,7 +64,10 @@ export default function HistoryPage() {
             </li>
           ))}
         </ol>
-        <div className="history-page">{shown ? <ReadOnlyPage key={selected ?? ""} blocks={shown.blocks} /> : null}</div>
+        <div className="history-page">
+          {shown && shown.blocks.length > 0 ? <ReadOnlyPage key={selected ?? ""} blocks={shown.blocks} /> : null}
+          {shown && shown.blocks.length === 0 ? <p className="muted">The page was empty then.</p> : null}
+        </div>
       </div>
     </div>
   );

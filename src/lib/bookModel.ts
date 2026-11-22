@@ -141,13 +141,33 @@ export function snapshotOf(pageId: string, rows: readonly BlockRow[]): Map<strin
   return out;
 }
 
+/** Whether `key` is a fractional index that keys can be generated next to. */
+export function isValidKey(key: string): boolean {
+  try {
+    generateKeyBetween(key, null);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A key after `lower` and before `upper`, ignoring either if it isn't a valid key. */
+export function keyBetween(lower: string | null, upper: string | null): string {
+  const lo = lower !== null && isValidKey(lower) ? lower : null;
+  const hi = upper !== null && isValidKey(upper) && (lo === null || upper > lo) ? upper : null;
+  return generateKeyBetween(lo, hi);
+}
+
 /**
  * Positions for a list of siblings in their new order. Those that already
  * have a position under this parent keep it where the order allows (the
  * longest run of them already in order), so a move writes only the blocks
  * that moved; the rest get fresh keys between their neighbours.
  */
-export function assignPositions(existing: readonly (string | null)[]): string[] {
+export function assignPositions(given: readonly (string | null)[]): string[] {
+  // A key that isn't a valid fractional index (written by hand, or corrupt) is
+  // treated as absent: the block gets a fresh one rather than breaking the save.
+  const existing = given.map((p) => (p !== null && isValidKey(p) ? p : null));
   const n = existing.length;
   // Longest strictly increasing subsequence of the existing positions.
   const keep = new Array<boolean>(n).fill(false);

@@ -172,3 +172,12 @@ describe("history", () => {
     expect(momentsOf(revs, "p")[0]).toBe("2026-01-05T00:00:00Z");
   });
 });
+
+describe("positions written by hand", () => {
+  test("an invalid key is replaced rather than breaking the order", () => {
+    const out = assignPositions(["a0", "zz", null]);
+    expect(out[0]).toBe("a0");
+    expect(out[1] !== "zz").toBe(true);
+    expect([...out].sort()).toEqual(out);
+  });
+});

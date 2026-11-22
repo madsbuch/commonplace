@@ -64,8 +64,8 @@ const mathInputRule = TiptapExtension.create({
           const type = state.schema.nodes["math"];
           const latex = match[1];
           if (!type || latex === undefined) return null;
-          // The closing `$` is still being typed: the text before it is `$` + latex.
-          const start = range.to - latex.length - 1;
+          // The match may start with the space before the opening `$`.
+          const start = range.from + (match[0].startsWith("$") ? 0 : 1);
           state.tr.replaceWith(start, range.to, type.create({ latex }));
           return undefined;
         },

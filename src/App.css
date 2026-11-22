@@ -101,6 +101,9 @@ a {
   .sidebar-open .sidebar {
     transform: none;
   }
+  .sidebar .tree-header {
+    padding-left: 44px;
+  }
   .sidebar-toggle {
     display: block;
     position: fixed;
@@ -332,6 +335,9 @@ button.danger {
   overflow-y: auto;
 }
 @media (max-width: 760px) {
+  .page-screen {
+    padding-top: 56px;
+  }
   .page-title {
     padding-left: 0;
     font-size: 1.7rem;

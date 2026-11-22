@@ -157,8 +157,8 @@ export default function PagePage() {
         </div>
         {loaded === null ? null : (
           <>
-            <TitleInput key={id} pageId={id} title={title} />
-            <PageEditor key={id} loaded={loaded} />
+            <TitleInput key={`title-${id}`} pageId={id} title={title} />
+            <PageEditor key={`editor-${id}`} loaded={loaded} />
           </>
         )}
       </div>

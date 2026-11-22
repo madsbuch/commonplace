@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { filterSuggestionItems } from "@blocknote/core";
-import { SideMenuExtension, SyntaxHighlightingExtension } from "@blocknote/core/extensions";
+import { SideMenuExtension } from "@blocknote/core/extensions";
 import {
   DragHandleMenu,
   RemoveBlockItem,
@@ -16,9 +16,7 @@ import {
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
-import { createHighlighter } from "shiki";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { fromEditorBlocks, schema, toEditorBlocks } from "../blocks";
+import { fromEditorBlocks, schema, syntaxHighlighter, toEditorBlocks } from "../blocks";
 import { dbId, editorId } from "../blocks/ids";
 import { applySave, loadPage, moveBlockToPage, searchLinkTargets, type LoadedPage } from "../lib/book";
 import { planSave, type DocBlock, type Snapshot } from "../lib/bookModel";
@@ -30,17 +28,6 @@ import { PagePicker } from "./PagePicker";
 
 /** How long typing pauses before it is saved. */
 const SAVE_DELAY_MS = 600;
-
-// Spec: BOOK-9
-/** Shiki for code blocks, with Lean; languages load when a block first uses one. */
-const syntaxHighlighter = SyntaxHighlightingExtension({
-  createHighlighter: () =>
-    createHighlighter({
-      themes: ["github-light", "github-dark"],
-      langs: [],
-      engine: createJavaScriptRegexEngine({ forgiving: true }),
-    }),
-});
 
 function sameSnapshot(a: ReadonlyMap<string, Snapshot>, b: ReadonlyMap<string, Snapshot>): boolean {
   if (a.size !== b.size) return false;

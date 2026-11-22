@@ -62,6 +62,40 @@ ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
 - No native `confirm`/`alert`/`prompt`: the desktop WebView doesn't show them.
 - Rust: every crate sets `unsafe_code = "forbid"` in its `Cargo.toml`.
 
+## The book: pages and blocks
+
+- One `blocks` table holds the whole book (`src/db/schema.ts`). A page is a
+  block of type `page`; its content is the blocks whose `parent_id` is the
+  page (nested: theirs). Siblings are ordered by `position`, a fractional
+  index (`fractional-indexing`), so an insert or move writes one row. No
+  foreign keys: sync applies rows in any order.
+- Deleting marks `deleted_at`; rows are never removed. Every write to a block
+  also writes a `revisions` row (`src/lib/book.ts`), with `page_id` the page
+  it was on, so `pageAt` (`src/lib/bookModel.ts`) can rebuild a page at any
+  moment. Moving a block to another page writes a revision for it and for
+  everything nested in it.
+- `src/lib/bookModel.ts` holds the decisions without I/O (content trees,
+  `planSave`'s diff, positions, the page tree, history, Markdown) and is
+  unit-tested; `src/lib/book.ts` does the queries.
+- The editor is BlockNote (`src/components/PageEditor.tsx`). Its block ids are
+  UUIDv4; a row's id is the TypeID of the same bits (`src/blocks/ids.ts`).
+  Saves are debounced and write only what changed since the last save
+  (`planSave` against a snapshot), so another device's edit to an untouched
+  block is never overwritten. Changes from sync are taken in when the editor
+  isn't focused, or on blur.
+- Block types live in `src/blocks/`, one module each, mirroring
+  `.spec/book/blocks/`. A type maps its stored form (type name, props,
+  content) to the editor's and back. A new type is a new module added to
+  `BLOCK_TYPES` (and its spec to `schema` if custom); storage and sync don't
+  change. Rows of a type this build doesn't know show as a placeholder and
+  are written back untouched (`src/blocks/unknown.tsx`).
+- Inline maths is a `math` inline node (`$…$` input rule, KaTeX); links are
+  `pageLink` nodes holding the page's (and block's) id, showing live titles
+  from `src/lib/pageIndex.ts`. Code blocks highlight with Shiki (JS regex
+  engine), Lean included.
+- `tsconfig.json` leaves `exactOptionalPropertyTypes` off: BlockNote's types
+  don't hold under it.
+
 ## AI
 
 Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat
@@ -103,6 +137,9 @@ Book content leaves the device only that way.
 - `bun run build`: typecheck `src/`, lint everything, and bundle
 - `bun run lint`: ESLint only
 - `bun test`: the test suite, including the spec check
+- `bun run test:browser`: drives the editor in Chromium against real SQLite
+  (`tests/browser/`: the Tauri SQL plugin is stood in for by
+  `fake-tauri.ts`, injected by `fake-tauri-init.js`)
 - `bun run tauri icon app-icon.png`: regenerate icons from `app-icon.png`
 
 Dependencies install only once published for two weeks (`bunfig.toml`).
