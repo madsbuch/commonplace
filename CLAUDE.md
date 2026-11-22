@@ -60,7 +60,47 @@ ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
 - No `any`, and in `src/` no `any` flowing anywhere (`no-unsafe-*`).
 - No `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`.
 - No native `confirm`/`alert`/`prompt`: the desktop WebView doesn't show them.
-- Rust: every crate sets `unsafe_code = "forbid"` in its `Cargo.toml`.
+- Rust: every crate under `src-tauri` and `tools` sets `unsafe_code =
+  "forbid"` in its `Cargo.toml`, except the app crate (`src-tauri`), which
+  sets `"deny"` for one audited exception: the JNI entry point in
+  `src/sync/background.rs` needs `#[no_mangle]` and carries
+  `#[allow(unsafe_code)]`. That code is Android-only, so a desktop `cargo
+  check` never sees it: only the APK build (CI) does.
+
+## Sync
+
+The book syncs peer to peer over the local network, as Tally does
+(`src-tauri/src/sync/`, ported from it; see its module docs).
+
+- Every table syncs between the book's devices unless it's listed in
+  `LOCAL_TABLES` (`scripts/sync-triggers.ts`: `device_settings` and sync's
+  own bookkeeping). Sync rides on triggers: a migration that adds a table
+  must add its triggers (`bun scripts/sync-triggers.ts <table>` prints them,
+  appended after a `-- @generated` line); one that rebuilds a table must
+  re-create them (dropping a table drops its triggers); and one that adds a
+  column must re-create that table's triggers (`--retrigger <table>`), since
+  the update trigger lists the columns it watches.
+  `tests/sync-tracking.test.ts` fails for any of these left undone.
+- Trigger SQL must run on Android 14's SQLite 3.39; CI checks with
+  `tools/sqlite-android-compat`
+  (`cargo run --manifest-path tools/sqlite-android-compat/Cargo.toml -- .`).
+- Concurrent changes to a row resolve to the later clock, whole row. That's
+  why a block is a row of its own and every save also inserts a `revisions`
+  row: two devices editing the same block keep both edits as revisions.
+- No foreign keys between synced tables: rows arrive one at a time in any
+  order. (Sync does handle cascades and unique columns, should a table need
+  them; the Rust tests cover both with tables of their own.)
+- Settings that belong to one device are listed in `DEVICE_SETTING_KEYS`
+  (`src/lib/settings.ts`) and live in `device_settings`.
+- Development and release builds never sync with each other (`same_build`
+  in `src-tauri/src/sync/session.rs`).
+- Discovery answers on UDP 47831 and sync listens on TCP 47832 (or any free
+  port), clear of Tally's 47821/47822, so both apps run side by side.
+- `src/lib/syncBoot.ts` (imported by `main.tsx`) checks the database's
+  instance before anything writes, starts sync, and refreshes the screens
+  when another device's data arrives.
+- `cargo test` (in `src-tauri`) runs the sync tests: random histories that
+  must converge, pairing over real sockets, restored copies.
 
 ## Commands
 
@@ -74,7 +114,8 @@ ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
     (`bundle.android.debugApplicationIdSuffix`), installed beside the real app.
 - `bun run build`: typecheck `src/`, lint everything, and bundle
 - `bun run lint`: ESLint only
-- `bun test`: the test suite, including the spec check
+- `bun test`: the test suite, including the spec check and sync tracking
+- `cargo test` (in `src-tauri`): the Rust tests, sync's included
 - `bun run tauri icon app-icon.png`: regenerate icons from `app-icon.png`
 
 Dependencies install only once published for two weeks (`bunfig.toml`).
@@ -84,6 +125,8 @@ Dependencies install only once published for two weeks (`bunfig.toml`).
 - `check.yml`: `bun test` and `bun run build` on every push.
 - `android-apk.yml`, `macos.yml`, `linux.yml`: on push to main, build the
   apps and publish them to the `latest` release.
+- `android-apk.yml` also checks the migrations on SQLite 3.39
+  (`tools/sqlite-android-compat`).
 - Android: `src-tauri/gen/android` isn't committed yet. CI generates it with
   `tauri android init --ci` and adds release signing with
   `scripts/android-signing.mjs`. Once generated locally (needs the Android

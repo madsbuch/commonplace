@@ -34,6 +34,9 @@ hex = "0.4"
 tokio = { version = "1", features = ["net", "time", "sync", "io-util", "rt-multi-thread", "macros"] }
 if-addrs = "0.13"
 futures-util = "0.3"
+# Pairing codes (session.rs).
+base64 = "0.22"
+tauri-plugin-sync-background = { path = "plugins/sync-background" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The background sync's entry point (src/sync/background.rs).
@@ -47,5 +50,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures-core = "0.3"
 
 [lints.rust]
-# No unsafe Rust; see CLAUDE.md.
-unsafe_code = "forbid"
+# No unsafe Rust; see CLAUDE.md. "deny" rather than "forbid" here, for one
+# audited exception: the JNI entry point in src/sync/background.rs.
+unsafe_code = "deny"

@@ -39,6 +39,12 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # Every migration, the sync triggers especially, has to parse and
+      # behave on Android 14's SQLite (3.39), the oldest an Android device of
+      # ours runs.
+      - name: Check migrations on Android's SQLite
+        run: cargo run --quiet --manifest-path tools/sqlite-android-compat/Cargo.toml -- .
+
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 

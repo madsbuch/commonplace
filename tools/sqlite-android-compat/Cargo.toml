@@ -1,0 +1,11 @@
+[package]
+name = "sqlite-android-compat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusqlite = { version = "0.28", features = ["bundled"] }
+
+[lints.rust]
+# No unsafe Rust; see CLAUDE.md.
+unsafe_code = "forbid"
