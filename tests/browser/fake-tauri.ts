@@ -167,13 +167,23 @@ if (import.meta.main) {
       const { cmd, args } = z.object({ cmd: z.string(), args: z.record(z.string(), z.unknown()) }).parse(await req.json());
       try {
         let out: unknown = null;
+        if (cmd === "library_save_file") {
+          // The PDF arrives as base64, as it does in the app.
+          const bytes = Uint8Array.from(Buffer.from(String(args["data"]), "base64"));
+          if (!new TextDecoder().decode(bytes.slice(0, 1024)).includes("%PDF-")) return Response.json({ err: "the file isn't a PDF" }, { headers: cors });
+          db.query("INSERT OR REPLACE INTO library_files (item_id, media_type, data) VALUES (?, ?, ?)").run(
+            String(args["itemId"]),
+            String(args["mediaType"] ?? "application/pdf"),
+            bytes,
+          );
+          return Response.json({ ok: null }, { headers: cors });
+        }
         if (cmd === "library_read_file") {
-          // Answered as raw bytes, as tauri::ipc::Response is.
           const row = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(
             db.query("SELECT data FROM library_files WHERE item_id = ?").get(String(args["itemId"])) ?? undefined,
           );
-          if (!row) return Response.json({ err: "no PDF on this device" }, { headers: cors });
-          return new Response(row.data, { headers: { ...cors, "content-type": "application/octet-stream" } });
+          if (!row) return Response.json({ err: "item has no PDF on this device" }, { headers: cors });
+          return Response.json({ ok: Buffer.from(row.data).toString("base64") }, { headers: cors });
         }
         if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
         if (cmd === "plugin:sql|load") out = args["db"];

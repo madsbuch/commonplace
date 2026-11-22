@@ -146,10 +146,12 @@ The book syncs peer to peer over the local network, as Tally does
 - Papers and books (`src/lib/library.ts`): details in `library_items`, the
   PDF's bytes in `library_files` (one per item, kept apart so listing never
   reads megabytes). Both sync; removing an item deletes both rows.
-- The bytes go through Rust (`src-tauri/src/library.rs`) as raw IPC bodies:
-  `invoke("library_save_file", bytes, { headers })` and
-  `library_read_file` answering with `tauri::ipc::Response`. The SQL plugin
-  can only pass JSON. Writes made in Rust don't announce themselves, so the
+- The bytes go through Rust (`src-tauri/src/library.rs`) as base64 strings
+  both ways (`library_save_file`, `library_read_file`): the SQL plugin can
+  only pass JSON, and raw IPC bodies (`invoke(cmd, bytes)`,
+  `tauri::ipc::Response`) work on the desktop but don't reach Rust on
+  Android. The browser encodes (`FileReader.readAsDataURL`); `bytesOf`
+  decodes in slices. Writes made in Rust don't announce themselves, so the
   caller calls `notifyTablesChanged`.
 - pdf.js (`src/lib/pdf.ts`, legacy build for the Android WebView) runs in a
   bundled worker; its fonts, character maps, colour profiles and wasm decoders

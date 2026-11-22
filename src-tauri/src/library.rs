@@ -1,9 +1,26 @@
 //! A library item's PDF (`library_files` in `src/db/schema.ts`), byte for
 //! byte. Through Rust, as in Tally, because the SQL plugin's JS API can only
-//! pass JSON values; here the bytes travel as raw IPC bodies both ways, so a
-//! book-sized PDF isn't spelled out as base64 or a list of numbers.
+//! pass JSON values. The bytes cross the IPC as base64 both ways: raw IPC
+//! bodies work on the desktop but don't reach Rust on Android.
 
+use base64::Engine as _;
 use sqlx::SqlitePool;
+
+/// Bytes from the base64 the frontend sends (standard alphabet, padded).
+pub fn decode(data: &str) -> Result<Vec<u8>, String> {
+    // At most the largest file's worth: base64 is 4 characters per 3 bytes.
+    if data.len() > MAX_FILE_BYTES / 3 * 4 + 4 {
+        return Err(format!("the file is larger than {} MB", MAX_FILE_BYTES / (1024 * 1024)));
+    }
+    base64::engine::general_purpose::STANDARD
+        .decode(data.trim())
+        .map_err(|e| format!("the file didn't arrive intact: {e}"))
+}
+
+/// Bytes as base64 for the frontend.
+pub fn encode(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
 
 // Spec: LIB-2
 /// `library.max-file-size` in the spec.
@@ -70,6 +87,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(tracked, 1);
+    }
+
+    // Spec: LIB-7
+    #[test]
+    fn base64_round_trips() {
+        let pdf = fake_pdf(100_000);
+        assert_eq!(decode(&encode(&pdf)).unwrap(), pdf);
+        assert!(decode("not base64!").is_err());
+        assert!(decode(&"A".repeat(MAX_FILE_BYTES / 3 * 4 + 8)).is_err());
     }
 
     // Spec: LIB-2

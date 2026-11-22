@@ -29,3 +29,14 @@ describe("reading a library item's details", () => {
     expect([...s.required].sort()).toEqual(Object.keys(s.properties).sort());
   });
 });
+
+describe("PDF bytes over the IPC", () => {
+  // Spec: LIB-7
+  test("base64 decodes back to the same bytes, padding and all", async () => {
+    const { bytesOf } = await import("../src/lib/library");
+    for (const n of [0, 1, 2, 3, 1000, 300_001]) {
+      const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 31) & 255);
+      expect(bytesOf(Buffer.from(bytes).toString("base64"))).toEqual(bytes);
+    }
+  });
+});

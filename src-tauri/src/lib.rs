@@ -69,27 +69,22 @@ async fn db_pool(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
 }
 
 // ---------------------------------------------------------------------------
-// Library (src/library.rs): PDFs in and out, as raw bytes
+// Library (src/library.rs): PDFs in and out, as base64
 // ---------------------------------------------------------------------------
 
-/// Stores a library item's PDF: the bytes are the request body, the item's id
-/// and media type its `x-item-id` and `x-media-type` headers.
+/// Stores a library item's PDF, sent as base64: raw IPC bodies don't reach
+/// Rust on Android, and a base64 string travels the same way everywhere.
 #[tauri::command]
-async fn library_save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err("expected the PDF's bytes as the request body".into());
-    };
-    let header = |name: &str| request.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
-    let item_id = header("x-item-id").ok_or("missing x-item-id")?;
-    let media_type = header("x-media-type").unwrap_or_else(|| "application/pdf".into());
-    library::save(&db_pool(&app).await?, &item_id, &media_type, bytes).await
+async fn library_save_file(app: tauri::AppHandle, item_id: String, media_type: String, data: String) -> Result<(), String> {
+    let bytes = library::decode(&data)?;
+    library::save(&db_pool(&app).await?, &item_id, &media_type, &bytes).await
 }
 
-/// A library item's PDF, as raw bytes (an ArrayBuffer on the JS side).
+/// A library item's PDF, as base64.
 #[tauri::command]
-async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<tauri::ipc::Response, String> {
+async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<String, String> {
     let bytes = library::read(&db_pool(&app).await?, &item_id).await?;
-    Ok(tauri::ipc::Response::new(bytes))
+    Ok(library::encode(&bytes))
 }
 
 // ---------------------------------------------------------------------------

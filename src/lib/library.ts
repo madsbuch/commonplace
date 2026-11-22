@@ -3,7 +3,8 @@
 // live in `library_items`; the PDF's bytes in `library_files`, kept apart so
 // listing the library never reads megabytes. Both sync like the rest of the
 // database (LIB-7). The bytes go through Rust commands (src-tauri/src/
-// library.rs) as raw IPC bodies: the SQL plugin can only pass JSON values.
+// library.rs) as base64: the SQL plugin can only pass JSON values, and raw
+// IPC bodies don't reach Rust on Android.
 // ---------------------------------------------------------------------------
 
 import { invoke } from "@tauri-apps/api/core";
@@ -108,7 +109,7 @@ export async function addFile(file: File): Promise<string> {
   const id = newId("library_items");
   const at = nowIso();
   // The file first: a device that syncs the item before the file shows it as on its way.
-  await invoke("library_save_file", bytes, { headers: { "x-item-id": id, "x-media-type": "application/pdf" } });
+  await invoke("library_save_file", { itemId: id, mediaType: "application/pdf", data: await base64Of(file) });
   await execute(
     `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, added_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
@@ -155,14 +156,38 @@ export async function removeItem(id: string): Promise<void> {
   await execute(`DELETE FROM library_items WHERE id = $1`, [id]);
 }
 
+/** A file's bytes as base64, encoded by the browser rather than in a JS loop. */
+function base64Of(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("The file couldn't be read"));
+    reader.onload = () => {
+      const url = typeof reader.result === "string" ? reader.result : "";
+      resolve(url.slice(url.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Bytes from base64, a slice at a time so a book-sized PDF doesn't build one huge string. */
+export function bytesOf(base64: string): Uint8Array {
+  const clean = base64.replace(/\s+/g, "");
+  const pad = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+  const out = new Uint8Array((clean.length / 4) * 3 - pad);
+  const CHUNK = 4 * 65_536;
+  let at = 0;
+  for (let i = 0; i < clean.length; i += CHUNK) {
+    const bin = atob(clean.slice(i, i + CHUNK));
+    for (let j = 0; j < bin.length; j++) out[at++] = bin.charCodeAt(j);
+  }
+  return out;
+}
+
 // Spec: LIB-6
 /** An item's PDF, as stored. */
 export async function readFile(id: string): Promise<Uint8Array> {
   const raw: unknown = await invoke("library_read_file", { itemId: id });
-  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
-  if (raw instanceof Uint8Array) return raw;
-  if (Array.isArray(raw)) return Uint8Array.from(z.array(z.number()).parse(raw));
-  throw new Error("The PDF came back in a form this app doesn't read");
+  return bytesOf(z.string().parse(raw));
 }
 
 /** "2.4 MB". */
