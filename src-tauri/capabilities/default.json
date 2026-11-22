@@ -3,5 +3,16 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://openrouter.ai/*" }]
+    }
+  ]
 }

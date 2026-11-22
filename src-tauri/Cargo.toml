@@ -16,8 +16,35 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# preserve_order keeps SELECT column order in plugin-sql row objects,
+# which Drizzle's sqlite-proxy relies on for positional row mapping.
+serde_json = { version = "1", features = ["preserve_order"] }
+tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
+tauri-plugin-http = "2.5.9"
+# Sync (src/sync/), as in Tally.
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["sqlite"] }
+snow = "0.9"
+rand = "0.8"
+rmp-serde = "1"
+serde_bytes = "0.11"
+hex = "0.4"
+tokio = { version = "1", features = ["net", "time", "sync", "io-util", "rt-multi-thread", "macros"] }
+if-addrs = "0.13"
+futures-util = "0.3"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# The background sync's entry point (src/sync/background.rs).
+jni = "0.21"
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "~2.5.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures-core = "0.3"
 
 [lints.rust]
 # No unsafe Rust; see CLAUDE.md.
