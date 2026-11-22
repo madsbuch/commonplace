@@ -3,7 +3,7 @@
 //! first version, and guards the fix now.
 
 use super::engine;
-use super::tests::{device, exec, insert_block, synced_test_table};
+use super::tests::{device, dump, exec, insert_block, synced_test_table};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 
@@ -106,6 +106,43 @@ async fn a_child_added_while_its_parent_was_deleted_elsewhere_goes_too() {
 /// A copy of `d`'s database as it is now (what Android Auto Backup, a
 /// device-to-device transfer, or putting back one of the computer's daily
 /// snapshots hands back later).
+// ---------------------------------------------------------------------------
+// A split chat's title must follow from the losing version alone: a title
+// built from each device's copy of the device list (which a rename changes)
+// would leave two devices with the same chat under two titles.
+// ---------------------------------------------------------------------------
+
+// Spec: SYN-20
+#[tokio::test]
+async fn a_chat_split_on_two_devices_while_a_device_renames_itself_converges() {
+    let (a, b, c) = (device().await, device().await, device().await);
+    for (d, name) in [(&a, "Phone"), (&b, "Mac"), (&c, "Tablet")] {
+        exec(&d.pool, &format!("INSERT INTO book_devices (id, name, public_key, platform, added_at) VALUES ('{}', '{name}', '00', 'x', 'now')", d.id)).await;
+    }
+    exec(&a.pool, "INSERT INTO chats (id, title, messages, created_at, updated_at) VALUES ('c', 'Plan', '[\"q1\"]', 'now', 'now')").await;
+    settle(&[&a.pool, &b.pool, &c.pool]).await;
+
+    // B continues the chat, then A does (later: A's wins, B's is split off),
+    // then B renames itself.
+    exec(&b.pool, "UPDATE chats SET messages = '[\"q1\",\"mac\"]' WHERE id = 'c'").await;
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    exec(&a.pool, "UPDATE chats SET messages = '[\"q1\",\"phone\"]' WHERE id = 'c'").await;
+    exec(&b.pool, &format!("UPDATE book_devices SET name = 'Mac Studio' WHERE id = '{}'", b.id)).await;
+
+    // C hears from B first (its edit, then the rename), then from A; A hears
+    // from B before the rename has reached anyone else.
+    engine::pull_all(&c.pool, &b.pool, 500, 1 << 20).await.unwrap();
+    engine::pull_all(&c.pool, &a.pool, 500, 1 << 20).await.unwrap();
+    engine::pull_all(&a.pool, &b.pool, 500, 1 << 20).await.unwrap();
+    settle(&[&a.pool, &b.pool, &c.pool]).await;
+
+    let (da, dc) = (engine::digest(&a.pool).await.unwrap(), engine::digest(&c.pool).await.unwrap());
+    assert_eq!(engine::digest_differences(&da, &dc), Vec::<String>::new(), "devices never converge");
+    assert_eq!(dump(&a.pool).await.get("chats"), dump(&c.pool).await.get("chats"));
+    let titles: Vec<String> = sqlx::query_scalar("SELECT title FROM chats ORDER BY title").fetch_all(&a.pool).await.unwrap();
+    assert_eq!(titles, vec!["Plan".to_string(), "Plan (continued in parallel)".to_string()]);
+}
+
 async fn copy_of(d: &SqlitePool, dir: &crate::test_db::Scratch) -> std::path::PathBuf {
     let path = dir.0.join("copy.db");
     sqlx::query(&format!("VACUUM INTO '{}'", path.display())).execute(d).await.unwrap();

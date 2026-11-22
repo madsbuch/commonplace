@@ -15,7 +15,9 @@
 //!   with the later clock wins, and both devices end up with the same row and
 //!   the merged vector. A block edited on two devices keeps both edits all
 //!   the same: every save also writes a `revisions` row of its own, and those
-//!   never conflict.
+//!   never conflict. Chats are the exception to the clock alone: a
+//!   conversation continued on two devices at once is split, the losing side
+//!   kept as a new chat, so no turn is lost.
 //! - A row that collides with a different row on a unique column keeps the
 //!   lower id; the other is deleted everywhere.
 //!
@@ -75,6 +77,8 @@ pub struct ApplyStats {
     pub skipped: usize,
     /// Versions made concurrently with this device's own, settled by clock.
     pub conflicts: usize,
+    /// Chats split because both sides had continued them.
+    pub forks: usize,
     /// Rows dropped for colliding with another on a unique column.
     pub unique_merges: usize,
 }
@@ -84,6 +88,7 @@ impl ApplyStats {
         self.applied += o.applied;
         self.skipped += o.skipped;
         self.conflicts += o.conflicts;
+        self.forks += o.forks;
         self.unique_merges += o.unique_merges;
     }
 }
@@ -626,6 +631,51 @@ async fn write_settling_clashes(
 }
 
 // Spec: SYN-11, SYN-12
+// Spec: SYN-20
+/// The deterministic id of the chat split off from `pk` at `hlc`/`origin`:
+/// a UUIDv8 from the SHA-256 of what identifies the split, spelled as a
+/// `chat_` TypeID like every other chat id (src/lib/ids.ts).
+fn fork_id(pk: &str, hlc: &str, origin: &str) -> String {
+    let d = Sha256::digest(format!("chat-fork:{pk}:{hlc}:{origin}").as_bytes());
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&d[..16]);
+    b[6] = 0x80 | (b[6] & 0x0f);
+    b[8] = 0x80 | (b[8] & 0x3f);
+    crate::type_id::type_id("chat", b)
+}
+
+// Spec: SYN-20
+/// Keeps the losing side of a chat continued on two devices as a chat of its
+/// own. Its id, title and version follow from the losing version alone, so
+/// both devices create exactly the same one.
+async fn fork_chat(
+    conn: &mut SqliteConnection,
+    t: &TableInfo,
+    pk: &str,
+    loser_hlc: &str,
+    loser_origin: &str,
+    loser_vv: &BTreeMap<String, i64>,
+    loser_data: &[(String, Value)],
+) -> Result<()> {
+    let id = fork_id(pk, loser_hlc, loser_origin);
+    // The title follows from the losing version alone, not from anything
+    // devices might see differently (like what each calls the others), or
+    // two devices would make the same chat under two titles, forever.
+    let data: Vec<(String, Value)> = loser_data
+        .iter()
+        .map(|(c, v)| match (c.as_str(), v) {
+            (c, _) if c == t.pk => (c.to_string(), Value::Text(id.clone())),
+            ("title", Value::Text(title)) => (c.to_string(), Value::Text(format!("{title} (continued in parallel)"))),
+            _ => (c.clone(), v.clone()),
+        })
+        .collect();
+    if local_version(conn, &t.name, &id).await?.is_some() {
+        return Ok(());
+    }
+    write_row(conn, t, &data).await?;
+    record(conn, &t.name, &id, loser_hlc, loser_origin, false, loser_vv, None).await
+}
+
 async fn apply_one(
     conn: &mut SqliteConnection,
     tables: &BTreeMap<String, TableInfo>,
@@ -681,6 +731,24 @@ async fn apply_one(
             stats.conflicts += 1;
             let incoming_wins = (c.hlc.as_str(), c.origin.as_str()) > (l.hlc.as_str(), l.origin.as_str());
             let merged = merge_vv(&c.vv, &l.vv);
+
+            // Spec: SYN-20
+            if t.name == "chats" {
+                let local_data = if l.deleted { None } else { read_row(conn, t, &c.pk).await? };
+                let (loser_hlc, loser_origin, loser_vv, loser_data) = if incoming_wins {
+                    (&l.hlc, &l.origin, &l.vv, local_data.clone())
+                } else {
+                    (&c.hlc, &c.origin, &c.vv, c.data.clone())
+                };
+                let winner_data = if incoming_wins { c.data.clone() } else { local_data };
+                if let Some(loser) = loser_data {
+                    if winner_data.as_ref() != Some(&loser) {
+                        fork_chat(conn, t, &c.pk, loser_hlc, loser_origin, loser_vv, &loser).await?;
+                        stats.forks += 1;
+                    }
+                }
+            }
+
             let (hlc, origin, deleted) = if incoming_wins {
                 if c.deleted {
                     sqlx::query(&format!("DELETE FROM {} WHERE {} = ?", quote(&t.name), quote(&t.pk)))
