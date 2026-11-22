@@ -57,6 +57,7 @@ jobs:
             bun run tauri android init --ci
           fi
           bun scripts/android-signing.mjs
+          bun scripts/android-icons.mjs
 
       - name: Write signing config
         env:

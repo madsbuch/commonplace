@@ -179,7 +179,12 @@ The book syncs peer to peer over the local network, as Tally does
 
 - The app is Commonplace (`app.name`); the logo is `src/assets/logo.svg`,
   rendered to `app-icon.png` (`bun run tauri icon app-icon.png` makes the
-  platform icons) and `.spec/assets/logo.png`. The bundle id is still
+  desktop icons) and `.spec/assets/logo.png`. Android has its own set in
+  `src-tauri/icons/android` (an adaptive icon: the mark from
+  `logo-android-foreground.svg` over the logo's ink blue, plus `logo-round.svg`
+  and the logo for older launchers); `tauri icon` would overwrite it, so
+  restore that folder after running it. `scripts/android-icons.mjs` copies it
+  into the generated Android project (CI runs it after `tauri android init`). The bundle id is still
   `com.madsbuch.mybook`, so existing data stays where it is.
 - Colours are tokens in `src/App.css`, the spec's `color.*` values, light and
   dark. `src/lib/theme.ts` sets `data-theme` on `<html>` before the first
