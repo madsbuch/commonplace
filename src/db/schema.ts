@@ -397,3 +397,77 @@ export const leanChecks = sqliteTable("lean_checks", {
   device: text("device").notNull(),
   checkedAt: text("checked_at").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// The audio library (src/lib/audio.ts, src-tauri/src/audio/)
+// ---------------------------------------------------------------------------
+
+// Spec: AUD-1, AUD-2, AUD-4, AUD-6
+/**
+ * A recording of library items: verbatim (an item, or one of its sections)
+ * or a summary of several. Made on one device (`device`), which alone carries
+ * on with it: "writing" its script, then "speaking" it, then "ready".
+ */
+export const recordings = sqliteTable(
+  "recordings",
+  {
+    id: rowId("recordings"),
+    /** "verbatim" | "summary". */
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    /** JSON: the ids of the items it's of, in order. */
+    items: text("items").notNull(),
+    /** For a verbatim recording of a section: the section's anchor (HTML) or `page:<n>` (PDF contents). */
+    section: text("section"),
+    /** For a summary: its length in minutes (`audio.summary-lengths`). */
+    minutes: integer("minutes"),
+    voice: text("voice").notNull(),
+    speechModel: text("speech_model").notNull(),
+    /** "writing" | "speaking" | "ready" | "failed". */
+    status: text("status").notNull(),
+    /** How far the stage is, 0 to 1. */
+    progress: real("progress").notNull().default(0),
+    error: text("error"),
+    /** JSON: what's read, `{ chapters: [{ title, paragraphs }] }`, filled as it's written. */
+    script: text("script"),
+    /** JSON: `[{ title, start }]`, seconds, once spoken. */
+    chapters: text("chapters"),
+    durationSeconds: real("duration_seconds"),
+    /** The device making it (its sync device id). */
+    device: text("device").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("recordings_created").on(t.createdAt)],
+);
+
+// Spec: AUD-7
+/** A recording's audio: Opus in WebM. Kept apart from it, as PDFs are from items. */
+export const recordingFiles = sqliteTable("recording_files", {
+  recordingId: text("recording_id").primaryKey(),
+  mediaType: text("media_type").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+});
+
+// Spec: AUD-9
+/** Where the author stopped listening to a recording, on whichever device. */
+export const listening = sqliteTable("listening", {
+  recordingId: text("recording_id").primaryKey(),
+  /** Seconds. */
+  position: real("position").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+// Spec: AUD-6
+/**
+ * Passages already spoken, on this device only, until their recording is
+ * done: a recording that stops carries on without paying for them again.
+ * Keyed by SHA-256 of the model, voice and text.
+ */
+export const speechClips = sqliteTable("speech_clips", {
+  key: text("key").primaryKey(),
+  sampleRate: integer("sample_rate").notNull(),
+  /** 16-bit little-endian mono PCM. */
+  pcm: blob("pcm", { mode: "buffer" }).notNull(),
+  createdAt: text("created_at").notNull(),
+});

@@ -23,6 +23,7 @@ export const ID_PREFIXES = {
   affiliations: "affiliation",
   chats: "chat",
   assistant_memory: "memory",
+  recordings: "recording",
 } as const;
 
 export type IdTable = keyof typeof ID_PREFIXES;

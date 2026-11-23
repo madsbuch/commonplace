@@ -1,6 +1,7 @@
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+mod audio;
 // Spec: LEAN-7
 #[cfg(desktop)]
 mod lean;
@@ -75,6 +76,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0007_library_html.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "recordings",
+            sql: include_str!("../migrations/0008_recordings.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -105,6 +112,34 @@ async fn library_save_file(app: tauri::AppHandle, item_id: String, media_type: S
 #[tauri::command]
 async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<String, String> {
     let bytes = library::read(&db_pool(&app).await?, &item_id).await?;
+    Ok(library::encode(&bytes))
+}
+
+// ---------------------------------------------------------------------------
+// Audio (src/audio/): recordings made and played
+// ---------------------------------------------------------------------------
+
+fn audio_service(app: &tauri::AppHandle) -> std::sync::Arc<audio::render::AudioService> {
+    app.state::<std::sync::Arc<audio::render::AudioService>>().inner().clone()
+}
+
+// Spec: AUD-6
+/// Makes a recording's audio from its script, in the background (`audio-progress`, `audio-changed`).
+#[tauri::command]
+fn audio_render(app: tauri::AppHandle, id: String) {
+    audio_service(&app).render(app.clone(), id);
+}
+
+// Spec: AUD-7
+/// A recording's audio, as base64, for the player.
+#[tauri::command]
+async fn audio_read(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let bytes: Vec<u8> = sqlx::query_scalar("SELECT data FROM recording_files WHERE recording_id = ?")
+        .bind(&id)
+        .fetch_optional(&db_pool(&app).await?)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("this recording hasn't reached this device yet")?;
     Ok(library::encode(&bytes))
 }
 
@@ -191,6 +226,11 @@ type SyncState<'a> = tauri::State<'a, std::sync::Arc<sync::service::SyncService>
 async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), String> {
     let pool = db_pool(&app).await?;
     svc.start(app.clone(), pool).await?;
+    // Spec: AUD-6
+    // Recordings this device was speaking carry on.
+    if let Err(e) = audio_service(&app).resume(app.clone()).await {
+        eprintln!("audio: couldn't resume: {e}");
+    }
     // Spec: LEAN-6
     // Computers verify Lean blocks changed on other devices.
     #[cfg(desktop)]
@@ -290,7 +330,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_sync_background::init())
-        .manage(std::sync::Arc::new(sync::service::SyncService::default()));
+        .manage(std::sync::Arc::new(sync::service::SyncService::default()))
+        .manage(std::sync::Arc::new(audio::render::AudioService::default()));
 
     // Scanning the pairing QR code.
     #[cfg(mobile)]
@@ -331,6 +372,8 @@ pub fn run() {
             sync_remove_device,
             library_save_file,
             library_read_file,
+            audio_render,
+            audio_read,
             lean_status,
             lean_set_up,
             lean_check,

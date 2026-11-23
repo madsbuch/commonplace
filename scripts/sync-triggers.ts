@@ -31,6 +31,8 @@ export const LOCAL_TABLES = [
   "sync_vv",
   "sync_peers",
   "sync_epochs",
+  // Spec: AUD-6 — passages spoken on the way to a recording, this device's only.
+  "speech_clips",
 ];
 
 /**

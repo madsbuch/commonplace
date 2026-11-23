@@ -36,6 +36,8 @@ if-addrs = "0.13"
 futures-util = "0.3"
 # Pairing codes (session.rs).
 base64 = "0.22"
+# Recordings (src/audio/): Opus, in pure Rust, so it builds the same for phones.
+opus-pure = "0.2.3"
 tauri-plugin-sync-background = { path = "plugins/sync-background" }
 
 [target.'cfg(target_os = "android")'.dependencies]

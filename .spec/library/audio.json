@@ -1,0 +1,140 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Audio library",
+  "summary": "Recordings of papers and books, verbatim or summarized, to listen to anywhere.",
+  "order": 3,
+  "description": "Papers read aloud: verbatim, a whole paper or any of its sections, or a summary of several. Recordings are made once, on any device, and sync to all of them for listening offline, on a phone with the screen off.",
+  "stories": [
+    {
+      "id": "US-22",
+      "as": "an author who reads while walking",
+      "want": "a paper, or a section of it, read to me as it's written",
+      "soThat": "I can read away from a screen",
+      "requirements": [
+        "#AUD-1",
+        "#AUD-2",
+        "#AUD-3",
+        "#AUD-7",
+        "#AUD-10"
+      ]
+    },
+    {
+      "id": "US-23",
+      "as": "an author catching up on a subject",
+      "want": "a spoken summary of one or more papers",
+      "soThat": "I know what they say before I read them closely",
+      "requirements": [
+        "#AUD-4"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "AUD-1",
+      "text": "The audio library holds recordings of the library's papers and books, newest first; each opens in a player."
+    },
+    {
+      "id": "AUD-2",
+      "text": "The author can record an item verbatim, whole or one of its sections from its contents, down to the smallest; the sections within a recording are its chapters."
+    },
+    {
+      "id": "AUD-3",
+      "text": "A verbatim recording reads the text as written. Formulas are said the way a mathematician reads them aloud, and figure captions are read; the bibliography, page numbers, running heads and footnote marks are not."
+    },
+    {
+      "id": "AUD-4",
+      "text": "The author can record a summary of one or more items, read by one narrator, at a length from `audio.summary-lengths`; the summary's parts are its chapters."
+    },
+    {
+      "id": "AUD-5",
+      "text": "Recordings are spoken by `audio.speech-model` through OpenRouter, in a voice the author picks, and their text is prepared by `audio.script-model`; both can be changed in Settings, and their use is logged in the ledger.",
+      "related": [
+        "#AI-1"
+      ]
+    },
+    {
+      "id": "AUD-6",
+      "text": "A recording is made on any device, in the background while the app runs, and shows how far it has come; if the app stops, it carries on from where it was without speaking again what was already spoken."
+    },
+    {
+      "id": "AUD-7",
+      "text": "Recordings are kept as Opus in WebM, mono at `audio.bitrate`, and sync to every device for listening offline."
+    },
+    {
+      "id": "AUD-8",
+      "text": "The player plays, pauses, seeks, skips between chapters, and plays at a speed from `audio.speeds`."
+    },
+    {
+      "id": "AUD-9",
+      "text": "Where the author stopped listening is kept and syncs, so a recording carries on from there on any device.",
+      "related": [
+        "#APP-10"
+      ]
+    },
+    {
+      "id": "AUD-10",
+      "text": "On a phone, a recording keeps playing with the screen off and the app in the background, with lock-screen, notification and headphone controls, which skip between chapters too."
+    },
+    {
+      "id": "AUD-11",
+      "text": "On a computer, the keyboard's media keys control the player."
+    },
+    {
+      "id": "AUD-12",
+      "text": "The player's address holds the recording and the moment playing, `#t=<seconds>`.",
+      "related": [
+        "#APP-10"
+      ]
+    }
+  ],
+  "values": [
+    {
+      "id": "audio.speech-model",
+      "type": "text",
+      "value": "google/gemini-3.1-flash-tts-preview",
+      "description": "The model that speaks recordings, unless the author picks another."
+    },
+    {
+      "id": "audio.voice",
+      "type": "text",
+      "value": "Charon",
+      "description": "The voice recordings are read in, unless the author picks another."
+    },
+    {
+      "id": "audio.script-model",
+      "type": "text",
+      "value": "anthropic/claude-haiku-5.5",
+      "description": "The model that prepares a recording's text: formulas into speech, and summaries."
+    },
+    {
+      "id": "audio.bitrate",
+      "type": "number",
+      "value": 24,
+      "unit": "kbit/s",
+      "description": "Opus's bitrate for recordings: clear speech at about 11 MB an hour."
+    },
+    {
+      "id": "audio.summary-lengths",
+      "type": "list",
+      "value": [
+        "5 minutes",
+        "15 minutes",
+        "30 minutes"
+      ],
+      "description": "The lengths a summarized recording can have."
+    },
+    {
+      "id": "audio.speeds",
+      "type": "list",
+      "value": [
+        "0.8×",
+        "1×",
+        "1.25×",
+        "1.5×",
+        "1.75×",
+        "2×"
+      ],
+      "description": "The speeds the player plays at."
+    }
+  ]
+}
