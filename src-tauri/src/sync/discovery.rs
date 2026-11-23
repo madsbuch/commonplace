@@ -58,7 +58,7 @@ where
     }
 }
 
-// Spec: SYN-2
+// Spec: SYN-5
 /// Binds the answering socket on every interface, sharing the port: another
 /// app may hold it too (an earlier version still installed, a development
 /// build beside the real one), and searches are broadcast, so each hears them.
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(parse_reply("MYBOOK/1 R tag id 47832"), Some(("tag", "id", 47832)));
     }
 
-    // Spec: SYN-2
+    // Spec: SYN-5
     #[tokio::test]
     async fn two_apps_can_answer_on_the_same_port() {
         let port = 47_900 + (std::process::id() % 90) as u16;

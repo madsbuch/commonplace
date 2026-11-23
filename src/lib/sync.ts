@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { z } from "zod";
 import { parseCommandString } from "./schemas";
+import { announceNearby } from "./lan";
 
 const SyncDeviceSchema = z.object({
   id: z.string(),
@@ -81,11 +82,16 @@ export async function setDeviceName(name: string): Promise<void> {
 // Spec: SYN-9
 /** A pairing code for the QR, good for one device for `sync.pairing-lifetime`. */
 export async function createPairingCode(): Promise<string> {
-  return parseCommandString(await invoke("sync_offer"));
+  const code = parseCommandString(await invoke("sync_offer"));
+  // Spec: SYN-25
+  // Announced nearby with the code's tag, so the device that scans it finds this one.
+  void announceNearby();
+  return code;
 }
 
 export async function cancelPairing(): Promise<void> {
   await invoke("sync_cancel_offer");
+  void announceNearby();
 }
 
 /**
@@ -93,7 +99,12 @@ export async function cancelPairing(): Promise<void> {
  * `replace`: then a copy of what it holds is saved first, and replaced.
  */
 export async function joinBook(code: string, replace = false): Promise<JoinResult> {
-  return JoinResultSchema.parse(await invoke("sync_join", { code, replace }));
+  try {
+    return JoinResultSchema.parse(await invoke("sync_join", { code, replace }));
+  } finally {
+    // In the book now (or still not): announced as it is.
+    void announceNearby();
+  }
 }
 
 const TABLE_LABELS: Record<string, [string, string]> = {

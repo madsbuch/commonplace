@@ -100,7 +100,29 @@ The book syncs peer to peer over the local network, as Tally does
   (`src/lib/settings.ts`) and live in `device_settings`.
 - Development and release builds never sync with each other (`same_build`
   in `src-tauri/src/sync/session.rs`).
-- Discovery answers on UDP 47831 and sync listens on TCP 47832 (or any free
+- Devices find each other as Murmur does (SYN-5; github.com/madsbuch/murmur):
+  `src-tauri/plugins/lan` is Murmur's LAN plugin, ported (Android's
+  NsdManager in `LanPlugin.kt`, with a multicast lock, stopped while the app
+  is paused; `mdns-sd` on computers). Each device announces
+  `_commonplace._tcp` with its sync port and, in TXT, the book's tag, its
+  device id and, while it shows a pairing code, the code's tag
+  (`session::pair_tag`, SYN-25); `src/lib/lan.ts` asks Rust what to announce
+  (`sync_announce`), announces again when that changes (a code shown or put
+  away, a join, sync status, coming back in sight) and passes every device
+  found, with all its addresses (IPv6 too, link-local with its scope), to
+  Rust (`sync_peer_found`, kept in `SyncService::nearby`). A sync round tries
+  a book device at every address it announced, where the UDP search found
+  it and where it was last reached, all at once (`check::connect_any`, the
+  first to answer wins); a join waits up to 3 s for the device announcing
+  the code's tag and tries its addresses with the code's. Sync listens on one
+  dual-stack socket (IPv6 and IPv4, `session::dual_stack`; IPv4 alone where
+  there's no IPv6), and pairing codes carry a few IPv6 addresses too
+  (link-local ones without a scope; the scanning device tries each of its
+  own, `check::candidates`). `Info.plist` declares the Bonjour service
+  (`NSBonjourServices`), as Murmur's does. The fake Tauri layer records what's
+  announced (`/fake-lan`).
+- The UDP search stays beside it, so older versions still find each other:
+  discovery answers on UDP 47831 and sync listens on TCP 47832 (or any free
   port), clear of Tally's 47821/47822, so both apps run side by side.
   Discovery's socket shares its port (`SO_REUSEADDR`/`SO_REUSEPORT`,
   `discovery::bind_responder`): an earlier version still installed, or a

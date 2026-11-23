@@ -95,6 +95,61 @@ pub async fn connect(addr: SocketAddr) -> (std::result::Result<TcpStream, String
     (r, took)
 }
 
+// Spec: SYN-5
+/// The addresses to try for `addrs`: a link-local IPv6 address without a
+/// scope is tried on each of this device's interfaces that has one.
+pub fn candidates(addrs: &[SocketAddr]) -> Vec<SocketAddr> {
+    let scopes: Vec<u32> = if_addrs::get_if_addrs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|i| matches!(&i.addr, if_addrs::IfAddr::V6(v6) if v6.ip.is_unicast_link_local()))
+        .filter_map(|i| i.index)
+        .collect();
+    let mut out = Vec::new();
+    for a in addrs {
+        match a {
+            SocketAddr::V6(v6) if v6.ip().is_unicast_link_local() && v6.scope_id() == 0 => {
+                out.extend(scopes.iter().map(|s| SocketAddr::V6(std::net::SocketAddrV6::new(*v6.ip(), v6.port(), 0, *s))));
+            }
+            _ => out.push(*a),
+        }
+    }
+    out.dedup();
+    out
+}
+
+/// An address as a device announces it ("192.168.1.44", "fe80::1%5", "2a00::1") with its port.
+pub fn announced(address: &str, port: u16) -> Option<SocketAddr> {
+    let (host, scope) = match address.split_once('%') {
+        Some((h, s)) => (h, Some(s.parse::<u32>().ok()?)),
+        None => (address, None),
+    };
+    match host.parse::<IpAddr>().ok()? {
+        IpAddr::V4(v4) if scope.is_none() && !v4.is_unspecified() && !v4.is_multicast() && !v4.is_broadcast() => Some(SocketAddr::from((v4, port))),
+        IpAddr::V6(v6) if !v6.is_unspecified() && !v6.is_multicast() => Some(SocketAddr::V6(std::net::SocketAddrV6::new(v6, port, 0, scope.unwrap_or(0)))),
+        _ => None,
+    }
+}
+
+// Spec: SYN-5, SYN-24
+/// Tries every address at once; the first to answer wins. When none does,
+/// what each one came to.
+pub async fn connect_any(addrs: &[SocketAddr]) -> std::result::Result<(TcpStream, SocketAddr), Vec<String>> {
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    if addrs.is_empty() {
+        return Err(vec!["no address to try".into()]);
+    }
+    let mut attempts: FuturesUnordered<_> = addrs.iter().map(|a| async move { (*a, connect(*a).await.0) }).collect();
+    let mut failed = Vec::new();
+    while let Some((addr, r)) = attempts.next().await {
+        match r {
+            Ok(s) => return Ok((s, addr)),
+            Err(e) => failed.push(e),
+        }
+    }
+    Err(failed)
+}
+
 /// One of this device's networks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Net {
@@ -224,7 +279,13 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
 /// Checks the connection: this device's networks, whether sync listens, which
 /// of the book's devices answer the search, and whether each device there's
 /// an address for (the book's, and the code last joined) can be reached.
-pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>, joining: Option<(String, Vec<String>)>) -> Report {
+pub async fn run(
+    pool: &SqlitePool,
+    port: u16,
+    discovery_problem: Option<String>,
+    nearby: Vec<super::service::Nearby>,
+    joining: Option<(String, Vec<String>, String)>,
+) -> Report {
     let mut lines = Vec::new();
     let nets = networks();
     let lan: Vec<&Net> = nets.iter().filter(|n| n.ip.is_private() || n.ip.is_link_local()).collect();
@@ -265,7 +326,28 @@ pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>
     });
 
     let me = session::identity(pool).await.ok();
+    let my_tag = me.as_ref().and_then(|m| m.book_id.as_deref()).map(session::book_tag).unwrap_or_default();
+    // Spec: SYN-5
+    // What was found nearby (mDNS), with every address each announced.
+    if nearby.is_empty() {
+        lines.push(Line { ok: None, text: "No device has been found nearby (mDNS) yet.".into() });
+    }
+    for n in &nearby {
+        let list: Vec<String> = n.addrs.iter().map(|a| a.ip().to_string()).collect();
+        let what = if !my_tag.is_empty() && n.book == my_tag {
+            " (of this book)"
+        } else if !n.pair.is_empty() {
+            " (showing a pairing code)"
+        } else {
+            ""
+        };
+        let port = n.addrs.first().map(|a| a.port()).unwrap_or(0);
+        lines.push(Line { ok: Some(true), text: format!("Found nearby: {}{what} at {}, port {port}.", n.name, list.join(", ")) });
+    }
     let mut targets: Vec<Target> = Vec::new();
+    for n in nearby.iter().filter(|n| !my_tag.is_empty() && n.book == my_tag) {
+        targets.extend(n.addrs.iter().map(|a| Target { label: n.name.clone(), addr: *a }));
+    }
     if let Some(book) = me.as_ref().and_then(|m| m.book_id.clone()) {
         let my_id = me.as_ref().map(|m| m.device_id.clone()).unwrap_or_default();
         let peers: Vec<(String, String, Option<String>)> = sqlx::query_as(
@@ -300,11 +382,15 @@ pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>
     } else {
         lines.push(Line { ok: None, text: "This device isn't in a book yet.".into() });
     }
-    if let Some((host, addrs)) = joining {
+    if let Some((host, addrs, tag)) = joining {
+        let label = format!("{host} (the code last joined)");
+        for n in nearby.iter().filter(|n| n.pair == tag) {
+            targets.extend(n.addrs.iter().map(|a| Target { label: label.clone(), addr: *a }));
+        }
         for a in addrs {
             if let Ok(addr) = a.parse::<SocketAddr>() {
                 if !targets.iter().any(|t| t.addr == addr) {
-                    targets.push(Target { label: format!("{host} (the code last joined)"), addr });
+                    targets.push(Target { label: label.clone(), addr });
                 }
             }
         }
@@ -315,7 +401,7 @@ pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>
         lines.push(line);
         let near = match t.addr.ip() {
             IpAddr::V4(v4) => lan.iter().any(|n| n.holds(v4)),
-            IpAddr::V6(_) => false,
+            IpAddr::V6(_) => true,
         };
         findings.push((t.label.clone(), near, finding));
     }
@@ -385,6 +471,12 @@ async fn try_one(t: &Target, nets: &[Net]) -> (Line, Finding) {
     let finding = match reach {
         Reach::Connected => Finding::Reached,
         Reach::BlockedHere => Finding::Blocked,
+        // An IPv6 address was found nearby or given by the device itself: it's on the local network.
+        _ if ip.is_ipv6() => match reach {
+            Reach::Refused => Finding::NotOpen { label: label.clone() },
+            Reach::Failed => Finding::Failed { label: label.clone(), error: said.clone() },
+            _ => Finding::NotAnswering { label: label.clone(), ip },
+        },
         _ if near.is_none() && via_net.is_some_and(|n| !(n.ip.is_private() || n.ip.is_link_local())) => {
             Finding::ThroughVpn { label: label.clone(), via: via_net.map(|n| n.name.clone()).unwrap_or_default() }
         }
@@ -467,6 +559,37 @@ mod tests {
         let routed = Finding::RoutedAway { network: "192.168.1.0/24".into(), iface: "wlan0".into(), via: "172.30.232.16 (vgate0)".into() };
         let (v, _) = verdict(true, 0, &[routed]);
         assert!(v.starts_with("This device sends Commonplace's traffic for its own network (192.168.1.0/24, on wlan0) out through 172.30.232.16 (vgate0)"), "{v}");
+    }
+
+    // Spec: SYN-5
+    #[test]
+    fn announced_addresses_are_numeric_and_keep_their_scope() {
+        assert_eq!(announced("192.168.1.44", 47832), Some("192.168.1.44:47832".parse().unwrap()));
+        let scoped = announced("fe80::1%5", 47832).unwrap();
+        assert!(matches!(scoped, SocketAddr::V6(v6) if v6.scope_id() == 5 && v6.port() == 47832));
+        assert_eq!(announced("fe80::1%en0", 1), None);
+        assert_eq!(announced("ff02::1", 1), None);
+        assert_eq!(announced("phone.local", 1), None);
+        assert_eq!(announced("192.168.1.44%3", 1), None);
+    }
+
+    #[test]
+    fn scoped_and_routable_addresses_are_tried_as_they_are() {
+        let a: Vec<SocketAddr> = vec!["192.168.1.44:1".parse().unwrap(), "[fd00::5]:1".parse().unwrap(), "[fe80::1%3]:1".parse().unwrap()];
+        assert_eq!(candidates(&a), a);
+    }
+
+    // Spec: SYN-5, SYN-24
+    #[tokio::test]
+    async fn the_first_address_to_answer_wins() {
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let live = l.local_addr().unwrap();
+        let dead = { let d = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap(); d.local_addr().unwrap() };
+        let (_, addr) = connect_any(&[dead, live]).await.expect("the live one");
+        assert_eq!(addr, live);
+        let failed = connect_any(&[dead]).await.unwrap_err();
+        assert_eq!(failed.len(), 1);
+        assert!(connect_any(&[]).await.is_err());
     }
 
     #[test]

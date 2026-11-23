@@ -48,13 +48,50 @@ pub struct SyncService {
     activity: Mutex<Activity>,
     /// (book tag, device id) for answering discovery without the database.
     discovery_state: Arc<Mutex<Option<(String, String)>>>,
-    /// The device and addresses of the code last joined, for the connection check.
-    last_join: Mutex<Option<(String, Vec<String>)>>,
+    /// The device, addresses and tag of the code last joined, for the connection check.
+    last_join: Mutex<Option<(String, Vec<String>, String)>>,
     /// Why this device can't answer searches, if it can't.
     discovery_problem: Mutex<Option<String>>,
+    /// Devices found nearby (mDNS), by device id: what they announced and when.
+    nearby: Mutex<std::collections::HashMap<String, Nearby>>,
 }
 
 use super::now_iso;
+
+/// A device found nearby (mDNS, `tauri-plugin-lan`).
+#[derive(Debug, Clone)]
+pub struct Nearby {
+    pub name: String,
+    pub book: String,
+    pub pair: String,
+    pub addrs: Vec<SocketAddr>,
+    pub seen: std::time::Instant,
+}
+
+/// What a device announced, as the frontend passes it on (`sync_peer_found`).
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Announced {
+    pub device_id: String,
+    pub book: String,
+    pub pair: String,
+    pub addresses: Vec<String>,
+    pub port: u16,
+}
+
+/// What this device announces nearby (`tauri-plugin-lan`'s config).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Announce {
+    pub service_name: String,
+    pub port: u16,
+    pub device_id: String,
+    pub book: String,
+    pub pair: String,
+}
+
+/// How long a device found nearby is tried at what it announced.
+const NEARBY_FOR: Duration = Duration::from_secs(10 * 60);
 
 impl SyncService {
     fn set_activity(&self, app: &AppHandle, f: impl FnOnce(&mut Activity)) {
@@ -198,7 +235,7 @@ impl SyncService {
     /// Finds the book's devices on the network and syncs with each.
     async fn round(&self, app: &AppHandle, pool: &SqlitePool) {
         self.set_activity(app, |a| a.syncing = true);
-        let result = sync_round(pool).await;
+        let result = sync_round(pool, &self.nearby_of_book(pool).await).await;
         for o in result.outcomes.iter() {
             self.announce(app, o);
         }
@@ -218,7 +255,7 @@ impl SyncService {
         let pool = self.pool()?;
         let joining = self.last_join.lock().ok().and_then(|j| j.clone());
         let discovery = self.discovery_problem.lock().ok().and_then(|d| d.clone());
-        let report = super::check::run(pool, self.port(), discovery, joining).await;
+        let report = super::check::run(pool, self.port(), discovery, self.nearby(), joining).await;
         let fine = report.lines.iter().all(|l| l.ok != Some(false));
         let details: Vec<String> = report
             .lines
@@ -233,6 +270,95 @@ impl SyncService {
             Some(&details.join("\n")),
         );
         Ok(report)
+    }
+
+    // Spec: SYN-5
+    /// What this device announces nearby: its sync port, its id, the book's
+    /// tag and, while a code is on screen, the code's tag.
+    pub async fn announcing(&self) -> Result<Option<Announce>, String> {
+        let pool = self.pool()?;
+        let port = self.port();
+        if port == 0 {
+            return Ok(None);
+        }
+        let me = session::identity(pool).await?;
+        let pair = self
+            .slot
+            .lock()
+            .ok()
+            .and_then(|s| s.as_ref().filter(|p| p.expires > std::time::Instant::now()).map(|p| session::pair_tag(&p.token)))
+            .unwrap_or_default();
+        Ok(Some(Announce {
+            service_name: format!("Commonplace-{}", me.device_id.chars().filter(|c| c.is_ascii_alphanumeric()).take(12).collect::<String>()),
+            port,
+            device_id: me.device_id,
+            book: me.book_id.as_deref().map(session::book_tag).unwrap_or_default(),
+            pair,
+        }))
+    }
+
+    // Spec: SYN-5
+    /// A device found nearby: kept with every address it announced, and,
+    /// when it's one of the book's, synced with now.
+    pub async fn found_nearby(&self, peer: Announced) -> Result<(), String> {
+        if peer.port == 0 || peer.addresses.len() > 32 || peer.device_id.is_empty() {
+            return Err("an invalid nearby device".into());
+        }
+        let addrs: Vec<SocketAddr> = peer.addresses.iter().filter_map(|a| super::check::announced(a, peer.port)).collect();
+        if addrs.is_empty() {
+            return Ok(());
+        }
+        let pool = self.pool()?;
+        let me = session::identity(pool).await?;
+        if peer.device_id == me.device_id {
+            return Ok(());
+        }
+        let name: Option<String> = sqlx::query_scalar("SELECT name FROM book_devices WHERE id = ?").bind(&peer.device_id).fetch_optional(pool).await.ok().flatten();
+        let ours = me.book_id.as_deref().map(session::book_tag).is_some_and(|t| t == peer.book);
+        if let Ok(mut n) = self.nearby.lock() {
+            if n.len() > 64 {
+                n.retain(|_, v| v.seen.elapsed() < NEARBY_FOR);
+            }
+            n.insert(
+                peer.device_id.clone(),
+                Nearby { name: name.unwrap_or_else(|| peer.device_id.clone()), book: peer.book, pair: peer.pair, addrs, seen: std::time::Instant::now() },
+            );
+        }
+        if ours {
+            self.kick();
+        }
+        Ok(())
+    }
+
+    /// The book's devices found nearby lately, with their addresses.
+    async fn nearby_of_book(&self, pool: &SqlitePool) -> Vec<(String, Vec<SocketAddr>)> {
+        let tag = session::identity(pool).await.ok().and_then(|m| m.book_id).map(|b| session::book_tag(&b));
+        let Some(tag) = tag else { return Vec::new() };
+        self.nearby
+            .lock()
+            .map(|n| n.iter().filter(|(_, v)| v.book == tag && v.seen.elapsed() < NEARBY_FOR).map(|(k, v)| (k.clone(), v.addrs.clone())).collect())
+            .unwrap_or_default()
+    }
+
+    /// Devices found nearby lately.
+    pub fn nearby(&self) -> Vec<Nearby> {
+        self.nearby.lock().map(|n| n.values().filter(|v| v.seen.elapsed() < NEARBY_FOR).cloned().collect()).unwrap_or_default()
+    }
+
+    /// Where the device showing the code with `tag` was found nearby, waiting up to `wait` for it.
+    async fn showing(&self, tag: &str, wait: Duration) -> Vec<SocketAddr> {
+        let until = std::time::Instant::now() + wait;
+        loop {
+            let found: Vec<SocketAddr> = self
+                .nearby
+                .lock()
+                .map(|n| n.values().filter(|v| v.pair == tag && v.seen.elapsed() < NEARBY_FOR).flat_map(|v| v.addrs.clone()).collect())
+                .unwrap_or_default();
+            if !found.is_empty() || std::time::Instant::now() >= until {
+                return found;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
     }
 
     pub fn kick(&self) {
@@ -282,7 +408,7 @@ impl SyncService {
         let pool = self.pool()?;
         let offer = PairingOffer::decode(code)?;
         if let Ok(mut j) = self.last_join.lock() {
-            *j = Some((offer.host_name.clone(), offer.addrs.clone()));
+            *j = Some((offer.host_name.clone(), offer.addrs.clone(), session::pair_tag(&offer.token)));
         }
         let backup = if replace && !engine::data_tables(pool).await?.is_empty() {
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("backups");
@@ -291,7 +417,11 @@ impl SyncService {
             None
         };
         self.set_activity(app, |a| a.syncing = true);
-        let result = session::join(pool, &offer, replace).await;
+        // Spec: SYN-25
+        // The device showing the code announces the code's tag nearby: wait a
+        // moment to find it there, with every address it has.
+        let found = self.showing(&session::pair_tag(&offer.token), Duration::from_secs(3)).await;
+        let result = session::join(pool, &offer, &found, replace).await;
         match &result {
             Ok(o) => diagnostics::report(app, Level::Info, "sync", &format!("Joined the book through {}: took in {}", o.peer_name, describe(&o.received))),
             Err(e) => diagnostics::report(app, Level::Error, "sync", &format!("Joining a book failed: {e}")),
@@ -339,7 +469,7 @@ pub struct Round {
 /// One round: probe for the book's devices, then sync with each one found —
 /// and with any known one that didn't answer, at the address it was last
 /// reached at (a network that drops broadcasts still reaches it).
-pub async fn sync_round(pool: &SqlitePool) -> Round {
+pub async fn sync_round(pool: &SqlitePool, nearby: &[(String, Vec<SocketAddr>)]) -> Round {
     let mut round = Round { outcomes: vec![], errors: vec![] };
     let Ok(me) = session::identity(pool).await else { return round };
     let Some(book) = me.book_id.clone() else { return round };
@@ -366,32 +496,28 @@ pub async fn sync_round(pool: &SqlitePool) -> Round {
         // Where discovery says it is, then where it was last reached: an
         // answer to a probe isn't proof of anything (anyone on the network
         // can send one), so a failed attempt there doesn't end the search.
-        let mut addrs: Vec<SocketAddr> = found.iter().filter(|f| &f.device_id == id).map(|f| f.addr).collect();
-        if let Some(a) = last_addr.as_ref().and_then(|a| a.parse().ok()) {
-            if !addrs.contains(&a) {
-                addrs.push(a);
-            }
+        // Spec: SYN-5
+        // Every address it announced nearby (mDNS: IPv6 and IPv4), then
+        // where the search found it, then where it was last reached; all
+        // tried at once, the first to answer wins.
+        let mut addrs: Vec<SocketAddr> = nearby.iter().filter(|(d, _)| d == id).flat_map(|(_, a)| a.iter().copied()).collect();
+        addrs.extend(found.iter().filter(|f| &f.device_id == id).map(|f| f.addr));
+        if let Some(a) = last_addr.as_ref().and_then(|a| a.parse::<SocketAddr>().ok()) {
+            addrs.push(a);
         }
-        let mut last_err = None;
-        for addr in addrs {
-            match session::sync_with(pool, addr).await {
-                Ok(Some(o)) => {
-                    round.outcomes.push(o);
-                    last_err = None;
-                    break;
-                }
-                Ok(None) => {
-                    last_err = None;
-                    break;
-                }
-                Err(e) => last_err = Some(e),
-            }
+        let mut seen = Vec::new();
+        addrs.retain(|a| if seen.contains(a) { false } else { seen.push(*a); true });
+        if addrs.is_empty() {
+            continue;
         }
-        match last_err {
-            // Not around is normal; anything else is worth showing.
-            Some(e) if e.contains("no answer") || e.contains("refused") || e.contains("unreachable") || e.contains("doesn't answer") => {}
-            Some(e) => round.errors.push(e),
-            None => {}
+        match session::sync_with(pool, &addrs).await {
+            Ok(Some(o)) => round.outcomes.push(o),
+            Ok(None) => {}
+            // Not around is normal; anything else (macOS keeping the app
+            // off the network, a stranger answering) is worth showing.
+            Err(e) if !e.contains("Local Network")
+                && (e.contains("no answer") || e.contains("refused") || e.contains("unreachable") || e.contains("doesn't answer")) => {}
+            Err(e) => round.errors.push(e),
         }
     }
     round

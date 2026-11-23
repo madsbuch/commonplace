@@ -555,13 +555,14 @@ fn try_busy(device: &str) -> Option<Busy> {
 // Spec: SYN-1, SYN-4
 /// Syncs with the device at `addr`. `Ok(None)` when a sync is already running
 /// here (it'll come round again).
-pub async fn sync_with(pool: &SqlitePool, addr: SocketAddr) -> Result<Option<Outcome>> {
+pub async fn sync_with(pool: &SqlitePool, addrs: &[SocketAddr]) -> Result<Option<Outcome>> {
     let me = identity(pool).await?;
     let Some(_guard) = try_busy(&me.device_id) else {
         return Ok(None);
     };
-    // Spec: SYN-24
-    let stream = super::check::connect(addr).await.0?;
+    // Spec: SYN-5, SYN-24
+    // Every address the device is known at, at once (as Murmur does): the first to answer wins.
+    let (stream, addr) = super::check::connect_any(&super::check::candidates(addrs)).await.map_err(|tried| tried.join("; "))?;
     let mut ch = Channel::initiate(stream, PURPOSE_SYNC, &me.secret, None).await?;
     // Whoever answered at a discovered address has to be one of the book's
     // devices before this one sends or reads anything more.
@@ -620,6 +621,17 @@ pub struct PendingPairing {
 
 pub type PairingSlot = Arc<Mutex<Option<PendingPairing>>>;
 
+// Spec: SYN-25
+/// The tag a device advertises (mDNS) while it shows a code, so the device
+/// that scans it finds it on the network: derived from the code's secret,
+/// which it doesn't give away.
+pub fn pair_tag(token: &[u8; 32]) -> String {
+    let mut h = Sha256::new();
+    h.update(b"mybook-pair-tag:");
+    h.update(token);
+    hex::encode(&h.finalize()[..8])
+}
+
 /// Puts this device in a book of its own if it isn't in one, listing itself
 /// as its first device.
 pub async fn ensure_book(pool: &SqlitePool) -> Result<Identity> {
@@ -668,7 +680,7 @@ pub async fn offer(pool: &SqlitePool, slot: &PairingSlot, addrs: Vec<String>) ->
 /// none of the author's data; with it, whatever it holds is replaced by the
 /// book's (the caller saves a copy first — see `service::backup_before_join`).
 /// Ends with everything the host has.
-pub async fn join(pool: &SqlitePool, offer: &PairingOffer, replace: bool) -> Result<Outcome> {
+pub async fn join(pool: &SqlitePool, offer: &PairingOffer, found: &[SocketAddr], replace: bool) -> Result<Outcome> {
     let held = engine::data_tables(pool).await?;
     if !held.is_empty() && !replace {
         return Err(format!(
@@ -686,42 +698,38 @@ pub async fn join(pool: &SqlitePool, offer: &PairingOffer, replace: bool) -> Res
     // nothing here.
     let (secret, public) = wire::generate_keypair();
     let new_id = super::new_uuid();
-    let mut tried: Vec<String> = Vec::new();
-    for addr in &offer.addrs {
-        let Ok(addr) = addr.parse::<SocketAddr>() else { continue };
-        // Spec: SYN-24
-        // Each address's failure says what it means; all of them are kept.
-        let stream = match super::check::connect(addr).await.0 {
-            Ok(s) => s,
-            Err(e) => {
-                tried.push(e);
-                continue;
-            }
-        };
-        let mut ch = match Channel::initiate(stream, PURPOSE_PAIR, &secret, Some(&offer.token)).await {
-            Ok(ch) => ch,
-            Err(_) => return Err("the code has expired or was already used; show a new one".into()),
-        };
-        if ch.remote_key != offer.host_key {
-            return Err("the device that answered isn't the one that showed the code".into());
-        }
-        // The host is who the code said. Ask to be let in; only once it has,
-        // empty out — a refusal leaves this device exactly as it was.
-        ch.send(&Msg::Join { device_id: new_id.clone(), name: me.name.clone(), platform: me.platform.clone() }).await?;
-        match expect(&mut ch).await? {
-            Msg::Welcome { book_id } if book_id == offer.book_id => {}
-            _ => return Err("the host didn't let this device in".into()),
-        }
-        engine::reset_for_join(pool, &offer.book_id, &new_id, Some((&secret, &public)), replace).await?;
-        let me = identity(pool).await?;
-        let hello = hello(pool, &me).await?;
-        let host_key = offer.host_key.clone();
-        return client_session(&mut ch, pool, &hello, Some(addr), Some(&host_key)).await;
+    // Spec: SYN-25, SYN-24
+    // Where the host was found showing this code (mDNS, every address it
+    // has), and the addresses the code holds: all at once, the first to
+    // answer wins; each one's failure says what it means.
+    let mut addrs: Vec<SocketAddr> = found.to_vec();
+    addrs.extend(offer.addrs.iter().filter_map(|a| a.parse::<SocketAddr>().ok()));
+    addrs.dedup();
+    if addrs.is_empty() {
+        return Err(format!("couldn't reach {}: the code holds no address, and it wasn't found nearby", offer.host_name));
     }
-    if tried.is_empty() {
-        return Err(format!("couldn't reach {}: the code holds no address", offer.host_name));
+    let (stream, addr) = super::check::connect_any(&super::check::candidates(&addrs))
+        .await
+        .map_err(|tried| format!("couldn't reach {}: {}", offer.host_name, tried.join("; ")))?;
+    let mut ch = match Channel::initiate(stream, PURPOSE_PAIR, &secret, Some(&offer.token)).await {
+        Ok(ch) => ch,
+        Err(_) => return Err("the code has expired or was already used; show a new one".into()),
+    };
+    if ch.remote_key != offer.host_key {
+        return Err("the device that answered isn't the one that showed the code".into());
     }
-    Err(format!("couldn't reach {}: {}", offer.host_name, tried.join("; ")))
+    // The host is who the code said. Ask to be let in; only once it has,
+    // empty out — a refusal leaves this device exactly as it was.
+    ch.send(&Msg::Join { device_id: new_id.clone(), name: me.name.clone(), platform: me.platform.clone() }).await?;
+    match expect(&mut ch).await? {
+        Msg::Welcome { book_id } if book_id == offer.book_id => {}
+        _ => return Err("the host didn't let this device in".into()),
+    }
+    engine::reset_for_join(pool, &offer.book_id, &new_id, Some((&secret, &public)), replace).await?;
+    let me = identity(pool).await?;
+    let hello = hello(pool, &me).await?;
+    let host_key = offer.host_key.clone();
+    client_session(&mut ch, pool, &hello, Some(addr), Some(&host_key)).await
 }
 
 // ---------------------------------------------------------------------------
@@ -819,9 +827,22 @@ pub async fn listen<F>(pool: SqlitePool, slot: PairingSlot, bind_ip: &str, on_ou
 where
     F: Fn(Result<Outcome>) + Send + Sync + 'static,
 {
-    let listener = match TcpListener::bind((bind_ip, PREFERRED_PORT)).await {
-        Ok(l) => l,
-        Err(_) => TcpListener::bind((bind_ip, 0)).await.map_err(|e| e.to_string())?,
+    let listener = if bind_ip == "0.0.0.0" {
+        // Spec: SYN-5
+        // IPv6 and IPv4 on one socket, as Murmur listens: a device may be
+        // reachable over one and not the other.
+        match dual_stack(PREFERRED_PORT).or_else(|_| dual_stack(0)) {
+            Ok(l) => l,
+            Err(_) => match TcpListener::bind((bind_ip, PREFERRED_PORT)).await {
+                Ok(l) => l,
+                Err(_) => TcpListener::bind((bind_ip, 0)).await.map_err(|e| e.to_string())?,
+            },
+        }
+    } else {
+        match TcpListener::bind((bind_ip, PREFERRED_PORT)).await {
+            Ok(l) => l,
+            Err(_) => TcpListener::bind((bind_ip, 0)).await.map_err(|e| e.to_string())?,
+        }
     };
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let on_outcome = Arc::new(on_outcome);
@@ -843,6 +864,18 @@ where
     Ok((port, handle))
 }
 
+/// A listener on every IPv6 and IPv4 address at once.
+fn dual_stack(port: u16) -> std::io::Result<TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let s = Socket::new(Domain::IPV6, Type::STREAM, Some(Protocol::TCP))?;
+    s.set_only_v6(false)?;
+    s.set_reuse_address(true)?;
+    s.bind(&SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)).into())?;
+    s.listen(16)?;
+    s.set_nonblocking(true)?;
+    TcpListener::from_std(s.into())
+}
+
 /// This device's addresses on the local network, for the QR code.
 pub fn local_addrs(port: u16) -> Vec<String> {
     let mut out: Vec<String> = if_addrs::get_if_addrs()
@@ -854,12 +887,21 @@ pub fn local_addrs(port: u16) -> Vec<String> {
             // A lone address (/32) is a VPN's or a gateway's, not a local network another device is on.
             if_addrs::IfAddr::V4(v4) if v4.netmask == std::net::Ipv4Addr::BROADCAST => None,
             if_addrs::IfAddr::V4(v4) if v4.ip.is_private() || v4.ip.is_link_local() => Some(format!("{}:{port}", v4.ip)),
+            // Spec: SYN-5
+            // IPv6 too: unique-local and global ones as they are, link-local
+            // ones without a scope (the scanning device tries each of its own).
+            if_addrs::IfAddr::V6(v6) if v6.prefixlen < 128 && (v6.ip.is_unique_local() || v6.ip.is_unicast_link_local() || (v6.ip.segments()[0] & 0xe000) == 0x2000) => {
+                Some(format!("[{}]:{port}", v6.ip))
+            }
             _ => None,
         })
         .collect();
     out.sort();
     out.dedup();
-    out
+    // Every IPv4 address, and at most a few IPv6 ones, local ones first: the code stays small enough to scan.
+    let (v4, mut v6): (Vec<String>, Vec<String>) = out.into_iter().partition(|a| !a.starts_with('['));
+    v6.sort_by_key(|a| if a.starts_with("[fd") || a.starts_with("[fc") { 0 } else if a.starts_with("[fe8") { 1 } else { 2 });
+    v4.into_iter().chain(v6.into_iter().take(3)).collect()
 }
 
 // Spec: SYN-6

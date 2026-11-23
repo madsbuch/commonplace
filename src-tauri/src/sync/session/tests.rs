@@ -33,7 +33,7 @@ async fn host() -> Host {
 /// Syncs, waiting out a host that's still finishing the previous sync.
 async fn sync_now(pool: &SqlitePool, addr: SocketAddr) -> Result<Outcome> {
     for _ in 0..100 {
-        if let Some(o) = sync_with(pool, addr).await? {
+        if let Some(o) = sync_with(pool, &[addr]).await? {
             return Ok(o);
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -74,7 +74,7 @@ async fn a_new_device_joins_with_the_code_and_gets_everything() {
     let o = offer_from(&h).await;
     let joiner = device().await;
 
-    let outcome = join(&joiner.pool, &PairingOffer::decode(&o.encode()).unwrap(), false).await.unwrap();
+    let outcome = join(&joiner.pool, &PairingOffer::decode(&o.encode()).unwrap(), &[], false).await.unwrap();
     assert!(outcome.complete, "{:?}", outcome.differences);
     assert!(outcome.received.applied >= 27);
     assert_same(&h.device.pool, &joiner.pool).await;
@@ -103,8 +103,8 @@ async fn a_new_device_joins_with_the_code_and_gets_everything() {
 async fn a_code_works_once() {
     let h = host().await;
     let o = offer_from(&h).await;
-    join(&device().await.pool, &o, false).await.unwrap();
-    let err = join(&device().await.pool, &o, false).await.unwrap_err();
+    join(&device().await.pool, &o, &[], false).await.unwrap();
+    let err = join(&device().await.pool, &o, &[], false).await.unwrap_err();
     assert!(err.contains("expired or was already used"), "{err}");
     assert_eq!(count(&h.device.pool, "SELECT count(*) FROM book_devices").await, 2);
 }
@@ -115,7 +115,7 @@ async fn an_expired_code_is_refused() {
     let o = offer_from(&h).await;
     h.slot.lock().unwrap().as_mut().unwrap().expires = Instant::now() - Duration::from_secs(1);
     let joiner = device().await;
-    let err = join(&joiner.pool, &o, false).await.unwrap_err();
+    let err = join(&joiner.pool, &o, &[], false).await.unwrap_err();
     assert!(err.contains("expired"), "{err}");
     // Nothing on the joiner was touched.
     assert_eq!(identity(&joiner.pool).await.unwrap().book_id, None);
@@ -129,7 +129,7 @@ async fn a_forged_code_is_refused_before_anything_is_touched() {
     o.host_key = wire::generate_keypair().1;
     let joiner = device().await;
     exec(&joiner.pool, "INSERT INTO settings (key, value) VALUES ('assistant_model', 'some/model')").await;
-    assert!(join(&joiner.pool, &o, false).await.is_err());
+    assert!(join(&joiner.pool, &o, &[], false).await.is_err());
     assert_eq!(count(&joiner.pool, "SELECT count(*) FROM settings").await, 1);
     assert_eq!(identity(&joiner.pool).await.unwrap().book_id, None);
 }
@@ -140,11 +140,11 @@ async fn a_device_with_data_cannot_join_and_keeps_its_data() {
     let o = offer_from(&h).await;
     let joiner = device().await;
     exec(&joiner.pool, "INSERT INTO blocks (id, type, position, content, created_at, updated_at) VALUES ('mine', 'paragraph', 'a0', 'Draft', 'now', 'now')").await;
-    let err = join(&joiner.pool, &o, false).await.unwrap_err();
+    let err = join(&joiner.pool, &o, &[], false).await.unwrap_err();
     assert!(err.contains("already holds data"), "{err}");
     assert_eq!(count(&joiner.pool, "SELECT count(*) FROM blocks").await, 1);
     // And the code is still good for an empty one.
-    join(&device().await.pool, &o, false).await.unwrap();
+    join(&device().await.pool, &o, &[], false).await.unwrap();
 }
 
 #[tokio::test]
@@ -176,7 +176,7 @@ async fn a_stranger_cannot_sync() {
 async fn a_removed_device_is_refused_from_then_on() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     let joiner_id = identity(&joiner.pool).await.unwrap().device_id;
     exec(&h.device.pool, &format!("DELETE FROM book_devices WHERE id = '{joiner_id}'")).await;
     exec(&h.device.pool, "INSERT INTO blocks (id, type, position, content, created_at, updated_at) VALUES ('secret', 'paragraph', 'a0', 'x', 'now', 'now')").await;
@@ -188,7 +188,7 @@ async fn a_removed_device_is_refused_from_then_on() {
 async fn different_versions_of_the_app_do_not_sync() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     for (pool, name) in [(&h.device.pool, "Computer"), (&joiner.pool, "Phone")] {
         exec(pool, &format!("INSERT OR REPLACE INTO device_settings (key, value) VALUES ('sync_device_name', '{name}')")).await;
     }
@@ -203,7 +203,7 @@ async fn different_versions_of_the_app_do_not_sync() {
 async fn edits_on_both_sides_meet_in_one_sync() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     exec(&h.device.pool, "INSERT INTO blocks (id, type, position, content, created_at, updated_at) VALUES ('b', 'paragraph', 'a0', 'draft', 'now', 'now')").await;
     sync_now(&joiner.pool, h.addr).await.unwrap();
     // Both edit the block, each save with its revision, as the app does.
@@ -226,7 +226,7 @@ async fn edits_on_both_sides_meet_in_one_sync() {
 async fn the_last_sync_is_remembered_per_peer() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     let host_id = identity(&h.device.pool).await.unwrap().device_id;
     let (complete, at, addr): (i64, Option<String>, Option<String>) =
         sqlx::query_as("SELECT complete, last_complete_at, last_addr FROM sync_peers WHERE device_id = ?")
@@ -285,7 +285,7 @@ async fn failed_connections_are_reported_by_the_listener() {
 async fn a_restored_copy_is_caught_at_the_start_of_a_sync_and_then_catches_up() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     // A copy of the phone's database, taken now…
     let dir = crate::test_db::Scratch::new();
     let copy = dir.0.join("restored.db");
@@ -324,7 +324,7 @@ async fn a_restored_copy_is_caught_at_the_start_of_a_sync_and_then_catches_up() 
 async fn a_removed_device_is_refused_by_its_key_whatever_id_it_takes() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     let joiner_id = identity(&joiner.pool).await.unwrap().device_id;
     crate::sync::service::remove_device(&h.device.pool, &joiner_id).await.unwrap();
     // A new id doesn't help: the key is what's revoked.
@@ -343,14 +343,14 @@ async fn a_busy_host_leaves_the_joiner_untouched_and_the_code_usable() {
     exec(&joiner.pool, "INSERT INTO settings (key, value) VALUES ('assistant_model', 'some/model')").await;
     {
         let _held = try_busy(&host_id).unwrap();
-        let err = join(&joiner.pool, &o, false).await.unwrap_err();
+        let err = join(&joiner.pool, &o, &[], false).await.unwrap_err();
         assert!(err.contains("busy"), "{err}");
         // Nothing on the joiner changed.
         assert_eq!(identity(&joiner.pool).await.unwrap().book_id, None);
         assert_eq!(count(&joiner.pool, "SELECT count(*) FROM settings").await, 1);
     }
     // The code wasn't used up.
-    join(&joiner.pool, &o, false).await.unwrap();
+    join(&joiner.pool, &o, &[], false).await.unwrap();
 }
 
 #[tokio::test]
@@ -389,7 +389,7 @@ async fn a_failed_join_leaves_the_device_exactly_as_it_was() {
         // Nothing listens here.
         addrs: vec!["127.0.0.1:9".into()],
     };
-    assert!(join(&joiner.pool, &o, false).await.is_err());
+    assert!(join(&joiner.pool, &o, &[], false).await.is_err());
     let after: (Option<Vec<u8>>, String) =
         sqlx::query_as("SELECT public_key, device_id FROM sync_state").fetch_one(&joiner.pool).await.unwrap();
     assert_eq!(before, after, "key and id untouched");
@@ -400,7 +400,7 @@ async fn a_device_answering_at_a_spoofed_address_is_not_trusted() {
     // Our book, and a host of another book that someone points us at.
     let ours = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&ours).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&ours).await, &[], false).await.unwrap();
     let impostor = host().await;
     offer_from(&impostor).await;
     let err = sync_now(&joiner.pool, impostor.addr).await.unwrap_err();
@@ -422,7 +422,7 @@ async fn a_device_with_data_can_join_by_replacing_it_after_a_copy_is_saved() {
     let dir = crate::test_db::Scratch::new();
     let backup = crate::sync::service::backup_before_join(&joiner.pool, &dir.0).await.unwrap();
     // …then replaced by the book's.
-    let outcome = join(&joiner.pool, &o, true).await.unwrap();
+    let outcome = join(&joiner.pool, &o, &[], true).await.unwrap();
     assert!(outcome.complete, "{:?}", outcome.differences);
     assert_same(&h.device.pool, &joiner.pool).await;
     assert_eq!(count(&joiner.pool, "SELECT count(*) FROM blocks WHERE id = 'mine'").await, 0);
@@ -454,7 +454,7 @@ fn development_and_release_builds_never_sync() {
 async fn a_release_build_is_refused_by_a_development_build() {
     let h = host().await;
     let joiner = device().await;
-    join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     let me = identity(&joiner.pool).await.unwrap();
     let mut theirs = hello(&h.device.pool, &identity(&h.device.pool).await.unwrap()).await.unwrap();
     theirs.build = "release".into();
@@ -468,7 +468,7 @@ async fn a_release_build_is_refused_by_a_development_build() {
 async fn an_idle_sync_skips_the_full_comparison_only_when_it_is_safe() {
     let h = host().await;
     let joiner = device().await;
-    let first = join(&joiner.pool, &offer_from(&h).await, false).await.unwrap();
+    let first = join(&joiner.pool, &offer_from(&h).await, &[], false).await.unwrap();
     assert!(first.complete && !first.digest_skipped);
 
     // Nothing new on either side, after an identical sync: skipped, still complete.
@@ -527,4 +527,32 @@ fn a_hello_from_an_older_version_never_skips() {
     .unwrap();
     let read: Hello = rmp_serde::from_slice(&bytes).unwrap();
     assert_eq!(read, old);
+}
+
+// Spec: SYN-25
+#[test]
+fn a_code_has_a_tag_of_its_own() {
+    let (a, b) = ([1u8; 32], [2u8; 32]);
+    assert_eq!(pair_tag(&a), pair_tag(&a));
+    assert_ne!(pair_tag(&a), pair_tag(&b));
+    assert_eq!(pair_tag(&a).len(), 16);
+}
+
+// Spec: SYN-5
+#[tokio::test]
+async fn one_listener_takes_ipv4_and_ipv6() {
+    // Where there's no IPv6 at all (some CI containers), listen() falls back to IPv4.
+    let Ok(l) = dual_stack(0) else {
+        eprintln!("no IPv6 on this machine: skipped");
+        return;
+    };
+    let port = l.local_addr().unwrap().port();
+    let accept = tokio::spawn(async move {
+        for _ in 0..2 {
+            let _ = l.accept().await.unwrap();
+        }
+    });
+    tokio::net::TcpStream::connect(("127.0.0.1", port)).await.expect("over IPv4");
+    tokio::net::TcpStream::connect(("::1", port)).await.expect("over IPv6");
+    accept.await.unwrap();
 }

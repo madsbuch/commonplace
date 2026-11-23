@@ -31,13 +31,13 @@ async fn book() -> (Device, SocketAddr, Device, PathBuf) {
     let phone = device().await;
     let path = phone._dir.0.join("book.db");
     instance::check(&phone.pool, &path).await.unwrap();
-    session::join(&phone.pool, &offer, false).await.unwrap();
+    session::join(&phone.pool, &offer, &[], false).await.unwrap();
     (host, addr, phone, path)
 }
 
 async fn sync(pool: &SqlitePool, addr: SocketAddr) -> Result<session::Outcome, String> {
     for _ in 0..100 {
-        if let Some(o) = session::sync_with(pool, addr).await? {
+        if let Some(o) = session::sync_with(pool, &[addr]).await? {
             return Ok(o);
         }
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;

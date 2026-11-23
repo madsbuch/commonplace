@@ -31,7 +31,7 @@ pub async fn run_once(db_path: &str, budget: Duration) -> String {
     } else if let Err(e) = super::instance::check(&pool, std::path::Path::new(db_path)).await {
         format!("couldn't check the database: {e}")
     } else {
-        match tokio::time::timeout(budget, super::service::sync_round(&pool)).await {
+        match tokio::time::timeout(budget, super::service::sync_round(&pool, &[])).await {
             Err(_) => "ran out of time; carries on next run".to_string(),
             Ok(round) => {
                 let synced: Vec<String> = round
@@ -92,7 +92,7 @@ mod tests {
         // The "phone" joins, then writes with the app "closed".
         let phone_dir = crate::test_db::Scratch::new();
         let phone = crate::test_db::migrated_db(&phone_dir).await;
-        session::join(&phone, &offer, false).await.unwrap();
+        session::join(&phone, &offer, &[], false).await.unwrap();
         exec(&phone, "INSERT INTO blocks (id, type, position, content, created_at, updated_at) VALUES ('bg', 'paragraph', 'a0', 'Snack', 'now', 'now')").await;
         phone.close().await;
 

@@ -11,7 +11,8 @@ import { getDb, onDatabaseOpen } from "./db";
 import { notifyTablesChanged } from "./live";
 import { followAudio, resumeRecordings } from "./audio";
 import { followLeanChecks } from "./lean";
-import { checkInstance, onSyncChanged, startSync } from "./sync";
+import { checkInstance, onSyncChanged, onSyncStatus, startSync } from "./sync";
+import { announceNearby } from "./lan";
 
 onDatabaseOpen(async () => {
   try {
@@ -19,7 +20,14 @@ onDatabaseOpen(async () => {
   } catch (e) {
     console.warn("Checking the database's instance failed", e);
   }
-  startSync().catch((e: unknown) => console.warn("Sync didn't start", e));
+  startSync()
+    // Spec: SYN-5
+    // Once sync listens: announced nearby, and again whenever that changes.
+    .then(() => {
+      void announceNearby();
+      onSyncStatus(() => void announceNearby());
+    })
+    .catch((e: unknown) => console.warn("Sync didn't start", e));
   // Spec: AUD-6
   resumeRecordings().catch((e: unknown) => console.warn("Recordings didn't resume", e));
 });

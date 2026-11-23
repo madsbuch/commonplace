@@ -113,6 +113,8 @@ const ReplySchema = z.union([
 ]);
 let chatReplies: z.infer<typeof ReplySchema>[] = [];
 const workLog: { event: "begin" | "end"; id: string; title: string }[] = [];
+const lanStarts: unknown[] = [];
+let offerShown = false;
 let running: { id: string; title: string; since: number }[] = [];
 
 // Spec: LIB-23
@@ -275,6 +277,7 @@ if (import.meta.main) {
       if (url.pathname === "/fake-requests") return Response.json(chatRequests, { headers: cors });
       if (url.pathname === "/fake-joins") return Response.json(joins, { headers: cors });
       if (url.pathname === "/fake-work") return Response.json({ log: workLog, running }, { headers: cors });
+      if (url.pathname === "/fake-lan") return Response.json(lanStarts, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -334,7 +337,25 @@ if (import.meta.main) {
           const pages = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM blocks").get());
           return Response.json({ ok: fakeSyncStatus(pages.n) }, { headers: cors });
         }
+        // Spec: SYN-5, SYN-25
+        // The LAN plugin as a computer runs it: what's announced is recorded for the checks.
+        if (cmd === "plugin:lan|is_mobile") return Response.json({ ok: false }, { headers: cors });
+        if (cmd === "plugin:lan|start") {
+          lanStarts.push(args["config"]);
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        if (cmd === "sync_announce") {
+          return Response.json(
+            { ok: { serviceName: "Commonplace-fake", port: 47832, deviceId: "dev-fake", book: "bookfaketag", pair: offerShown ? "pairfaketag" : "" } },
+            { headers: cors },
+          );
+        }
+        if (cmd === "sync_cancel_offer") {
+          offerShown = false;
+          return Response.json({ ok: null }, { headers: cors });
+        }
         if (cmd === "sync_offer") {
+          offerShown = true;
           const body = Buffer.from(Array.from({ length: 230 }, (_, i) => (i * 97 + 13) % 256)).toString("base64url");
           return Response.json({ ok: `mybook-pair:1:${body}` }, { headers: cors });
         }

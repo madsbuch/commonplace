@@ -521,7 +521,13 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       return window.jsQR(data.data, 300, 300)?.data ?? null;
     });
     check("the pairing QR code reads back as the code", decoded?.startsWith("mybook-pair:1:") && decoded.length > 300, String(decoded).slice(0, 40));
+    // Spec: SYN-5, SYN-25
+    await page.waitForTimeout(500);
+    const announcedWithCode = (await (await fetch(`${FAKE}/fake-lan`)).json()).slice(-1)[0];
+    check("the device showing a code announces it nearby, by its tag", announcedWithCode?.pair === "pairfaketag" && announcedWithCode?.book === "bookfaketag" && announcedWithCode?.port === 47832, JSON.stringify(announcedWithCode));
     await page.getByRole("button", { name: "Done" }).click();
+    await page.waitForTimeout(500);
+    check("and stops announcing it once the code is put away", (await (await fetch(`${FAKE}/fake-lan`)).json()).slice(-1)[0]?.pair === "");
     await page.getByRole("button", { name: "Scan code" }).click();
     await page.waitForTimeout(800);
     const camera = (await page.locator(".pairing-camera").isVisible()) || (await page.locator(".mantine-Alert-root", { hasText: "Paste the code instead" }).isVisible());

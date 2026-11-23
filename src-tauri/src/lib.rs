@@ -375,6 +375,20 @@ async fn sync_join(
     svc.join(&app, &code, replace).await
 }
 
+// Spec: SYN-5
+/// What this device announces nearby (`plugin:lan|start`'s config); none until sync listens.
+#[tauri::command]
+async fn sync_announce(svc: SyncState<'_>) -> Result<Option<sync::service::Announce>, String> {
+    svc.announcing().await
+}
+
+// Spec: SYN-5
+/// A device the LAN plugin found nearby, passed on by the frontend.
+#[tauri::command]
+async fn sync_peer_found(svc: SyncState<'_>, peer: sync::service::Announced) -> Result<(), String> {
+    svc.found_nearby(peer).await
+}
+
 // Spec: SYN-23
 /// Checks the connection to the book's devices (and the code last joined).
 #[tauri::command]
@@ -409,6 +423,8 @@ pub fn run() {
         .plugin(tauri_plugin_audio_player::init())
         // Spec: WORK-2, WORK-3
         .plugin(tauri_plugin_background_work::init())
+        // Spec: SYN-5
+        .plugin(tauri_plugin_lan::init())
         .manage(work::Work::default())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))
         .manage(std::sync::Arc::new(audio::render::AudioService::default()));
@@ -479,6 +495,8 @@ pub fn run() {
             sync_join,
             sync_now,
             sync_check,
+            sync_announce,
+            sync_peer_found,
             sync_remove_device,
             library_save_file,
             library_read_file,
