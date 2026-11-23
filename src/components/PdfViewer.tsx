@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { openPdf, renderTextLayer, type OpenPdf, type PdfDocument } from "../lib/pdf";
 import { setPdfInView } from "../lib/currentView";
 
@@ -84,7 +84,18 @@ function PdfPage(props: { doc: PdfDocument; number: number; scale: number; size:
  * A PDF, page under page, drawn with pdf.js as pages come into view. Zoom is
  * relative to the width of the view: 1 fits a page to it.
  */
-export function PdfViewer(props: { load: () => Promise<Uint8Array>; itemId?: string }) {
+export function PdfViewer(props: {
+  load: () => Promise<Uint8Array>;
+  itemId?: string;
+  /** Told the open document once it's open (for its outline). */
+  onOpen?: (doc: PdfDocument) => void;
+  /** Told the page in view as it changes. */
+  onPage?: (page: number) => void;
+  /** A page to go to; `seq` makes going to the same page twice a new request. */
+  jump?: { page: number; seq: number } | null;
+  /** Shown at the start of the toolbar (the contents button). */
+  toolbarStart?: ReactNode;
+}) {
   const [pdf, setPdf] = useState<OpenPdf | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +103,20 @@ export function PdfViewer(props: { load: () => Promise<Uint8Array>; itemId?: str
   const [width, setWidth] = useState(0);
   const [current, setCurrent] = useState(1);
   const scroller = useRef<HTMLDivElement>(null);
-  const { load, itemId } = props;
+  const { load, itemId, onOpen, onPage, jump } = props;
+
+  useEffect(() => {
+    if (pdf) onOpen?.(pdf.doc);
+  }, [pdf, onOpen]);
+  useEffect(() => {
+    onPage?.(current);
+  }, [current, onPage]);
+  // Spec: LIB-15
+  useEffect(() => {
+    if (!jump || !pdf) return;
+    const el = scroller.current?.querySelector(`[data-page="${jump.page}"]`);
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: "start" });
+  }, [jump, pdf]);
 
   // Spec: ATL-1
   // Tell the assistant which page of which PDF is in view.
@@ -152,7 +176,8 @@ export function PdfViewer(props: { load: () => Promise<Uint8Array>; itemId?: str
   return (
     <div className="pdf-viewer">
       <div className="pdf-toolbar">
-        <span className="muted">{pdf ? `Page ${current} of ${pdf.doc.numPages}` : "Opening…"}</span>
+        {props.toolbarStart}
+        <span className="muted pdf-page-count">{pdf ? `Page ${current} of ${pdf.doc.numPages}` : "Opening…"}</span>
         <div className="pdf-zoom">
           <button type="button" aria-label="Zoom out" onClick={() => step(1 / 1.2)}>
             −

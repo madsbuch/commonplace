@@ -40,3 +40,27 @@ describe("PDF bytes over the IPC", () => {
     }
   });
 });
+
+describe("tables of contents", () => {
+  const toc = [
+    { title: "1 Computability", page: 1, children: [{ title: "1.1 Machines", page: 2, children: [] }, { title: "1.2 Numbers", page: 3, children: [] }] },
+    { title: "2 Decidability", page: 4, children: [{ title: "No page", page: null, children: [] }] },
+  ];
+
+  // Spec: LIB-15
+  test("the entry being read is the last to start at or before the page", async () => {
+    const { currentEntry } = await import("../src/components/Contents");
+    expect(currentEntry(toc, 1)).toBe(0);
+    expect(currentEntry(toc, 3)).toBe(2);
+    expect(currentEntry(toc, 9)).toBe(3);
+    expect(currentEntry([], 1)).toBeNull();
+  });
+
+  // Spec: LIB-14
+  test("a stored table of contents reads back; a corrupt one reads as none", async () => {
+    const { parseToc } = await import("../src/lib/schemas");
+    expect(parseToc(JSON.stringify(toc))).toEqual(toc);
+    expect(parseToc(null)).toBeNull();
+    expect(parseToc('[{"title":1}]')).toBeNull();
+  });
+});

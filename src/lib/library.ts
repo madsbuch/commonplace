@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import { execute, nowIso, select } from "./db";
 import { newId } from "./ids";
+import { parseToc, type TocEntry } from "./schemas";
 import { notifyTablesChanged } from "./live";
 import { removeItemAuthors } from "./people";
 
@@ -44,6 +45,7 @@ const ItemSchema = z
     filename: z.string(),
     file_size: z.number(),
     pages: z.number().nullable(),
+    toc: z.string().nullable(),
     added_at: z.string(),
     updated_at: z.string(),
   })
@@ -56,12 +58,14 @@ const ItemSchema = z
     filename: r.filename,
     fileSize: r.file_size,
     pages: r.pages,
+    /** The table of contents; null until it's been taken from the PDF, `[]` when the PDF has none. */
+    toc: parseToc(r.toc),
     addedAt: r.added_at,
     updatedAt: r.updated_at,
   }));
 export type LibraryItem = z.output<typeof ItemSchema>;
 
-const COLUMNS = "id, kind, title, authors, year, filename, file_size, pages, added_at, updated_at";
+const COLUMNS = "id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at";
 
 // Spec: LIB-1
 /** Every item, newest first. */
@@ -101,9 +105,11 @@ export async function addFile(file: File): Promise<string> {
   if (problem) throw new Error(problem);
   const bytes = new Uint8Array(await file.arrayBuffer());
   // pdf.js loads when first needed, and takes over the buffer it's given: hand it a copy.
-  const { openPdf, pdfDetails } = await import("./pdf");
+  const { openPdf, pdfDetails, pdfOutline } = await import("./pdf");
   const pdf = await openPdf(bytes.slice());
   const details = await pdfDetails(pdf.doc);
+  // Spec: LIB-14
+  const toc = await pdfOutline(pdf.doc);
   pdf.close();
 
   const id = newId("library_items");
@@ -111,8 +117,8 @@ export async function addFile(file: File): Promise<string> {
   // The file first: a device that syncs the item before the file shows it as on its way.
   await invoke("library_save_file", { itemId: id, mediaType: "application/pdf", data: await base64Of(file) });
   await execute(
-    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, added_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
+    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, $9)`,
     [
       id,
       details.pages >= BOOK_PAGES ? "book" : "paper",
@@ -123,6 +129,7 @@ export async function addFile(file: File): Promise<string> {
       file.size,
       details.pages,
       at,
+      JSON.stringify(toc),
     ],
   );
   notifyTablesChanged(LIBRARY_TABLES);
@@ -146,6 +153,12 @@ export async function updateItem(id: string, patch: { kind?: Kind; title?: strin
     next.year,
     nowIso(),
   ]);
+}
+
+// Spec: LIB-16
+/** Stores a table of contents taken from the item's PDF (for items added before they were taken). */
+export async function saveToc(id: string, toc: readonly TocEntry[]): Promise<void> {
+  await execute(`UPDATE library_items SET toc = $2 WHERE id = $1 AND toc IS NULL`, [id, JSON.stringify(toc)]);
 }
 
 // Spec: LIB-8

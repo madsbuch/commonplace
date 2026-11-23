@@ -54,6 +54,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0004_chats.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "library_toc",
+            sql: include_str!("../migrations/0005_library_toc.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

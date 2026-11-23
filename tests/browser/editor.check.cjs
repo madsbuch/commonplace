@@ -235,6 +235,35 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("two people marked the same become one", merged[0]?.merged_into?.startsWith("person_") && page.url().includes(merged[0].merged_into), JSON.stringify(merged));
     check("the merged person's items show under the one", (await page.locator(".entity-screen").innerText()).includes("Computing Machinery"));
 
+    // Spec: LIB-14, LIB-15, LIB-16
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({ answer: { title: "On Computable Numbers, with Contents", authors: [{ name: "Alan Turing", institutions: [] }], year: 1936, kind: "paper" } }),
+    });
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.locator("input[type=file]").setInputFiles(join(__dirname, "fixtures", "with-contents.pdf"));
+    await page.waitForURL((u) => /\/library\/lib_/.test(u.toString()), { timeout: 10000 });
+    await page.waitForTimeout(2500);
+    const tocItem = (await q("SELECT id, toc FROM library_items WHERE filename = 'with-contents.pdf'"))[0];
+    const stored = JSON.parse(tocItem?.toc ?? "[]");
+    check(
+      "the PDF's outline is kept as its contents, with pages",
+      stored.length === 3 && stored[0].children.length === 2 && stored[1].page === 4 && stored[1].children[0].title === "2.1 The halting problem",
+      tocItem?.toc,
+    );
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    check("the contents show beside the PDF", (await page.locator(".toc-entry").count()) === 6);
+    await page.locator(".toc-entry", { hasText: "Chapter 2: Decidability" }).click();
+    await page.waitForTimeout(800);
+    check("choosing an entry goes to its page", (await page.locator(".pdf-toolbar").innerText()).includes("Page 4 of 6"));
+    check("and marks it as the one being read", (await page.locator(".toc-entry.active").innerText()).includes("Chapter 2"));
+    await q(`UPDATE library_items SET toc = NULL WHERE id = '${tocItem.id}'`);
+    await page.reload();
+    await page.waitForTimeout(2500);
+    const again = (await q(`SELECT toc FROM library_items WHERE id = '${tocItem.id}'`))[0]?.toc;
+    check("an item without contents gets them when its PDF is opened", JSON.parse(again ?? "[]").length === 3, again);
+
     // Spec: LIB-5, LIB-8
     await page.goto(APP + "/library/" + second);
     await page.waitForTimeout(800);

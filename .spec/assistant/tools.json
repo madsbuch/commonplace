@@ -54,6 +54,14 @@
     {
       "id": "ATL-8",
       "text": "A picture of the screen leaves out the assistant itself and is at most `assistant.screenshot-width` wide."
+    },
+    {
+      "id": "ATL-9",
+      "text": "The assistant can read a library item's table of contents, with the page each entry starts on.",
+      "related": [
+        "#LIB-14",
+        "#ATL-3"
+      ]
     }
   ],
   "values": [

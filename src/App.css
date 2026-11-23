@@ -1604,3 +1604,92 @@ a.settings-row:hover {
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 }
+
+/* Spec: LIB-15 — a PDF's table of contents beside it */
+.library-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.library-body > .pdf-viewer {
+  flex: 1;
+  min-width: 0;
+}
+.toc-panel {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--sidebar);
+  min-height: 0;
+}
+.toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+.toc-entry {
+  width: 100%;
+  border: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.35;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.toc-entry.active {
+  background: var(--hover);
+  color: var(--accent);
+  font-weight: 600;
+}
+.toc-entry:disabled {
+  opacity: 0.6;
+}
+.toc-title {
+  flex: 1;
+  min-width: 0;
+}
+.toc-page {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.toc-toggle {
+  margin-right: 10px;
+  font-size: 13px;
+}
+.toc-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--line);
+}
+.pdf-page-count {
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  .toc-panel {
+    position: fixed;
+    inset: auto 0 0 0;
+    height: 70vh;
+    width: auto;
+    z-index: 45;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

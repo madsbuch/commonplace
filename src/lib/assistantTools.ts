@@ -22,6 +22,7 @@ import {
 } from "./lookup";
 import { addMemory, deleteMemory, isMemoryKind, updateMemory } from "./memory";
 import type { ToolDef } from "./openrouter";
+import type { TocEntry } from "./schemas";
 
 // Spec: ATL-3
 /** `assistant.pdf-pages-per-read` in the spec. */
@@ -63,7 +64,8 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "read_library_item",
-    description: "A paper's or book's details: title, authors with their institutions (and ids), year, kind, page count.",
+    description:
+      "A paper's or book's details: title, authors with their institutions (and ids), year, kind, page count, and its table of contents with the page each entry starts on (use it to pick pages for read_pdf_pages).",
     parameters: obj({ item_id: str("The item's id (lib_…).") }, ["item_id"]),
   },
   {
@@ -139,6 +141,12 @@ function out(value: unknown): string {
   return s.length > MAX_RESULT_CHARS ? `${s.slice(0, MAX_RESULT_CHARS)}\n…(cut: the result was longer than ${MAX_RESULT_CHARS} characters)` : s;
 }
 
+// Spec: ATL-9
+/** A table of contents as lines, "  2.1 Title (p. 14)", indented by depth: compact for the model. */
+function contentsLines(toc: readonly TocEntry[], depth = 0): string[] {
+  return toc.flatMap((e) => [`${"  ".repeat(depth)}${e.title}${e.page !== null ? ` (p. ${e.page})` : ""}`, ...contentsLines(e.children, depth + 1)]);
+}
+
 async function itemDetails(id: string) {
   const item = await getItem(id);
   if (!item) return null;
@@ -150,6 +158,7 @@ async function itemDetails(id: string) {
     kind: item.kind,
     pages: item.pages,
     authors: authors.map((a) => ({ person_id: a.personId, name: a.name, institutions: a.institutions.map((i) => ({ institution_id: i.id, name: i.name })) })),
+    contents: item.toc === null ? "not read yet" : item.toc.length === 0 ? "the PDF has none" : contentsLines(item.toc).join("\n"),
   };
 }
 

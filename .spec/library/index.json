@@ -26,6 +26,16 @@
         "#LIB-4",
         "#LIB-11"
       ]
+    },
+    {
+      "id": "US-16",
+      "as": "an author working through a long book",
+      "want": "its table of contents beside it",
+      "soThat": "I can go straight to the chapter I need",
+      "requirements": [
+        "#LIB-14",
+        "#LIB-15"
+      ]
     }
   ],
   "requirements": [
@@ -109,6 +119,18 @@
       "related": [
         "#ATL-6"
       ]
+    },
+    {
+      "id": "LIB-14",
+      "text": "An item's table of contents is taken from the PDF's own outline, with the page each entry starts on, where the PDF has one."
+    },
+    {
+      "id": "LIB-15",
+      "text": "The viewer shows an item's table of contents, marks the entry being read, and goes to an entry's page when it is chosen."
+    },
+    {
+      "id": "LIB-16",
+      "text": "An item added before tables of contents were taken gets one the first time its PDF is opened."
     }
   ],
   "values": [

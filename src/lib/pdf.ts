@@ -9,7 +9,9 @@
  */
 // Bundled, not a CDN URL: the worker has to be same-origin under the CSP.
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { z } from "zod";
 import { fieldsOf } from "./guards";
+import type { TocEntry } from "./schemas";
 
 // The legacy build: pdf.js 6 targets browsers newer than the WebView on a
 // phone; the legacy bundle ships the polyfills.
@@ -120,4 +122,45 @@ export async function renderTextLayer(page: PdfPage, viewport: Viewport, contain
   const layer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container, viewport });
   await layer.render().catch(() => undefined);
   return () => layer.cancel();
+}
+
+const RefSchema = z.object({ num: z.number(), gen: z.number() });
+
+/** The 1-based page an outline entry's destination points at, or null. */
+async function destPage(doc: PdfDocument, dest: unknown): Promise<number | null> {
+  try {
+    const explicit = typeof dest === "string" ? await doc.getDestination(dest) : dest;
+    if (!Array.isArray(explicit)) return null;
+    const target: unknown = explicit[0];
+    if (typeof target === "number") return target + 1;
+    const ref = RefSchema.safeParse(target);
+    return ref.success ? (await doc.getPageIndex(ref.data)) + 1 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** How deep, and how many entries, an outline is read: some PDFs carry thousands. */
+const MAX_TOC_DEPTH = 6;
+const MAX_TOC_ENTRIES = 2000;
+
+// Spec: LIB-14
+/** The PDF's own outline as a table of contents (empty when it has none). */
+export async function pdfOutline(doc: PdfDocument): Promise<TocEntry[]> {
+  const outline: unknown = await doc.getOutline().catch(() => null);
+  let budget = MAX_TOC_ENTRIES;
+  const walk = async (items: unknown, depth: number): Promise<TocEntry[]> => {
+    if (!Array.isArray(items) || depth > MAX_TOC_DEPTH) return [];
+    const out: TocEntry[] = [];
+    for (const item of items) {
+      if (budget-- <= 0) break;
+      const f = fieldsOf(item);
+      if (!f) continue;
+      const title = typeof f["title"] === "string" ? f["title"].replace(/\s+/g, " ").trim() : "";
+      if (title === "") continue;
+      out.push({ title, page: await destPage(doc, f["dest"]), children: await walk(f["items"], depth + 1) });
+    }
+    return out;
+  };
+  return walk(outline, 1);
 }

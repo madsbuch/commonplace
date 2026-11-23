@@ -251,6 +251,9 @@ export const libraryItems = sqliteTable(
     filename: text("filename").notNull(),
     fileSize: integer("file_size").notNull(),
     pages: integer("pages"),
+    // Spec: LIB-14
+    /** The PDF's outline as JSON (`TocEntry[]`, lib/library.ts); null until taken. */
+    toc: text("toc"),
     addedAt: text("added_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

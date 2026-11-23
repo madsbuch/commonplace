@@ -166,6 +166,13 @@ The book syncs peer to peer over the local network, as Tally does
   key, or when the call fails, the PDF's own metadata stands (XMP first,
   then the info dictionary; a PDF of 120 pages or more starts as a book).
   Logged in the ledger as `library_details`.
+- An item's table of contents is the PDF's own outline (`pdfOutline` in
+  `src/lib/pdf.ts`), taken when it's added and stored as JSON in
+  `library_items.toc` (`TocEntry[]`, `parseToc` in `src/lib/schemas.ts`):
+  `null` means not taken yet, and items added before get theirs the first time
+  their PDF opens; `[]` means the PDF has none. The viewer shows it beside the
+  pages (`src/components/Contents.tsx`, a sheet on phones), and the assistant
+  gets it with an item's details.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when

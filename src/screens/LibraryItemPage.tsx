@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
+import { Contents } from "../components/Contents";
 import { PdfViewer } from "../components/PdfViewer";
+import { pdfOutline, type PdfDocument } from "../lib/pdf";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
-import { getItem, hasFile, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, removeItem, updateItem, type LibraryItem } from "../lib/library";
+import { getItem, hasFile, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, removeItem, saveToc, updateItem, type LibraryItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 
 /** The details form: saved when a field is left. */
@@ -93,6 +95,25 @@ function DetailsInfo(props: { itemId: string }) {
   );
 }
 
+const CONTENTS_KEY = "library-contents-open";
+
+/** Whether the contents were open last time, on this device (on a phone they start closed). */
+function contentsWanted(): boolean {
+  try {
+    return localStorage.getItem(CONTENTS_KEY) !== "0" && !window.matchMedia("(max-width: 760px)").matches;
+  } catch {
+    return false;
+  }
+}
+
+function rememberContents(open: boolean): void {
+  try {
+    localStorage.setItem(CONTENTS_KEY, open ? "1" : "0");
+  } catch {
+    // A convenience only.
+  }
+}
+
 // Spec: LIB-5, LIB-6, LIB-8, LIB-11
 /** One paper or book: its details, editable, and its PDF. */
 export default function LibraryItemPage() {
@@ -103,6 +124,9 @@ export default function LibraryItemPage() {
   const [fileHere, setFileHere] = useState<boolean | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showContents, setShowContents] = useState(contentsWanted);
+  const [page, setPage] = useState(1);
+  const [jump, setJump] = useState<{ page: number; seq: number } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -117,6 +141,22 @@ export default function LibraryItemPage() {
   }, [id, version]);
 
   const load = useCallback(() => readFile(id), [id]);
+
+  // Spec: LIB-16
+  // An item added before contents were taken gets them the first time its PDF opens.
+  const needsToc = item !== null && item !== "missing" && item.toc === null;
+  const onOpen = useCallback(
+    (doc: PdfDocument) => {
+      if (needsToc) void pdfOutline(doc).then((toc) => saveToc(id, toc));
+    },
+    [id, needsToc],
+  );
+  const toc = item !== null && item !== "missing" ? (item.toc ?? []) : [];
+  const toggleContents = () =>
+    setShowContents((s) => {
+      rememberContents(!s);
+      return !s;
+    });
 
   if (item === "missing") {
     return (
@@ -170,7 +210,42 @@ export default function LibraryItemPage() {
       {fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (
-        <PdfViewer load={load} itemId={id} />
+        <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
+          {/* Spec: LIB-15 */}
+          {showContents && toc.length > 0 ? (
+            <aside className="toc-panel" aria-label="Contents">
+              <div className="toc-head">
+                <strong>Contents</strong>
+                <button type="button" className="assistant-ghost" aria-label="Close the contents" onClick={toggleContents}>
+                  ×
+                </button>
+              </div>
+              <Contents
+                toc={toc}
+                page={page}
+                onPick={(p) => {
+                  setJump((j) => ({ page: p, seq: (j?.seq ?? 0) + 1 }));
+                  // On a phone the contents cover the page: get out of the way.
+                  if (window.matchMedia("(max-width: 760px)").matches) setShowContents(false);
+                }}
+              />
+            </aside>
+          ) : null}
+          <PdfViewer
+            load={load}
+            itemId={id}
+            onOpen={onOpen}
+            onPage={setPage}
+            jump={jump}
+            toolbarStart={
+              toc.length > 0 ? (
+                <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
+                  Contents
+                </button>
+              ) : null
+            }
+          />
+        </div>
       ) : null}
     </div>
   );

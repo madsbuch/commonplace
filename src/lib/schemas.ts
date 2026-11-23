@@ -222,3 +222,30 @@ export function parseToolCallDeltas(chunk: unknown): z.infer<typeof ToolCallDelt
     .safeParse(chunk);
   return r.success ? (r.data.choices?.[0]?.delta?.tool_calls ?? []) : [];
 }
+
+// ---------------------------------------------------------------------------
+// A library item's table of contents (`library_items.toc`)
+// ---------------------------------------------------------------------------
+
+/** One entry: its title, the (1-based) page it starts on if known, and what's under it. */
+export interface TocEntry {
+  title: string;
+  page: number | null;
+  children: TocEntry[];
+}
+
+const TocEntrySchema: z.ZodType<TocEntry> = z.lazy(() =>
+  z.object({ title: z.string(), page: z.number().int().positive().nullable(), children: z.array(TocEntrySchema) }),
+);
+
+// Spec: LIB-14
+/** A stored table of contents; null when there's none yet, or it can't be read. */
+export function parseToc(raw: string | null): TocEntry[] | null {
+  if (raw === null) return null;
+  try {
+    const r = z.array(TocEntrySchema).safeParse(parseJson(raw));
+    return r.success ? r.data : null;
+  } catch {
+    return null;
+  }
+}
