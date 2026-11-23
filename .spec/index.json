@@ -33,6 +33,13 @@
       "from": "madsbuch/spec-repo",
       "commit": "4b867c69cb29461ee89e9b4b4de5c46062889d60",
       "tree": "ef45a0a59dfe1638f9a255ea3040fd5392fb6a70"
+    },
+    {
+      "id": "engineering-rules",
+      "at": "engineering-rules",
+      "from": "madsbuch/spec-repo",
+      "commit": "48f69d4f71fcdf2533c3a40f578030b270597836",
+      "tree": "54bfd50d7c3c800660958fd4f64ea6f2506df643"
     }
   ]
 }

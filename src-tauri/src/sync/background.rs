@@ -55,6 +55,7 @@ pub async fn run_once(db_path: &str, budget: Duration) -> String {
 // function by its exact symbol name, which takes `#[no_mangle]` — an unsafe
 // attribute, since two libraries exporting one name would clash. The name is
 // JNI's, unique to this class.
+// Spec: engineering-rules.TYP-5
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]

@@ -21,6 +21,7 @@ export default tseslint.config(
     rules: {
       // None of the rules below may be switched off with a comment — only
       // the hooks dependency check, whose exceptions are judgment calls.
+      // Spec: engineering-rules.TYP-4
       "eslint-comments/no-restricted-disable": [
         "error",
         // gitignore-style patterns: "*" swallows the "react-hooks/" folder,
@@ -33,6 +34,7 @@ export default tseslint.config(
       "eslint-comments/no-unlimited-disable": "error",
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+      // Spec: engineering-rules.JSN-1
       "no-restricted-properties": [
         "error",
         {
@@ -53,6 +55,7 @@ export default tseslint.config(
       // The other half of the boundary rule: a type argument or an `as` on
       // what a command, a query or a fetch hands back claims a shape nobody
       // checked. Parse it through src/lib/schemas.ts instead.
+      // Spec: engineering-rules.JSN-2
       "no-restricted-syntax": [
         "error",
         {
@@ -68,6 +71,7 @@ export default tseslint.config(
             "from src/lib/schemas.ts (see CLAUDE.md).",
         },
       ],
+      // Spec: engineering-rules.TYP-1, engineering-rules.TYP-2, engineering-rules.TYP-3
       "@typescript-eslint/consistent-type-assertions": ["error", { assertionStyle: "never" }],
       "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/no-explicit-any": "error",
@@ -101,6 +105,7 @@ export default tseslint.config(
   {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    // Spec: engineering-rules.TYP-2
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",

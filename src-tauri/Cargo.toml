@@ -62,4 +62,5 @@ futures-core = "0.3"
 [lints.rust]
 # No unsafe Rust; see CLAUDE.md. "deny" rather than "forbid" here, for one
 # audited exception: the JNI entry point in src/sync/background.rs.
+# Spec: engineering-rules.TYP-5
 unsafe_code = "deny"
