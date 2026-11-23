@@ -160,19 +160,31 @@ a {
   .sidebar .tree-header {
     padding-left: 44px;
   }
+  /* The menu button: an icon, centred in the 52px top bar where a screen has one. */
   .sidebar-toggle {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: fixed;
-    top: calc(8px + env(safe-area-inset-top));
-    left: 8px;
+    top: calc(6px + env(safe-area-inset-top));
+    left: 6px;
     z-index: 30;
-    border: 1px solid var(--line);
-    background: var(--bg);
+    border: none;
+    padding: 0;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: var(--fg);
-    border-radius: 8px;
-    width: 36px;
-    height: 36px;
-    font-size: 18px;
+    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+  }
+  .sidebar-toggle:active {
+    background: var(--hover);
+  }
+  /* What's at the bottom stays above Android's navigation bar. */
+  .main {
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .screen {
     padding-top: 56px;
@@ -819,7 +831,8 @@ button.danger {
 }
 @media (max-width: 760px) {
   .library-item-bar {
-    padding-left: 56px;
+    min-height: 52px;
+    padding-left: 52px;
   }
   .pdf-stack {
     padding: 8px;
@@ -1057,10 +1070,21 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 .chat-row .library-row {
   flex: 1;
   min-width: 0;
+  border-bottom: none;
+}
+.chat-row > button:not(.danger) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.chat-row > button:not(.danger):hover {
+  color: var(--fg);
+  border-color: var(--line);
 }
 .memory-kind {
   font-size: 15px;
@@ -1357,6 +1381,11 @@ kbd {
 .page-actions .button-link:hover {
   color: var(--fg);
   border-color: var(--line);
+}
+.page-actions .button-primary,
+.page-actions .button-primary:hover {
+  color: #fff;
+  border-color: var(--accent);
 }
 .page-actions button[aria-pressed="true"] {
   color: var(--accent);
