@@ -6,6 +6,7 @@ import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
 import { MoreMenu } from "../components/MoreMenu";
+import { RecordDialog } from "../components/RecordDialog";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
@@ -128,6 +129,7 @@ export default function LibraryItemPage() {
   const [fileHere, setFileHere] = useState<boolean | null>(null);
   const [htmlHere, setHtmlHere] = useState<boolean | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [showContents, setShowContents] = useState(contentsWanted);
   const [page, setPage] = useState(1);
   const [jump, setJump] = useState<{ itemId: string; page: number; seq: number } | null>(null);
@@ -264,6 +266,8 @@ export default function LibraryItemPage() {
           <MoreMenu
             label="More for this item"
             actions={[
+              // Spec: AUD-2
+              { label: "Record aloud…", onClick: () => setRecording(true) },
               {
                 label: "Remove from the library",
                 confirm: "Really remove it?",
@@ -339,6 +343,7 @@ export default function LibraryItemPage() {
           />
         </div>
       ) : null}
+      {recording ? <RecordDialog item={item} onClose={() => setRecording(false)} /> : null}
     </div>
   );
 }

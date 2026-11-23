@@ -4,6 +4,8 @@ import { ModelPicker, modelSub } from "../components/ModelPicker";
 import { InfoButton } from "../components/InfoButton";
 import { BackToSettings } from "../components/SettingsRows";
 import { getDetailsModel, saveDetailsModel } from "../lib/libraryDetails";
+import { getScriptModel, getSpeechModel, getVoice, saveAudioSetting, SCRIPT_MODEL_KEY, SPEECH_MODEL_KEY, VOICE_KEY } from "../lib/audio";
+import { DEFAULT_SPEECH_MODEL, DEFAULT_VOICE, VOICES } from "../lib/audioModel";
 import {
   getApiKey,
   getAssistantModel,
@@ -50,6 +52,22 @@ export default function AiSettingsPage() {
   const [picking, setPicking] = useState(false);
   const [detailsModel, setDetailsModel] = useState<string | null>(null);
   const [pickingDetails, setPickingDetails] = useState(false);
+  const [voice, setVoice] = useState(DEFAULT_VOICE);
+  const [speechModel, setSpeechModel] = useState(DEFAULT_SPEECH_MODEL);
+  const [scriptModel, setScriptModel] = useState<string | null>(null);
+  const [pickingScript, setPickingScript] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void Promise.all([getVoice(), getSpeechModel(), getScriptModel()]).then(([v, s, m]) => {
+      if (!live) return;
+      setVoice(v);
+      setSpeechModel(s);
+      setScriptModel(m);
+    });
+    return () => {
+      live = false;
+    };
+  }, [settingsVersion]);
   const booted = useRef(false);
 
   useEffect(() => {
@@ -266,6 +284,57 @@ export default function AiSettingsPage() {
         )}
       </section>
 
+      {/* Spec: AUD-5 */}
+      <section className="ai-section">
+        <div className="with-info">
+          <h2>Recordings</h2>
+          <InfoButton title="Recordings">
+            <p>The audio library's recordings are read in this voice, by the speech model, through OpenRouter. The script model prepares what's read: formulas into speech, and summaries.</p>
+            <p>A recording keeps the voice and speech model it was made with.</p>
+          </InfoButton>
+        </div>
+        <label className="ai-row ai-field">
+          <span>Voice</span>
+          <select value={voice} onChange={(e) => void saveAudioSetting(VOICE_KEY, e.target.value).then(() => setVoice(e.target.value))}>
+            {VOICES.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} ({v.character})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="ai-row ai-field">
+          <span>Speech model</span>
+          <input
+            className="ai-input"
+            value={speechModel}
+            spellCheck={false}
+            autoCapitalize="off"
+            onChange={(e) => setSpeechModel(e.target.value)}
+            onBlur={() => void saveAudioSetting(SPEECH_MODEL_KEY, speechModel.trim() || DEFAULT_SPEECH_MODEL)}
+          />
+        </label>
+        <div className="ai-row">
+          <div className="model-current">
+            <div className="model-name">Script model: {models.find((m) => m.id === scriptModel)?.name ?? scriptModel ?? "…"}</div>
+            <div className="model-sub">{scriptModel}</div>
+          </div>
+          <button type="button" className="ai-button ghost" onClick={() => setPickingScript((x) => !x)}>
+            {pickingScript ? "Done" : "Change"}
+          </button>
+        </div>
+        {pickingScript && (
+          <ModelPicker
+            models={models}
+            selected={scriptModel ?? ""}
+            onSelect={(id) => {
+              setScriptModel(id);
+              setPickingScript(false);
+              void saveAudioSetting(SCRIPT_MODEL_KEY, id);
+            }}
+          />
+        )}
+      </section>
     </div>
   );
 }

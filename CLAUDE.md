@@ -19,7 +19,7 @@ before editing the spec).
   idea; don't bring one back without asking.
 - What isn't decided stays out of the spec. Ask instead of guessing.
 - Requirement id prefixes: `BOOK-` (book), `PAGE-` (pages), `BLK-` (blocks),
-  `PAR-`/`HEAD-`/`LIST-`/`CODE-`/`LEAN-` (block types), `LNK-` (links), `LIB-` (library), `PPL-` (people and institutions), `AST-`
+  `PAR-`/`HEAD-`/`LIST-`/`CODE-`/`LEAN-` (block types), `LNK-` (links), `LIB-` (library), `AUD-` (the audio library), `PPL-` (people and institutions), `AST-`
   (assistant), `CHAT-` (chats), `ATL-` (assistant tools), `MEM-` (memory), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
   `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
   (sync triggers), `ID-` (row ids). Stories use `US-`. Requirements keep their
@@ -316,6 +316,39 @@ read and show verdicts.
   the screen; the screen's text says how things stand (APP-9). The ⓘ can
   pulse while what it explains is under way (`tone="busy"`) or turn the
   warning colour when it failed (`tone="warning"`), with the details inside.
+
+## The audio library
+
+Recordings of library items (`recordings`, synced): verbatim (a whole item,
+or a section and those within it, `section` = `html:<anchor>` or `toc:<i>`)
+or a summary of several, one narrator, 5/15/30 minutes. Only the device
+that starts one carries on with it (`device`).
+
+- The app writes the script (`src/lib/audio.ts`; pure parts in
+  `audioModel.ts`): an item's sections from its HTML version (each without
+  the sections in it, the front matter first, the bibliography left out), or
+  from its PDF by its contents' pages and titles; each chapter through the
+  script model (`audio_script` in the ledger) to keep the prose and say the
+  maths; or one call for a summary. The script is saved chapter by chapter,
+  so writing carries on after a restart (`resumeRecordings`).
+- Rust speaks and encodes it (`src-tauri/src/audio/`): OpenRouter's
+  `/audio/speech` (raw PCM asked for), three passages at once, each kept in
+  `speech_clips` (local, in `LOCAL_TABLES`) until the recording is done;
+  `speech` rows in the ledger count characters (OpenRouter doesn't price
+  speech). Then one Opus stream (`opus-pure`, pure Rust: it builds for
+  Android) at 24 kbit/s mono, 24 kHz, muxed by our own WebM writer
+  (`webm.rs`: SeekHead, Info, Tracks, Chapters, Clusters, Cues), into
+  `recording_files` (synced). Ogg Opus would be simpler, but Safari plays
+  WebM Opus reliably and Ogg not. Rust resumes "speaking" recordings on
+  start (`sync_start`); it emits `audio-progress` and `audio-changed`.
+- `tests/browser/fixtures/speech.webm` is our encoder's output
+  (`WRITE_SPEECH_FIXTURE=… cargo test speech_in_opus`); the fake Tauri layer
+  "renders" with it, so the browser checks play real WebM Opus.
+- One player for the app (`src/lib/player.ts`): an audio element on a Blob
+  of the recording (`audio_read`, base64), Media Session for media keys,
+  chapters, speed (per device), where it was left saved every 5 s and on
+  pause (`listening`, synced), and `#t=<seconds>` in the recording's address.
+  `MiniPlayer` shows what's playing on other screens.
 
 ## AI
 

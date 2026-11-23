@@ -786,6 +786,78 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("on a phone it opens as text", await page.locator(".html-reader").isVisible());
     await page.setViewportSize({ width: 1200, height: 800 });
 
+    // Spec: AUD-2, AUD-3, AUD-5, AUD-6, AUD-7
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({ answer: { paragraphs: ["Two point one. Attention.", "Scaled dot-product attention: softmax of Q K transpose, times V."] } }),
+    });
+    const sentBefore = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
+    await page.goto(`${APP}/library/${arx?.id}`);
+    await page.waitForTimeout(1200);
+    await page.getByRole("button", { name: "More for this item" }).click();
+    await page.getByRole("menuitem", { name: "Record aloud…" }).click();
+    await page.getByLabel("What to read").selectOption({ label: "\u20032.1 Attention" });
+    await page.getByRole("button", { name: "Record", exact: true }).click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(2500);
+    const rec = (await q("SELECT id, kind, section, status, script, chapters, duration_seconds, voice, speech_model FROM recordings"))[0];
+    check("a section of a paper is recorded aloud, word for word", rec?.kind === "verbatim" && rec?.section === "html:S2.SS1" && rec?.status === "ready", JSON.stringify({ ...rec, script: undefined }));
+    check("its script is what the script model made of the section", JSON.parse(rec?.script ?? "{}").chapters?.[0]?.paragraphs?.[1]?.startsWith("Scaled dot-product attention: softmax of Q K"), rec?.script);
+    const scriptAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(sentBefore));
+    check("the script model is told to keep the prose and say the maths", scriptAsk.includes("Keep every word of the prose exactly") && scriptAsk.includes("2.1 Attention") && scriptAsk.includes("softmax}(QK^{T})V"), scriptAsk.slice(0, 200));
+    check("in the voice and speech model chosen", rec?.voice === "Charon" && rec?.speech_model === "google/gemini-3.1-flash-tts-preview");
+    check("its audio is Opus in WebM, kept to sync", (await q(`SELECT media_type, length(data) AS n FROM recording_files WHERE recording_id = '${rec?.id}'`))[0]?.media_type === "audio/webm");
+
+    // Spec: AUD-8, AUD-9, AUD-12
+    await page.getByRole("button", { name: "Play" }).click();
+    await page.waitForTimeout(1600);
+    check("the player plays it", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && /#t=[1-3]$/.test(page.url()), page.url());
+    await page.getByRole("radio", { name: "1.5×" }).click();
+    check("at a speed chosen", (await page.getByRole("radio", { name: "1.5×" }).getAttribute("aria-checked")) === "true");
+    await page.getByRole("button", { name: "Pause" }).click();
+    await page.waitForTimeout(600);
+    const listened = await q(`SELECT position FROM listening WHERE recording_id = '${rec?.id}'`);
+    check("where it was left is kept", listened[0]?.position > 0.5, JSON.stringify(listened));
+    await page.locator(".recording-chapters button").first().click();
+    await page.waitForTimeout(300);
+    check("a chapter goes to its start", (await page.locator(".player-times span").first().innerText()) === "0:00");
+    await page.goto(`${APP}/audio/${rec?.id}#t=2`);
+    await page.waitForTimeout(1800);
+    check("an address with a moment opens the recording there", (await page.locator(".player-times span").first().innerText()) === "0:02", await page.locator(".player-times span").first().innerText());
+
+    // Spec: AUD-1, APP-12
+    await page.getByRole("link", { name: "← Audio" }).click();
+    await page.waitForURL(/\/audio$/);
+    await page.waitForTimeout(800);
+    check("the audio library lists it, and offers no deleting", (await page.locator(".library-list").innerText()).includes("2.1 Attention") && (await page.locator(".library-list button").count()) === 0);
+    check("what's playing stays at hand on other screens", await page.locator(".mini-player").isVisible());
+
+    // Spec: AUD-4
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({ answer: { title: "Two papers on machines", parts: [{ title: "The question", paragraphs: ["What can machines compute?"] }, { title: "The answer", paragraphs: ["Less than everything."] }] } }),
+    });
+    await page.getByRole("button", { name: "Summarize papers…" }).click();
+    await page.locator(".summarize-items label").nth(0).click();
+    await page.locator(".summarize-items label").nth(1).click();
+    await page.getByRole("radio", { name: "5 min", exact: true }).click();
+    await page.getByRole("button", { name: "Record summary" }).click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(2000);
+    const sum = (await q("SELECT title, kind, minutes, items, chapters FROM recordings WHERE kind = 'summary'"))[0];
+    check("several papers are summarized aloud, one narrator, at the length chosen", sum?.title === "Two papers on machines" && sum?.minutes === 5 && JSON.parse(sum?.items ?? "[]").length === 2, JSON.stringify(sum));
+    check("the summary's parts are its chapters", (await page.locator(".recording-chapters").innerText()).includes("The question") && JSON.parse(sum?.chapters ?? "[]").length === 2);
+    const sumAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(-1));
+    check("asked for the words five minutes take", sumAsk.includes("About 750 words"));
+
+    // Spec: APP-12
+    await page.getByRole("button", { name: "More for this recording" }).click();
+    await page.getByRole("menuitem", { name: "Delete recording" }).click();
+    await page.getByRole("menuitem", { name: "Really delete this recording?" }).click();
+    await page.waitForURL(/\/audio$/);
+    check("a recording is deleted from its own menu", (await q("SELECT count(*) AS n FROM recordings WHERE kind = 'summary'"))[0].n === 0);
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

@@ -50,6 +50,23 @@ export const LeanIcon = () => (
     <path d="M11.4 9.6 6 20" />
   </Icon>
 );
+export const HeadphonesIcon = () => (
+  <Icon>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z" />
+  </Icon>
+);
+export const PlayIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
+  </svg>
+);
+export const PauseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <rect x="6" y="4" width="4.5" height="16" rx="1" />
+    <rect x="13.5" y="4" width="4.5" height="16" rx="1" />
+  </svg>
+);
 export const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />

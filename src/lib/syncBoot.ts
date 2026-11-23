@@ -9,6 +9,7 @@
 
 import { getDb, onDatabaseOpen } from "./db";
 import { notifyTablesChanged } from "./live";
+import { followAudio, resumeRecordings } from "./audio";
 import { followLeanChecks } from "./lean";
 import { checkInstance, onSyncChanged, startSync } from "./sync";
 
@@ -19,11 +20,14 @@ onDatabaseOpen(async () => {
     console.warn("Checking the database's instance failed", e);
   }
   startSync().catch((e: unknown) => console.warn("Sync didn't start", e));
+  // Spec: AUD-6
+  resumeRecordings().catch((e: unknown) => console.warn("Recordings didn't resume", e));
 });
 
 onSyncChanged(() => notifyTablesChanged("all"));
 // Spec: LEAN-6
 followLeanChecks();
+followAudio();
 
 // Open the database now, so sync starts even before a screen reads anything.
 getDb().catch((e: unknown) => console.warn("The database didn't open", e));

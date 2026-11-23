@@ -18,6 +18,8 @@ const InstitutionPage = lazy(() => import("./screens/InstitutionPage"));
 const ChatsPage = lazy(() => import("./screens/ChatsPage"));
 const ChatPage = lazy(() => import("./screens/ChatPage"));
 const MemoryPage = lazy(() => import("./screens/MemoryPage"));
+const AudioPage = lazy(() => import("./screens/AudioPage"));
+const RecordingPage = lazy(() => import("./screens/RecordingPage"));
 
 function screen(node: ReactNode) {
   return <Suspense fallback={null}>{node}</Suspense>;
@@ -31,6 +33,7 @@ function screen(node: ReactNode) {
  * - `/library`, `/library/:id`: the papers and books, and one of them
  * - `/library/people/:id`, `/library/institutions/:id`: a person, an institution
  * - `/chats`, `/chats/:id`, `/memory`: the assistant's chats, one chat, its memory
+ * - `/audio`, `/audio/:id`: the audio library, and one recording in the player
  * - `/settings`, and nested in it `/settings/ai`, `/settings/lean`,
  *   `/settings/sync` and `/settings/costs`
  *   (`/sync` and `/costs` lead there)
@@ -49,6 +52,9 @@ export const router = createBrowserRouter([
       { path: "/chats", element: screen(<ChatsPage />) },
       { path: "/chats/:id", element: screen(<ChatPage />) },
       { path: "/memory", element: screen(<MemoryPage />) },
+      // Spec: AUD-1, AUD-12
+      { path: "/audio", element: screen(<AudioPage />) },
+      { path: "/audio/:id", element: screen(<RecordingPage />) },
       { path: "/settings", element: screen(<SettingsPage />) },
       // Spec: APP-8
       { path: "/settings/ai", element: screen(<AiSettingsPage />) },

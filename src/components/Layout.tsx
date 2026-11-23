@@ -4,7 +4,8 @@ import { installSelectionTracking, setPath } from "../lib/currentView";
 import { toggleDock, useDockOpen } from "../lib/dock";
 import { setNavigate } from "../lib/navigation";
 import { AssistantDock } from "./AssistantDock";
-import { ChatIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon } from "./Icons";
+import { ChatIcon, HeadphonesIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon } from "./Icons";
+import { MiniPlayer } from "./MiniPlayer";
 import { Logo } from "./Logo";
 import { PageTree } from "./PageTree";
 import { QUICK_OPEN_KEYS, QuickOpen } from "./QuickOpen";
@@ -72,6 +73,11 @@ export function Layout() {
             <ChatIcon />
             Chats
           </NavLink>
+          {/* Spec: AUD-1 */}
+          <NavLink to="/audio">
+            <HeadphonesIcon />
+            Audio
+          </NavLink>
         </div>
         <PageTree />
         <div className="sidebar-footer">
@@ -85,6 +91,7 @@ export function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <MiniPlayer />
       {showDock ? <AssistantDock /> : null}
       {!showDock && !onChatScreen ? (
         <button type="button" className="dock-toggle" aria-label="Open the assistant" title="Assistant" onClick={toggleDock}>

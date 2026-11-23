@@ -2314,3 +2314,202 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
     font-size: 16.5px;
   }
 }
+
+/* Spec: AUD-1, AUD-8 — the audio library and its player */
+.recording-meta {
+  margin-top: -8px;
+  font-size: 14px;
+}
+.recording-progress {
+  margin: 16px 0;
+}
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 400ms ease;
+}
+.player {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--sidebar) 55%, var(--bg));
+}
+.player-seek {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.player-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+.player-controls button {
+  min-width: 44px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.player-controls button:hover {
+  border-color: var(--line);
+}
+.player-controls .player-play {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-controls .player-play svg {
+  width: 24px;
+  height: 24px;
+}
+.player-speeds {
+  justify-content: center;
+  display: flex;
+  flex-wrap: wrap;
+}
+.recording-chapters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.recording-chapters li > button,
+.recording-chapter-pending {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+}
+.recording-chapter-pending {
+  color: var(--muted);
+}
+.recording-chapters li > button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.recording-chapters li > button .muted {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* What's playing, at the bottom of every other screen. */
+.mini-player {
+  position: fixed;
+  left: calc(var(--sidebar-width) + 16px);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - var(--sidebar-width) - 140px));
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.mini-player-toggle {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.mini-player-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--fg);
+  font-size: 13px;
+}
+.mini-player-title,
+.mini-player-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-player-title {
+  font-weight: 600;
+}
+.mini-player-sub {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .mini-player {
+    left: 12px;
+    max-width: calc(100vw - 130px);
+  }
+}
+.summarize-dialog {
+  gap: 10px;
+}
+.summarize-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: 40vh;
+}
+.summarize-items label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 2px;
+  font-size: 14px;
+}
+.record-field,
+.ai-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.record-field select,
+.ai-field select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+.record-voice {
+  font-size: 13px;
+}

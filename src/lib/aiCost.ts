@@ -8,7 +8,7 @@
  * tested without a database. Adapted from Tally.
  */
 
-export const AI_FEATURES = ["assistant", "library_details", "connection_test"] as const;
+export const AI_FEATURES = ["assistant", "library_details", "connection_test", "audio_script", "speech"] as const;
 
 export type AiFeature = (typeof AI_FEATURES)[number];
 
@@ -16,6 +16,9 @@ const FEATURE_INFO: Record<AiFeature, { label: string; detail: string }> = {
   assistant: { label: "Writing assistant", detail: "Questions, critique and quizzes about a page" },
   library_details: { label: "Library details", detail: "Reading a new paper's or book's title, authors and year" },
   connection_test: { label: "Connection tests", detail: "Testing the API key in Settings" },
+  // Spec: AUD-5
+  audio_script: { label: "Recording scripts", detail: "Formulas into speech, and summaries, for the audio library" },
+  speech: { label: "Speech", detail: "Recordings read aloud; OpenRouter doesn't price it, so these count characters" },
 };
 
 /** Display name and one-line description; unknown features show as logged. */

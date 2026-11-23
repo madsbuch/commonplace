@@ -295,6 +295,23 @@ if (import.meta.main) {
         if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
         // Sync, enough for the pairing screen: a device that holds a book, a
         // code as long as a real one, and joins recorded for the checks.
+        // Spec: AUD-6, AUD-7
+        // The Rust job, as if it had spoken the script: the fixture our encoder made, its chapters spread over it.
+        if (cmd === "audio_render") {
+          const id = String(args["id"]);
+          const row = z.object({ script: z.string() }).parse(db.query("SELECT script FROM recordings WHERE id = ?").get(id));
+          const script = z.object({ chapters: z.array(z.object({ title: z.string() })) }).parse(parseJson(row.script));
+          const chapters = script.chapters.map((c, i) => ({ title: c.title, start: (i * 3) / Math.max(1, script.chapters.length) }));
+          const webm = new Uint8Array(readFileSync(new URL("tests/browser/fixtures/speech.webm", root)));
+          db.query("INSERT OR REPLACE INTO recording_files (recording_id, media_type, data) VALUES (?, 'audio/webm', ?)").run(id, webm);
+          db.query("UPDATE recordings SET status = 'ready', progress = 1, chapters = ?, duration_seconds = 3 WHERE id = ?").run(JSON.stringify(chapters), id);
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        if (cmd === "audio_read") {
+          const row = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(db.query("SELECT data FROM recording_files WHERE recording_id = ?").get(String(args["id"])) ?? undefined);
+          if (!row) return Response.json({ err: "this recording hasn't reached this device yet" }, { headers: cors });
+          return Response.json({ ok: Buffer.from(row.data).toString("base64") }, { headers: cors });
+        }
         if (cmd === "lean_status") {
           return Response.json({ ok: { lake: "/home/fake/.elan/bin/lake", ready: true, toolchain: "leanprover/lean4:v4.99.0", settingUp: false, workspace: "/fake/lean" } }, { headers: cors });
         }

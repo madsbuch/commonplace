@@ -332,3 +332,68 @@ export const LeanSetupEventSchema = z.object({
   done: z.boolean().optional(),
   error: z.string().nullable().optional(),
 });
+
+// ---------------------------------------------------------------------------
+// The audio library (src/lib/audio.ts): recordings as stored (strict).
+// ---------------------------------------------------------------------------
+
+// Spec: AUD-2, AUD-4
+export const ScriptSchema = z.object({
+  chapters: z.array(z.object({ title: z.string(), paragraphs: z.array(z.string()) })),
+});
+export type Script = z.infer<typeof ScriptSchema>;
+
+export const RecordingChapterSchema = z.object({ title: z.string(), start: z.number().nonnegative() });
+export type RecordingChapter = z.infer<typeof RecordingChapterSchema>;
+
+const RecordingRowSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["verbatim", "summary"]),
+  title: z.string(),
+  items: z.string(),
+  section: z.string().nullable(),
+  minutes: z.number().nullable(),
+  voice: z.string(),
+  speech_model: z.string(),
+  status: z.enum(["writing", "speaking", "ready", "failed"]),
+  progress: z.number(),
+  error: z.string().nullable(),
+  script: z.string().nullable(),
+  chapters: z.string().nullable(),
+  duration_seconds: z.number().nullable(),
+  device: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/** A `recordings` row, its JSON columns read. */
+export function parseRecording(row: unknown) {
+  const r = RecordingRowSchema.parse(row);
+  const json = <T>(text: string | null, schema: z.ZodType<T>): T | null => {
+    if (text === null) return null;
+    const p = schema.safeParse(parseJson(text));
+    return p.success ? p.data : null;
+  };
+  return {
+    id: r.id,
+    kind: r.kind,
+    title: r.title,
+    items: json(r.items, z.array(z.string())) ?? [],
+    section: r.section,
+    minutes: r.minutes,
+    voice: r.voice,
+    speechModel: r.speech_model,
+    status: r.status,
+    progress: r.progress,
+    error: r.error,
+    script: json(r.script, ScriptSchema),
+    chapters: json(r.chapters, z.array(RecordingChapterSchema)) ?? [],
+    durationSeconds: r.duration_seconds,
+    device: r.device,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+export type Recording = ReturnType<typeof parseRecording>;
+
+export const AudioEventSchema = z.object({ id: z.string(), progress: z.number().optional() });

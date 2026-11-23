@@ -16,6 +16,8 @@ export type ViewKind =
   | "chats"
   | "chat"
   | "memory"
+  | "audio"
+  | "recording"
   | "settings"
   | "ai-settings"
   | "lean-settings"
@@ -63,6 +65,8 @@ export function viewOfPath(path: string): Pick<CurrentView, "kind" | "id"> {
   if (a === "library" && b) return { kind: "library-item", id: b };
   if (a === "library") return { kind: "library", id: null };
   if (a === "chats" && b) return { kind: "chat", id: b };
+  if (a === "audio" && b) return { kind: "recording", id: b };
+  if (a === "audio") return { kind: "audio", id: null };
   if (a === "chats") return { kind: "chats", id: null };
   if (a === "settings" && b === "ai") return { kind: "ai-settings", id: null };
   if (a === "settings" && b === "lean") return { kind: "lean-settings", id: null };
@@ -131,6 +135,8 @@ export const ROUTES: readonly { address: string; shows: string }[] = [
   { address: "/chats", shows: "Every chat with you." },
   { address: "/chats/<chat id>", shows: "One chat, on its own." },
   { address: "/memory", shows: "Your memory." },
+  { address: "/audio", shows: "The audio library: recordings of papers read aloud, and spoken summaries." },
+  { address: "/audio/<recording id>", shows: "One recording in the player, with its chapters; `#t=<seconds>` is the moment playing." },
   { address: "/settings", shows: "Settings: rows leading to AI and models, Lean, sync, AI costs and memory, and the appearance switch." },
   { address: "/settings/ai", shows: "The OpenRouter key, the assistant's model and the model that reads library details." },
   { address: "/settings/lean", shows: "Whether this computer verifies Lean blocks (Lean with Mathlib), and setting that up." },
