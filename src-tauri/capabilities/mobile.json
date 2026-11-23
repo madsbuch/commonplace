@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Mobile-only: scanning a pairing QR code with the camera",
+  "description": "Mobile-only: scanning a pairing QR code with the camera, and playing recordings natively",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
-  "permissions": ["barcode-scanner:default"]
+  "permissions": ["barcode-scanner:default", "audio-player:default"]
 }

@@ -349,6 +349,17 @@ that starts one carries on with it (`device`).
   chapters, speed (per device), where it was left saved every 5 s and on
   pause (`listening`, synced), and `#t=<seconds>` in the recording's address.
   `MiniPlayer` shows what's playing on other screens.
+- On Android the player is native (AUD-10): `src-tauri/plugins/audio-player`,
+  ported from learn-polish's song player. Media3 ExoPlayer in a
+  `MediaSessionService` (foreground, plays with the screen off; notification
+  with a Close button; headphones unplugged pause), its player wrapped in a
+  `ChapterPlayer` (a `ForwardingPlayer`) so the lock screen's next and
+  previous skip chapters of the one file. Media3 plays files, so
+  `audio_file` writes the recording to `<app data>/recordings/<id>.webm`
+  (via `.part`). Its commands (`set_recording`, `play`, `pause`, `seek_to`,
+  `set_speed`, `stop`, `get_state`) and its `state` events are used by
+  `player.ts`; `audio-player:default` is in the mobile capability. Only the
+  APK build (CI) compiles its Kotlin.
 
 ## AI
 

@@ -143,6 +143,32 @@ async fn audio_read(app: tauri::AppHandle, id: String) -> Result<String, String>
     Ok(library::encode(&bytes))
 }
 
+// Spec: AUD-10
+/**
+ * A recording's audio as a file, for Android's player (Media3 plays files,
+ * not bytes): written to the app's data folder once, and again if it changed.
+ */
+#[tauri::command]
+async fn audio_file(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let bytes: Vec<u8> = sqlx::query_scalar("SELECT data FROM recording_files WHERE recording_id = ?")
+        .bind(&id)
+        .fetch_optional(&db_pool(&app).await?)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("this recording hasn't reached this device yet")?;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recordings");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+    let path = dir.join(format!("{safe}.webm"));
+    if std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64) {
+        // Written beside it, then moved: the player never sees half a file.
+        let part = dir.join(format!("{safe}.webm.part"));
+        std::fs::write(&part, &bytes).map_err(|e| e.to_string())?;
+        std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 // ---------------------------------------------------------------------------
 // Lean (src/lean/): computers check Lean blocks; phones only show verdicts
 // ---------------------------------------------------------------------------
@@ -330,6 +356,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_sync_background::init())
+        // Spec: AUD-10
+        .plugin(tauri_plugin_audio_player::init())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))
         .manage(std::sync::Arc::new(audio::render::AudioService::default()));
 
@@ -374,6 +402,7 @@ pub fn run() {
             library_read_file,
             audio_render,
             audio_read,
+            audio_file,
             lean_status,
             lean_set_up,
             lean_check,

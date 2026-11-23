@@ -39,6 +39,8 @@ base64 = "0.22"
 # Recordings (src/audio/): Opus, in pure Rust, so it builds the same for phones.
 opus-pure = "0.2.3"
 tauri-plugin-sync-background = { path = "plugins/sync-background" }
+# Spec: AUD-10 — recordings played through Media3 on Android.
+tauri-plugin-audio-player = { path = "plugins/audio-player" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The background sync's entry point (src/sync/background.rs).
