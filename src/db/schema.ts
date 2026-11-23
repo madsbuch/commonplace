@@ -471,3 +471,28 @@ export const speechClips = sqliteTable("speech_clips", {
   pcm: blob("pcm", { mode: "buffer" }).notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+// Spec: DIAG-1, DIAG-2
+/**
+ * What happened in the app on this device (never synced): failures, the
+ * work it did by itself, the screens it went through. Written by the
+ * frontend (src/lib/diagnostics.ts) and by Rust (src-tauri/src/diagnostics.rs).
+ */
+export const diagnostics = sqliteTable(
+  "diagnostics",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Milliseconds since the epoch. */
+    at: integer("at").notNull(),
+    /** "error", "warning" or "info". */
+    level: text("level").notNull(),
+    /** What it came from: "app", "assistant", "audio", "sync", … */
+    source: text("source").notNull(),
+    message: text("message").notNull(),
+    /** A stack, a response, whatever more there is. */
+    details: text("details"),
+    /** The address on screen when it happened. */
+    screen: text("screen"),
+  },
+  (t) => [index("diagnostics_at").on(t.at)],
+);

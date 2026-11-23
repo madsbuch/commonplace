@@ -23,6 +23,7 @@ import {
   syncNow,
 } from "../lib/sync";
 import type { SyncDevice, SyncStatus } from "../lib/sync";
+import { useNotedProblem } from "../lib/diagnostics";
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -181,7 +182,8 @@ function Confirm(props: { text: string; confirmLabel: string; onConfirm: () => v
  */
 export default function SyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [error, setError] = useNotedProblem("sync");
   const [name, setName] = useState("");
   const [code, setCode] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
@@ -202,7 +204,7 @@ export default function SyncPage() {
     } catch (e) {
       setError(errMsg(e));
     }
-  }, []);
+  }, [setError]);
 
   useEffect(() => {
     void refresh();
@@ -268,7 +270,7 @@ export default function SyncPage() {
         setJoining("idle");
       }
     },
-    [refresh],
+    [refresh, setError],
   );
 
   // Spec: SYN-9, SYN-22
@@ -285,12 +287,12 @@ export default function SyncPage() {
       if (status?.canJoin) void join(c, false);
       else setPending(c);
     },
-    [status?.canJoin, join],
+    [status?.canJoin, join, setError],
   );
   const scanFailed = useCallback((e: string) => {
     setJoining("idle");
     setError(e);
-  }, []);
+  }, [setError]);
 
   async function scan() {
     setError(null);

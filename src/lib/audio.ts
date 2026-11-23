@@ -6,6 +6,8 @@
 // started a recording carries on with it: its script here, its audio there.
 // ---------------------------------------------------------------------------
 
+import { note } from "./diagnostics";
+import { beginWork } from "./work";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { z } from "zod";
@@ -266,14 +268,22 @@ async function fail(id: string, message: string): Promise<void> {
 export async function writeScript(id: string): Promise<void> {
   if (writing.has(id)) return;
   writing.add(id);
+  // Spec: WORK-1, DIAG-1
+  // Ended after Rust has begun speaking it, so the work never stops in between.
+  const work = beginWork("audio", "Writing a recording's script");
+  const failWith = async (message: string) => {
+    work.failed(message);
+    await fail(id, message);
+  };
   try {
     const rec = await getRecording(id);
     if (!rec) return;
+    work.rename(`Writing the script for “${rec.title}”`);
     const key = await getApiKey();
-    if (!key) return await fail(id, "There's no OpenRouter key (Settings → AI and models).");
+    if (!key) return await failWith("There's no OpenRouter key (Settings → AI and models).");
     const model = await getScriptModel();
     const items = (await Promise.all(rec.items.map(getItem))).filter((i): i is LibraryItem => i !== null);
-    if (items.length === 0) return await fail(id, "Its papers are no longer in the library.");
+    if (items.length === 0) return await failWith("Its papers are no longer in the library.");
     await execute(`UPDATE recordings SET status = 'writing', error = NULL, updated_at = $2 WHERE id = $1`, [id, nowIso()]);
 
     let script: Script;
@@ -286,7 +296,7 @@ export async function writeScript(id: string): Promise<void> {
         feature: "audio_script",
       });
       const summary = parseSummary(raw);
-      if (summary.chapters.length === 0) return await fail(id, "The script model wrote nothing to read.");
+      if (summary.chapters.length === 0) return await failWith("The script model wrote nothing to read.");
       script = { chapters: summary.chapters.map((c): ScriptChapter => ({ title: c.title, paragraphs: passages(c.paragraphs) })) };
       if (summary.title) await execute(`UPDATE recordings SET title = $2 WHERE id = $1`, [id, summary.title]);
       await saveScript(id, script, 1);
@@ -313,8 +323,10 @@ export async function writeScript(id: string): Promise<void> {
     await invoke("audio_render", { id });
     notifyTablesChanged(AUDIO_TABLES);
   } catch (e) {
+    work.failed(e);
     await fail(id, errorMessage(e));
   } finally {
+    work.done();
     writing.delete(id);
   }
 }
@@ -327,6 +339,7 @@ export async function retryRecording(rec: Recording): Promise<void> {
   if (scripted && rec.error !== null && !rec.error.includes("script")) {
     await execute(`UPDATE recordings SET status = 'speaking', error = NULL, updated_at = $2 WHERE id = $1`, [rec.id, nowIso()]);
     notifyTablesChanged(["recordings"]);
+    note("info", "audio", `Trying “${rec.title}” again, from what was already spoken`);
     await invoke("audio_render", { id: rec.id });
   } else {
     await writeScript(rec.id);

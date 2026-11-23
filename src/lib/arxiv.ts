@@ -5,6 +5,7 @@
 // out; the HTTP capability allows arXiv's hosts for this.
 // ---------------------------------------------------------------------------
 
+import { asWork } from "./work";
 import { fetch } from "@tauri-apps/plugin-http";
 import { parseArxivFeed, parseArxivId, type ArxivListing } from "./arxivModel";
 import { addFile, findByArxiv, getItem, saveHtml } from "./library";
@@ -61,20 +62,24 @@ export async function importArxiv(input: string, onStep: (step: string) => void 
   if (!id) throw new Error(`"${input.trim()}" isn't an arXiv identifier.`);
   const existing = await findByArxiv(id);
   if (existing) return existing;
-  onStep("Looking it up on arXiv…");
-  const listing = await arxivListing(id);
-  onStep("Fetching the PDF…");
-  const pdf = await get(`${PDF}${id}`);
-  onStep("Fetching the HTML version…");
-  const html = await arxivHtml(id).catch(() => null);
-  const name = `${id.replace("/", "_")}.pdf`;
-  const copy = new Uint8Array(pdf.bytes.length);
-  copy.set(pdf.bytes);
-  const file = new File([copy], name, { type: "application/pdf" });
-  return addFile(file, {
-    arxivId: id,
-    known: { title: listing.title, authors: listing.authors, year: listing.year },
-    ...(html ? { html } : {}),
+  // Spec: WORK-1, DIAG-1
+  return asWork("library", `Adding ${id} from arXiv`, async (work) => {
+    onStep("Looking it up on arXiv…");
+    const listing = await arxivListing(id);
+    work.rename(`Adding “${listing.title}” (${id}) from arXiv`);
+    onStep("Fetching the PDF…");
+    const pdf = await get(`${PDF}${id}`);
+    onStep("Fetching the HTML version…");
+    const html = await arxivHtml(id).catch(() => null);
+    const name = `${id.replace("/", "_")}.pdf`;
+    const copy = new Uint8Array(pdf.bytes.length);
+    copy.set(pdf.bytes);
+    const file = new File([copy], name, { type: "application/pdf" });
+    return addFile(file, {
+      arxivId: id,
+      known: { title: listing.title, authors: listing.authors, year: listing.year },
+      ...(html ? { html } : {}),
+    });
   });
 }
 
@@ -82,10 +87,14 @@ export async function importArxiv(input: string, onStep: (step: string) => void 
 /** Fetches an arXiv item's HTML version again (figures and all); false when arXiv has none. */
 export async function refetchArxivHtml(itemId: string): Promise<boolean> {
   const item = await getItem(itemId);
-  if (!item?.arxivId) return false;
-  const html = await arxivHtml(item.arxivId);
-  if (!html) return false;
-  await saveHtml(itemId, html.html, html.sourceUrl);
-  notifyTablesChanged(["library_html"]);
-  return true;
+  const arxivId = item?.arxivId;
+  if (!item || !arxivId) return false;
+  // Spec: WORK-1, DIAG-1
+  return asWork("library", `Fetching the text of “${item.title}” again from arXiv`, async () => {
+    const html = await arxivHtml(arxivId);
+    if (!html) throw new Error(`arXiv has no HTML version of ${arxivId}.`);
+    await saveHtml(itemId, html.html, html.sourceUrl);
+    notifyTablesChanged(["library_html"]);
+    return true;
+  });
 }

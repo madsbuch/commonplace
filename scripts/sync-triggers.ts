@@ -34,6 +34,9 @@ export const LOCAL_TABLES = [
   // Passages spoken on the way to a recording: this device's only.
   // Spec: AUD-6
   "speech_clips",
+  // What happened in the app on this device.
+  // Spec: DIAG-1
+  "diagnostics",
 ];
 
 /**

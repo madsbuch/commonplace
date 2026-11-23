@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getVoice, recordableSections, recordVerbatim } from "../lib/audio";
 import type { LibraryItem } from "../lib/library";
 import { go } from "../lib/navigation";
+import { useNotedProblem } from "../lib/diagnostics";
 
 // Spec: AUD-2
 /** Recording an item verbatim: the whole of it, or one of its sections and those within it. */
@@ -9,7 +10,8 @@ export function RecordDialog(props: { item: LibraryItem; onClose: () => void }) 
   const [sections, setSections] = useState<{ key: string; title: string; depth: number }[] | null>(null);
   const [chosen, setChosen] = useState<string>("");
   const [voice, setVoice] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [problem, setProblem] = useNotedProblem("audio");
   useEffect(() => {
     void recordableSections(props.item).then(setSections);
     void getVoice().then(setVoice);

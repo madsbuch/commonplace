@@ -281,7 +281,7 @@ export default function LibraryItemPage() {
               // Spec: AUD-2
               { label: "Record aloud…", onClick: () => setRecording(true) },
               // Spec: LIB-27
-              ...(item.arxivId ? [{ label: "Fetch the text again from arXiv", onClick: () => void refetchArxivHtml(item.id) }] : []),
+              ...(item.arxivId ? [{ label: "Fetch the text again from arXiv", onClick: () => void refetchArxivHtml(item.id).catch(() => undefined) }] : []),
               {
                 label: "Remove from the library",
                 confirm: "Really remove it?",

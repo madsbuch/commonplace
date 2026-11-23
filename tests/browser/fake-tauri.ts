@@ -112,6 +112,8 @@ const ReplySchema = z.union([
   z.object({ error: z.string() }),
 ]);
 let chatReplies: z.infer<typeof ReplySchema>[] = [];
+const workLog: { event: "begin" | "end"; id: string; title: string }[] = [];
+let running: { id: string; title: string; since: number }[] = [];
 
 // Spec: LIB-23
 /** arXiv, as its listing, PDF, HTML version and figures answer for 1706.03762 (and only it). */
@@ -272,6 +274,7 @@ if (import.meta.main) {
       }
       if (url.pathname === "/fake-requests") return Response.json(chatRequests, { headers: cors });
       if (url.pathname === "/fake-joins") return Response.json(joins, { headers: cors });
+      if (url.pathname === "/fake-work") return Response.json({ log: workLog, running }, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -340,6 +343,27 @@ if (import.meta.main) {
           const outcome = { peer_id: "dev_other", peer_name: "The other device", received: { applied: 0, conflicts: 0, unique_merges: 0 }, complete: true, differences: [] };
           return Response.json({ ok: { outcome, backup: args["replace"] === true ? "/backups/before-join.db" : null } }, { headers: cors });
         }
+        // Spec: WORK-1, DIAG-3
+        // Work as Rust keeps it, every begin and end recorded for the checks.
+        if (cmd === "work_begin") {
+          const id = String(args["id"]);
+          const title = String(args["title"]);
+          workLog.push({ event: "begin", id, title });
+          const at = running.findIndex((r) => r.id === id);
+          if (at >= 0) running[at] = { id, title, since: running[at]?.since ?? Date.now() };
+          else running.push({ id, title, since: Date.now() });
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        if (cmd === "work_end") {
+          const id = String(args["id"]);
+          workLog.push({ event: "end", id, title: running.find((r) => r.id === id)?.title ?? "" });
+          running = running.filter((r) => r.id !== id);
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        if (cmd === "work_running") return Response.json({ ok: running }, { headers: cors });
+        if (cmd === "plugin:app|version") return Response.json({ ok: "0.1.0" }, { headers: cors });
+        if (cmd === "plugin:app|identifier") return Response.json({ ok: "com.madsbuch.mybook.dev" }, { headers: cors });
+        if (cmd === "plugin:app|tauri_version") return Response.json({ ok: "2.99.0" }, { headers: cors });
         if (cmd === "plugin:sql|load") out = args["db"];
         else if (cmd === "plugin:sql|execute") {
           const r = db.query(positional(String(args["query"]))).run(...bindable(args["values"]));

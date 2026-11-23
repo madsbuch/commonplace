@@ -10,8 +10,15 @@ import "@fontsource-variable/literata/wght-italic.css";
 import "@fontsource-variable/inter";
 import { router } from "./router";
 import { installTheme, useColorScheme } from "./lib/theme";
+import { installDiagnostics, noteScreen } from "./lib/diagnostics";
 import "./lib/syncBoot";
 import "./App.css";
+
+// Spec: DIAG-1, DIAG-2
+// First, so what goes wrong while starting is noted too; then every screen opened.
+installDiagnostics();
+noteScreen(router.state.location.pathname, router.state.location.search);
+router.subscribe((s) => noteScreen(s.location.pathname, s.location.search));
 
 // Before the first render, so a pinned theme never flashes the other one.
 installTheme();

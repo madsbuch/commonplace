@@ -6,6 +6,7 @@ import { Layout } from "./components/Layout";
 const HomePage = lazy(() => import("./screens/HomePage"));
 const PagePage = lazy(() => import("./screens/PagePage"));
 const HistoryPage = lazy(() => import("./screens/HistoryPage"));
+const DiagnosticsPage = lazy(() => import("./screens/DiagnosticsPage"));
 const SettingsPage = lazy(() => import("./screens/SettingsPage"));
 const AiSettingsPage = lazy(() => import("./screens/AiSettingsPage"));
 const LeanSettingsPage = lazy(() => import("./screens/LeanSettingsPage"));
@@ -35,7 +36,7 @@ function screen(node: ReactNode) {
  * - `/chats`, `/chats/:id`, `/memory`: the assistant's chats, one chat, its memory
  * - `/audio`, `/audio/:id`: the audio library, and one recording in the player
  * - `/settings`, and nested in it `/settings/ai`, `/settings/lean`,
- *   `/settings/sync` and `/settings/costs`
+ *   `/settings/sync`, `/settings/costs` and `/settings/diagnostics`
  *   (`/sync` and `/costs` lead there)
  */
 export const router = createBrowserRouter([
@@ -61,6 +62,8 @@ export const router = createBrowserRouter([
       { path: "/settings/lean", element: screen(<LeanSettingsPage />) },
       { path: "/settings/sync", element: screen(<SyncPage />) },
       { path: "/settings/costs", element: screen(<CostsPage />) },
+      // Spec: DIAG-3
+      { path: "/settings/diagnostics", element: screen(<DiagnosticsPage />) },
       { path: "/sync", element: <Navigate to="/settings/sync" replace /> },
       { path: "/costs", element: <Navigate to="/settings/costs" replace /> },
     ],

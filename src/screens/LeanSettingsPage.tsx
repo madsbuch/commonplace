@@ -4,6 +4,7 @@ import { BackToSettings } from "../components/SettingsRows";
 import { leanSetUp, leanStatus, leanVersion, runsLean } from "../lib/lean";
 import type { LeanServiceStatus } from "../lib/schemas";
 import "./AiScreens.css";
+import { useNotedProblem } from "../lib/diagnostics";
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -14,7 +15,8 @@ function errorText(e: unknown): string {
 export default function LeanSettingsPage() {
   const computer = runsLean();
   const [status, setStatus] = useState<LeanServiceStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [error, setError] = useNotedProblem("lean");
   const [log, setLog] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const stop = useRef<(() => void) | null>(null);
@@ -31,6 +33,8 @@ export default function LeanSettingsPage() {
   useEffect(() => {
     if (computer) void refresh();
     return () => stop.current?.();
+    // Once per screen: refresh reads the status afresh each time it's called.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computer]);
 
   useEffect(() => logEnd.current?.scrollIntoView({ block: "nearest" }), [log]);

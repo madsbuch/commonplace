@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { openPdf, renderTextLayer, type OpenPdf, type PdfDocument } from "../lib/pdf";
 import { replaceFragment } from "../lib/address";
 import { setPdfInView } from "../lib/currentView";
+import { useNotedProblem } from "../lib/diagnostics";
 
 /** How far outside the view a page starts rendering, so scrolling finds it drawn. */
 const RENDER_MARGIN = "1200px 0px";
@@ -135,7 +136,8 @@ export function PdfViewer(props: {
 }) {
   const [pdf, setPdf] = useState<OpenPdf | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [error, setError] = useNotedProblem("library", "error");
   const [zoom, setZoom] = useState(1);
   const [width, setWidth] = useState(0);
   const [current, setCurrent] = useState(1);

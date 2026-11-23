@@ -24,6 +24,8 @@ import { onTablesChanged } from "./live";
 import { listMemory, memoryNote } from "./memory";
 import { chatRound, errorMessage } from "./openrouter";
 import { parseToolArgs, type TranscriptMessage } from "./schemas";
+import { note } from "./diagnostics";
+import { beginWork } from "./work";
 
 /** Rounds of tool use one turn may take before it must answer. */
 const MAX_ROUNDS = 16;
@@ -149,6 +151,7 @@ async function runTurn(): Promise<void> {
   if (!chatId) return;
   const key = await getApiKey();
   if (!key) {
+    note("warning", "assistant", "A question waits: there's no OpenRouter key (Settings → AI and models).");
     set({ status: "no-key", error: null });
     return;
   }
@@ -162,6 +165,9 @@ async function runTurn(): Promise<void> {
   const signal = controller.signal;
   let messages = [...state.messages];
   set({ status: "running", streaming: "", activeTools: [], error: null });
+  // Spec: WORK-1, DIAG-1
+  // It carries on with the app out of sight; the diagnostics note how it went.
+  const work = beginWork("assistant", `Answering “${titleFrom(messages, actionLabel)}” (${model})`);
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const memory = memoryNote(await listMemory());
@@ -176,6 +182,7 @@ async function runTurn(): Promise<void> {
         messages = [...messages, { role: "assistant", content: result.text }];
         await persist(chatId, messages);
         if (state.chatId === chatId) set({ messages, status: "idle", streaming: "", activeTools: [] });
+        work.done();
         return;
       }
       messages = [...messages, { role: "assistant", content: result.text.trim() || null, tool_calls: result.toolCalls }];
@@ -196,11 +203,15 @@ async function runTurn(): Promise<void> {
       if (signal.aborted) throw new Error("Stopped");
     }
   } catch (e) {
+    if (signal.aborted) work.stopped();
+    else work.failed(e);
     await persist(chatId, messages).catch(() => undefined);
     if (state.chatId === chatId) {
       set({ messages, status: "error", streaming: "", activeTools: [], error: signal.aborted ? "Stopped." : errorMessage(e) });
     }
   } finally {
+    // Ended once: whatever ended it otherwise has already said how.
+    work.done();
     controller = null;
   }
 }

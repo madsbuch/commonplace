@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Work in the background",
+  "summary": "What the app does on the author's behalf carries on while they're elsewhere.",
+  "order": 10,
+  "description": "Answers, recordings and reading take minutes. The author starts them and puts the phone away; they carry on until they're done, and the phone says so while they do.",
+  "stories": [
+    {
+      "id": "US-25",
+      "as": "the author, on my phone",
+      "want": "to start an answer or a recording and then leave the app or turn off the screen",
+      "soThat": "I don't have to watch it to have it finish",
+      "requirements": ["#WORK-1", "#WORK-2"]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "WORK-1",
+      "text": "Work the app does by itself on the author's behalf (the assistant answering, a recording being written and spoken, an item's details being read, a paper being fetched from arXiv) carries on when the author leaves the app or the screen turns off, until it's done or fails; only closing the app stops it.",
+      "related": ["#CHAT-4", "#AUD-6"]
+    },
+    {
+      "id": "WORK-2",
+      "text": "On Android, while such work runs, the app runs it in the foreground, and a notification says what it's doing; tapping it opens the app, and it goes when the work is done."
+    },
+    {
+      "id": "WORK-3",
+      "text": "On a computer, while such work runs, the computer doesn't go to sleep for being left alone.",
+      "level": "should"
+    },
+    {
+      "id": "WORK-4",
+      "text": "A request that fails for the network (no connection, a dropped one, a timeout, or the service busy) is tried again, waiting longer each time, for up to `work.network-patience`, before the work fails; the failure says what the network said."
+    }
+  ],
+  "values": [
+    {
+      "id": "work.network-patience",
+      "type": "duration",
+      "value": "3min",
+      "description": "How long work keeps trying a request through a network that fails."
+    }
+  ]
+}

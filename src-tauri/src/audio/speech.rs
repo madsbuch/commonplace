@@ -8,6 +8,26 @@ use tauri_plugin_http::reqwest;
 
 type Result<T> = std::result::Result<T, String>;
 
+/// Why a passage wasn't spoken, and whether trying again could help.
+#[derive(Debug, PartialEq)]
+pub struct SpeakError {
+    pub message: String,
+    /// The network, a timeout, or the service busy: worth waiting for (WORK-4).
+    pub transient: bool,
+}
+
+impl SpeakError {
+    fn lasting(message: String) -> Self {
+        SpeakError { message, transient: false }
+    }
+}
+
+// Spec: WORK-4
+/// Whether a status is worth trying again: a timeout, too many requests, or the service's own trouble.
+pub fn transient_status(status: u16) -> bool {
+    status == 408 || status == 429 || (500..600).contains(&status)
+}
+
 pub const SPEECH_URL: &str = "https://openrouter.ai/api/v1/audio/speech";
 
 /// Speech as it came: mono 16-bit samples at `rate`.
@@ -82,7 +102,7 @@ pub fn parse_audio(content_type: &str, body: &[u8]) -> Result<Speech> {
 
 // Spec: AUD-5
 /// One passage, spoken.
-pub async fn speak(client: &reqwest::Client, key: &str, model: &str, voice: &str, text: &str) -> Result<Speech> {
+pub async fn speak(client: &reqwest::Client, key: &str, model: &str, voice: &str, text: &str) -> std::result::Result<Speech, SpeakError> {
     let body = json!({ "model": model, "input": speech_input(text), "voice": voice, "response_format": "pcm" });
     let res = client
         .post(SPEECH_URL)
@@ -93,18 +113,23 @@ pub async fn speak(client: &reqwest::Client, key: &str, model: &str, voice: &str
         .body(body.to_string())
         .send()
         .await
-        .map_err(|e| format!("couldn't reach OpenRouter: {e}"))?;
+        // Spec: WORK-4
+        // What the network said, all of it: "error sending request" alone doesn't say why.
+        .map_err(|e| SpeakError { message: format!("couldn't reach OpenRouter: {}", crate::diagnostics::chain(&e)), transient: true })?;
     let status = res.status();
     let content_type = res.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+    let bytes = res
+        .bytes()
+        .await
+        .map_err(|e| SpeakError { message: format!("the speech stopped arriving: {}", crate::diagnostics::chain(&e)), transient: true })?;
     if !status.is_success() {
         let message = serde_json::from_slice::<Value>(&bytes)
             .ok()
             .and_then(|v| v.pointer("/error/message").and_then(Value::as_str).map(str::to_string))
             .unwrap_or_else(|| String::from_utf8_lossy(&bytes).chars().take(300).collect());
-        return Err(format!("OpenRouter said {status}: {message}"));
+        return Err(SpeakError { message: format!("OpenRouter said {status}: {message}"), transient: transient_status(status.as_u16()) });
     }
-    parse_audio(&content_type, &bytes)
+    parse_audio(&content_type, &bytes).map_err(SpeakError::lasting)
 }
 
 #[cfg(test)]
@@ -136,6 +161,12 @@ mod tests {
         w.extend((samples.len() as u32).to_le_bytes());
         w.extend(&samples);
         assert_eq!(parse_audio("audio/wav", &w).unwrap(), Speech { rate: 22_050, pcm: vec![200, -200] });
+    }
+
+    #[test]
+    fn busy_and_broken_services_are_worth_waiting_for() {
+        assert!(transient_status(429) && transient_status(503) && transient_status(408));
+        assert!(!transient_status(401) && !transient_status(402) && !transient_status(400));
     }
 
     #[test]

@@ -4,9 +4,10 @@
 //! page calls. Events tell the frontend when data arrived (`sync-changed`)
 //! and when the status moved (`sync-status`).
 
+use crate::diagnostics::{self, Level};
 use super::discovery;
 use super::engine;
-use super::session::{self, Outcome, PairingOffer, PairingSlot};
+use super::session::{self, Outcome, PairingOffer, PairingSlot, Received};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
@@ -69,6 +70,22 @@ impl SyncService {
         if outcome.received.changed_anything() {
             let _ = app.emit("sync-changed", outcome.received);
         }
+        // Spec: DIAG-1
+        // A sync that moved something, or ended with the devices differing, is noted.
+        if outcome.received.changed_anything() || !outcome.complete {
+            let level = if outcome.complete { Level::Info } else { Level::Warning };
+            let differing = if outcome.complete { String::new() } else { format!("; still differing: {}", outcome.differences.join(", ")) };
+            diagnostics::report(app, level, "sync", &format!("Synced with {}: took in {}{differing}", outcome.peer_name, describe(&outcome.received)));
+        }
+    }
+
+    // Spec: DIAG-1
+    /// Notes a sync failure, once until it changes.
+    fn note_failure(&self, app: &AppHandle, error: &str) {
+        let repeated = self.activity.lock().map(|a| a.last_error.as_deref() == Some(error)).unwrap_or(false);
+        if !repeated {
+            diagnostics::report(app, Level::Warning, "sync", &format!("Sync failed: {error}"));
+        }
     }
 
     /// Starts listening and the sync loop, once. `pool` is the app's own.
@@ -91,7 +108,7 @@ impl SyncService {
             }
             Err(e) if e == "busy" => {}
             Err(e) => {
-                eprintln!("sync: incoming connection failed: {e}");
+                diagnostics::report(&app2, Level::Warning, "sync", &format!("A device's sync with this one failed: {e}"));
             }
         })
         .await?;
@@ -141,10 +158,11 @@ impl SyncService {
         if cfg!(not(any(target_os = "android", target_os = "ios"))) {
             if let Ok(dir) = app.path().app_data_dir() {
                 let pool = pool.clone();
+                let app_for_snapshots = app.clone();
                 tokio::spawn(async move {
                     loop {
                         if let Err(e) = super::snapshots::run(&pool, &dir.join("snapshots"), &today()).await {
-                            eprintln!("sync: snapshot failed: {e}");
+                            diagnostics::report(&app_for_snapshots, Level::Warning, "sync", &format!("The daily snapshot failed: {e}"));
                         }
                         tokio::time::sleep(Duration::from_secs(3600)).await;
                     }
@@ -160,6 +178,9 @@ impl SyncService {
         let result = sync_round(pool).await;
         for o in result.outcomes.iter() {
             self.announce(app, o);
+        }
+        if let Some(e) = result.errors.first() {
+            self.note_failure(app, e);
         }
         self.set_activity(app, |a| {
             a.syncing = false;
@@ -222,6 +243,10 @@ impl SyncService {
         };
         self.set_activity(app, |a| a.syncing = true);
         let result = session::join(pool, &offer, replace).await;
+        match &result {
+            Ok(o) => diagnostics::report(app, Level::Info, "sync", &format!("Joined the book through {}: took in {}", o.peer_name, describe(&o.received))),
+            Err(e) => diagnostics::report(app, Level::Error, "sync", &format!("Joining a book failed: {e}")),
+        }
         self.set_activity(app, |a| {
             a.syncing = false;
             a.last_error = result.as_ref().err().cloned();
@@ -321,6 +346,11 @@ pub async fn sync_round(pool: &SqlitePool) -> Round {
         }
     }
     round
+}
+
+/// What a sync took in, as the diagnostics say it.
+fn describe(r: &Received) -> String {
+    format!("{} changes ({} were conflicts, {} merged rows)", r.applied + r.conflicts, r.conflicts, r.unique_merges)
 }
 
 /// Today's date (UTC), "YYYY-MM-DD".

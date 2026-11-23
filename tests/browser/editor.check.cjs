@@ -902,6 +902,76 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForURL(/\/audio$/);
     check("a recording is deleted from its own menu", (await q("SELECT count(*) AS n FROM recordings WHERE kind = 'summary'"))[0].n === 0);
 
+    // Spec: WORK-1
+    const work = await (await fetch(`${FAKE}/fake-work`)).json();
+    check(
+      "an answer, a recording's script and an item's details run as work, each begun and ended",
+      ["Answering “", "Writing the script for “", "Reading the details of “", "from arXiv"].every(
+        (w) => work.log.some((e) => e.event === "begin" && e.title.includes(w)) && work.log.some((e) => e.event === "end" && e.title.includes(w)),
+      ),
+      JSON.stringify(work.log.slice(-6)),
+    );
+    check("and nothing is left running once it's all done", work.running.length === 0, JSON.stringify(work.running));
+
+    // Spec: DIAG-1, DIAG-2, DIAG-3
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.evaluate(() => setTimeout(() => {
+      throw new Error("A failure nothing caught, from the checks");
+    }));
+    await page.waitForTimeout(800);
+    for (let i = errors.length - 1; i >= 0; i--) if (errors[i].includes("from the checks")) errors.splice(i, 1);
+    await page.goto(APP + "/settings");
+    await page.waitForTimeout(1000);
+    const diagRow = await page.locator(".settings-row", { hasText: "Diagnostics" }).innerText();
+    check("Settings has a Diagnostics row saying what failed in the last day", /\d+ failures? in the last day/.test(diagRow), diagRow);
+    await page.locator(".settings-row", { hasText: "Diagnostics" }).click();
+    await page.waitForURL(/\/settings\/diagnostics$/);
+    await page.waitForTimeout(1000);
+    const log = await page.locator(".diag-list").innerText();
+    check("the log has the failed answer with what the model said", log.includes("Failed: Answering") && log.includes("bad day"), log.slice(0, 400));
+    check("and what nothing caught", log.includes("A failure nothing caught, from the checks"));
+    check("and the work done, and the screens opened", log.includes("Finished: Writing the script for") && log.includes("Opened /library"));
+    await page.getByRole("radio", { name: "Failures" }).click();
+    await page.waitForTimeout(600);
+    const failuresOnly = await page.locator(".diag-list").innerText();
+    check("failures alone, when chosen, with the address saying so", page.url().endsWith("?show=failures") && failuresOnly.includes("Failed: Answering") && !failuresOnly.includes("Opened /"), page.url());
+    await page.locator(".diag-entry", { hasText: "Failed: Answering" }).first().locator(".diag-line").click();
+    check("an entry opens to its details and where it happened", (await page.locator(".diag-details").first().innerText()).includes("on /chats/chat_"));
+    if (process.env.CHECK_SHOTS) {
+      await page.setViewportSize({ width: 390, height: 800 });
+      await page.goto(APP + "/settings/diagnostics");
+      await page.waitForTimeout(1200);
+      await page.screenshot({ path: join(process.env.CHECK_SHOTS, "diagnostics-phone.png") });
+      await page.setViewportSize({ width: 1200, height: 800 });
+      await page.goto(APP + "/settings/diagnostics?show=failures");
+      await page.waitForTimeout(1000);
+    }
+
+    // Spec: DIAG-4, DIAG-5
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: APP });
+    await page.getByRole("button", { name: "Copy everything" }).click();
+    await page.waitForTimeout(1500);
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    check(
+      "one press copies everything for a coding agent: the app, how it's set up, and the log oldest first",
+      copied.startsWith("# Commonplace diagnostics") &&
+        copied.includes("- Version: 0.1.0 (development build, com.madsbuch.mybook.dev") &&
+        copied.includes("- Models: assistant ") &&
+        copied.includes("## Running now") &&
+        copied.indexOf("Opened /") < copied.indexOf("Failed: Answering") &&
+        /\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} [+-]\d\d:\d\d  ERROR {4}assistant  Failed: Answering/.test(copied),
+      copied.slice(0, 600),
+    );
+    check("and never the key", !copied.includes("sk-test") && copied.includes("an OpenRouter key is set"));
+    check("the page says it's copied", (await page.locator(".diag-actions [role=status]").innerText()).startsWith("Copied, with "));
+
+    // Spec: DIAG-6
+    await page.getByRole("button", { name: "More for the diagnostics" }).click();
+    await page.getByRole("menuitem", { name: "Empty the log" }).click();
+    await page.getByRole("menuitem", { name: "Really empty it?" }).click();
+    await page.waitForTimeout(800);
+    check("the log is emptied from its menu, asking first", (await q("SELECT count(*) AS n FROM diagnostics WHERE level = 'error'"))[0].n === 0);
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

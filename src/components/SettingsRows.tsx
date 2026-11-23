@@ -6,7 +6,8 @@ import { loadUsageRows } from "../lib/aiUsage";
 import { useTablesVersion } from "../lib/live";
 import { listMemory } from "../lib/memory";
 import { copyLine, copyState, getSyncStatus, onSyncStatus } from "../lib/sync";
-import { ChatIcon, CostIcon, KeyIcon, LeanIcon, SyncIcon } from "./Icons";
+import { ChatIcon, CostIcon, KeyIcon, LeanIcon, PulseIcon, SyncIcon } from "./Icons";
+import { failuresSince } from "../lib/diagnostics";
 import { leanStatus, leanVersion, runsLean } from "../lib/lean";
 import { ThemeSwitch } from "./ThemeSwitch";
 
@@ -33,7 +34,8 @@ export function SettingsRows() {
   const [memory, setMemory] = useState<string | null>(null);
   const [ai, setAi] = useState<string | null>(null);
   const [lean, setLean] = useState<string | null>(null);
-  const version = useTablesVersion(["ai_usage", "assistant_memory", "settings"]);
+  const [diagnostics, setDiagnostics] = useState<string | null>(null);
+  const version = useTablesVersion(["ai_usage", "assistant_memory", "settings", "diagnostics"]);
 
   useEffect(() => {
     let live = true;
@@ -77,6 +79,12 @@ export function SettingsRows() {
         .catch(() => {
           if (live) setLean("Not available here");
         });
+    // Spec: DIAG-3
+    void failuresSince(Date.now() - 24 * 60 * 60 * 1000)
+      .then((n) => {
+        if (live) setDiagnostics(n === 0 ? "Nothing failed in the last day" : `${n} ${n === 1 ? "failure" : "failures"} in the last day`);
+      })
+      .catch(() => undefined);
     void listMemory()
       .then((m) => {
         if (live) setMemory(m.length === 0 ? "Nothing remembered yet" : `${m.length} thing${m.length === 1 ? "" : "s"} remembered`);
@@ -94,6 +102,7 @@ export function SettingsRows() {
       <Row to="/settings/sync" icon={<SyncIcon />} title="Sync" line={sync} />
       <Row to="/settings/costs" icon={<CostIcon />} title="AI costs" line={spend} />
       <Row to="/memory" icon={<ChatIcon />} title="The assistant's memory" line={memory} />
+      <Row to="/settings/diagnostics" icon={<PulseIcon />} title="Diagnostics" line={diagnostics} />
       <div className="settings-row static">
         <span className="settings-row-main">
           <span className="settings-row-title">Appearance</span>

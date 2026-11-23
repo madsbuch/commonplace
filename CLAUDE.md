@@ -22,7 +22,8 @@ before editing the spec).
   `PAR-`/`HEAD-`/`LIST-`/`CODE-`/`LEAN-` (block types), `LNK-` (links), `LIB-` (library), `AUD-` (the audio library), `PPL-` (people and institutions), `AST-`
   (assistant), `CHAT-` (chats), `ATL-` (assistant tools), `MEM-` (memory), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
   `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
-  (sync triggers), `ID-` (row ids). Stories use `US-`. Requirements keep their
+  (sync triggers), `ID-` (row ids), `DIAG-` (diagnostics), `WORK-` (work in
+  the background). Stories use `US-`. Requirements keep their
   id when moved, so older prefixes (e.g. `BOOK-5` under revisions) appear
   outside their home item.
 - A new block type is a new item in `.spec/book/blocks/` with its own prefix.
@@ -73,8 +74,8 @@ The book syncs peer to peer over the local network, as Tally does
 (`src-tauri/src/sync/`, ported from it; see its module docs).
 
 - Every table syncs between the book's devices unless it's listed in
-  `LOCAL_TABLES` (`scripts/sync-triggers.ts`: `device_settings` and sync's
-  own bookkeeping). Sync rides on triggers: a migration that adds a table
+  `LOCAL_TABLES` (`scripts/sync-triggers.ts`: `device_settings`, sync's
+  own bookkeeping, `speech_clips` and `diagnostics`). Sync rides on triggers: a migration that adds a table
   must add its triggers (`bun scripts/sync-triggers.ts <table>` prints them,
   appended after a `-- @generated` line); one that rebuilds a table must
   re-create them (dropping a table drops its triggers); and one that adds a
@@ -320,7 +321,8 @@ read and show verdicts.
 - Settings (`/settings`) holds only rows (`src/components/SettingsRows.tsx`),
   each with a line on how its part stands, opening a page nested in it:
   `/settings/ai` (the OpenRouter key and models), `/settings/sync`,
-  `/settings/costs`, and the memory; the theme switch sits in its row. A new
+  `/settings/costs`, the memory and `/settings/diagnostics`; the theme
+  switch sits in its row. A new
   setting goes on a nested page (or a new row and page), never on Settings
   itself (APP-8). A new route also goes in `ROUTES` (`src/lib/currentView.ts`).
 - Explanations of how something works go behind an ⓘ
@@ -372,6 +374,47 @@ that starts one carries on with it (`device`).
   `set_speed`, `stop`, `get_state`) and its `state` events are used by
   `player.ts`; `audio-player:default` is in the mobile capability. Only the
   APK build (CI) compiles its Kotlin.
+
+## Diagnostics and work in the background
+
+- The diagnostics (DIAG-*) are a log per device: the `diagnostics` table
+  (local, never synced), kept 14 days and at most 5,000 entries
+  (`diagnostics.kept`, `diagnostics.most`; trimmed at start). The frontend
+  notes through `note(level, source, message, details)` in
+  `src/lib/diagnostics.ts` (queued, written in batches; noting never
+  throws): uncaught errors and rejections and console errors/warnings
+  (`installDiagnostics`, first thing in `main.tsx`), every screen the router
+  opens, failed model requests and their retries (`openrouter.ts`), and a
+  screen's failure line (`useNotedProblem(source)` in place of
+  `useState<string | null>`). Rust notes through
+  `src-tauri/src/diagnostics.rs` (`report`, `report_with`): sync, recordings,
+  Lean; entries wait in memory until the database is open (`flush` in
+  `sync_start`). A panic is appended to `crashes.jsonl` beside the database
+  and taken in at the next start. Keys (`sk-or-…`, `Bearer …`) are masked
+  when noted and again when copied (`maskKeys`, Rust `mask`). Rust errors
+  are written with their whole cause (`diagnostics::chain`): reqwest's
+  "error sending request" alone says nothing.
+- `/settings/diagnostics` (`DiagnosticsPage.tsx`) shows what runs, the log
+  (newest first, `?show=failures`), and copies everything as one text for a
+  coding agent (`diagnosticsReport.ts` gathers, `diagnosticsModel.ts`
+  formats; falls back to a selected textarea if the clipboard refuses).
+- New work that runs by itself goes through `beginWork(source, title)` /
+  `asWork` (`src/lib/work.ts`), or in Rust `Work::begin`/`end`
+  (`src-tauri/src/work.rs`). That notes it in the diagnostics and keeps it
+  going out of sight (WORK-1): while anything runs, the
+  `background-work` plugin (`src-tauri/plugins/background-work`) runs an
+  Android foreground service (type dataSync, a partial wake lock, a
+  notification listing what runs; `WorkService.kt`), and on a computer holds
+  `caffeinate -i` / `systemd-inhibit` so it doesn't sleep. Android won't
+  start that service with the app in the background, so a hand-over never
+  lets the list go empty: Rust's `audio_render` begins "Speaking …" before
+  it returns, and the script writer ends its own work after.
+- Requests that fail for the network (no connection, dropped, 408/425/429/5xx)
+  are tried again for up to three minutes (`work.network-patience`:
+  `NETWORK_WAITS_MS` in `openrouter.ts`, `NETWORK_WAITS` in
+  `audio/render.rs`), each try noted.
+- The fake Tauri layer keeps work as Rust would (`/fake-work` lists every
+  begin and end) and answers `plugin:app|version`/`identifier`.
 
 ## AI
 

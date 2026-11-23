@@ -6,6 +6,7 @@ import { clock, SUMMARY_MINUTES } from "../lib/audioModel";
 import { LIBRARY_TABLES, listItems, type LibraryItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 import type { Recording } from "../lib/schemas";
+import { useNotedProblem } from "../lib/diagnostics";
 
 /** "Writing the script, 40%" and the like: how a recording stands. */
 export function recordingState(r: Recording): string {
@@ -23,7 +24,8 @@ function SummarizeDialog(props: { onClose: () => void }) {
   const [chosen, setChosen] = useState<string[]>([]);
   const [minutes, setMinutes] = useState<number>(SUMMARY_MINUTES[1]);
   const [query, setQuery] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [problem, setProblem] = useNotedProblem("audio");
   useEffect(() => {
     void listItems().then(setItems);
   }, []);

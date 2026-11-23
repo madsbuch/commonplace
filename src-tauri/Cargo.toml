@@ -41,6 +41,8 @@ opus-pure = "0.2.3"
 tauri-plugin-sync-background = { path = "plugins/sync-background" }
 # Spec: AUD-10 — recordings played through Media3 on Android.
 tauri-plugin-audio-player = { path = "plugins/audio-player" }
+# Spec: WORK-2, WORK-3 — work kept going out of sight.
+tauri-plugin-background-work = { path = "plugins/background-work" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The background sync's entry point (src/sync/background.rs).

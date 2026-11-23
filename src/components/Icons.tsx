@@ -44,6 +44,11 @@ export const KeyIcon = () => (
     <path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2" />
   </Icon>
 );
+export const PulseIcon = () => (
+  <Icon>
+    <path d="M2 12h4l3-8 4 16 3-8h6" />
+  </Icon>
+);
 export const LeanIcon = () => (
   <Icon>
     <path d="M6 4c2.5 0 3.6 1 4.6 3.2L18 20" />

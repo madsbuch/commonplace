@@ -1,0 +1,5 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Running work in the foreground (called from Rust, not the frontend)"
+permissions = ["allow-show", "allow-stop"]

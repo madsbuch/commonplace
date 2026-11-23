@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Diagnostics",
+  "summary": "What happened in the app on a device, kept to be copied and handed to whoever fixes it.",
+  "order": 9,
+  "description": "When something fails, a screen says so in a line; the details, and what led up to it, are in the diagnostics. They're written for a coding agent to read: one copy holds the app's version, the device and everything that happened.",
+  "stories": [
+    {
+      "id": "US-24",
+      "as": "the author, who has a coding agent fix the app",
+      "want": "everything that happened in the app in one place, copied with one press",
+      "soThat": "the agent sees what failed, and what led up to it, without my retelling it",
+      "requirements": ["#DIAG-1", "#DIAG-3", "#DIAG-4"]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "DIAG-1",
+      "text": "Each device keeps a log of what happened in the app on it: every failure, with its message, its details and what it came from; the work it did by itself (WORK-1), as it began, finished or failed and how long it took; and the screens it went through. The log keeps `diagnostics.kept`, and at most `diagnostics.most` entries; it stays on its device."
+    },
+    {
+      "id": "DIAG-2",
+      "text": "The log holds what fails outside any screen too: errors nothing caught, the work the app's native side does (sync, recordings being spoken, Lean), and a crash of that side, taken in when the app next starts."
+    },
+    {
+      "id": "DIAG-3",
+      "text": "Settings has a Diagnostics row, saying how many things failed in the last day, opening `/settings/diagnostics`: the work running now, then the log, newest first, with only the failures when they're chosen (in the address).",
+      "related": ["#APP-8", "#APP-10"]
+    },
+    {
+      "id": "DIAG-4",
+      "text": "One button copies the whole of it as one text for a coding agent: the app's version and build, the platform and device, the time, how the app is set up (models, sync, Lean), the work running now, and the log, oldest first, each entry with its time to the millisecond."
+    },
+    {
+      "id": "DIAG-5",
+      "text": "Nothing in the log or its copy holds the OpenRouter key: anything shaped like one is masked before it's kept or copied."
+    },
+    {
+      "id": "DIAG-6",
+      "text": "The log is emptied from the page's menu, asking first.",
+      "related": ["#APP-12"]
+    }
+  ],
+  "values": [
+    {
+      "id": "diagnostics.kept",
+      "type": "duration",
+      "value": "14d",
+      "description": "How long the log keeps an entry."
+    },
+    {
+      "id": "diagnostics.most",
+      "type": "number",
+      "value": 5000,
+      "unit": "entries",
+      "description": "The most entries the log keeps; the oldest go first."
+    }
+  ]
+}

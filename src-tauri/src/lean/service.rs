@@ -154,13 +154,34 @@ impl LeanService {
             return Ok(());
         }
         tauri::async_runtime::spawn(async move {
+            // Spec: WORK-1, DIAG-1
+            let work = app.state::<crate::work::Work>();
+            work.begin(&app, "lean:set-up", "Setting up Lean and Mathlib");
+            crate::diagnostics::report(&app, crate::diagnostics::Level::Info, "lean", "Started: Setting up Lean and Mathlib");
             // The workspace changes under a running server: stop it.
             *self.server.lock().await = None;
             let a = app.clone();
+            // The last lines it printed, for the diagnostics should it fail.
+            let tail = Arc::new(std::sync::Mutex::new(std::collections::VecDeque::<String>::new()));
+            let t = tail.clone();
             let on_line = move |line: String| {
+                if let Ok(mut t) = t.lock() {
+                    if t.len() == 40 {
+                        t.pop_front();
+                    }
+                    t.push_back(line.clone());
+                }
                 let _ = a.emit("lean-setup", json!({ "line": line }));
             };
             let result = workspace::set_up(&ws, &lake, &on_line).await;
+            let took = work.end(&app, "lean:set-up").map(crate::work::took).unwrap_or_default();
+            match &result {
+                Ok(_) => crate::diagnostics::report(&app, crate::diagnostics::Level::Info, "lean", &format!("Finished: Setting up Lean and Mathlib ({took})")),
+                Err(e) => {
+                    let lines = tail.lock().map(|t| t.iter().cloned().collect::<Vec<_>>().join("\n")).unwrap_or_default();
+                    crate::diagnostics::report_with(&app, crate::diagnostics::Level::Error, "lean", &format!("Failed: Setting up Lean and Mathlib ({took}): {e}"), Some(&lines));
+                }
+            }
             self.setting_up.store(false, Ordering::SeqCst);
             let _ = app.emit("lean-setup", json!({ "done": true, "error": result.err() }));
         });
@@ -324,7 +345,7 @@ impl LeanService {
             loop {
                 tokio::time::sleep(BACKGROUND_EVERY).await;
                 if let Err(e) = self.verify_changed(&app).await {
-                    eprintln!("lean: {e}");
+                    crate::diagnostics::report(&app, crate::diagnostics::Level::Warning, "lean", &format!("Checking blocks changed elsewhere failed: {e}"));
                 }
             }
         });
@@ -367,7 +388,7 @@ impl LeanService {
                 continue;
             }
             if let Err(e) = self.check(app, &b.id, &b.name, &b.source).await {
-                eprintln!("lean: couldn't check {}: {e}", b.id);
+                crate::diagnostics::report(app, crate::diagnostics::Level::Warning, "lean", &format!("Couldn't check {} ({}): {e}", b.name, b.id));
                 if let Ok(mut f) = self.failed.lock() {
                     f.insert(hash);
                 }

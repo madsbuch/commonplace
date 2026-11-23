@@ -7,6 +7,7 @@
  * Every response that reports its cost is logged in the usage ledger under
  * the feature that asked (lib/aiUsage.ts). Adapted from Tally.
  */
+import { messageOf, note } from "./diagnostics";
 import { fetch } from "@tauri-apps/plugin-http";
 import { recordAiUsage } from "./aiUsage";
 import type { AiFeature } from "./aiCost";
@@ -154,11 +155,36 @@ export interface ChatOptions {
 
 // HTTP statuses worth retrying: timeout, too-early, rate limit, server/gateway.
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
-const MAX_ATTEMPTS = 3;
-const RETRY_BASE_DELAY_MS = 1_000;
+// Spec: WORK-4
+/**
+ * Waits before each try again when the network or the service fails (no
+ * connection, a dropped one, a retryable status): three minutes in all,
+ * `work.network-patience`. An answer that came back unusable (empty, not
+ * JSON) is tried twice more.
+ */
+const NETWORK_WAITS_MS = [2_000, 5_000, 10_000, 20_000, 30_000, 45_000, 68_000];
+const UNUSABLE_WAITS_MS = [1_000, 2_000];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Counts a request's failures; says whether to try again, having waited. */
+function retrier(feature: AiFeature, model: string, signal: AbortSignal | undefined) {
+  const tries = { network: 0, unusable: 0 };
+  return async (kind: "network" | "unusable", error: Error): Promise<boolean> => {
+    const wait = (kind === "network" ? NETWORK_WAITS_MS : UNUSABLE_WAITS_MS)[tries[kind]++];
+    if (wait === undefined || signal?.aborted) return false;
+    // Spec: DIAG-1
+    note("warning", "ai", `A ${feature} request to ${model} failed; trying again in ${wait / 1000} s: ${error.message}`);
+    await sleep(wait);
+    return !signal?.aborted;
+  };
+}
+
+/** A request that never reached OpenRouter, or whose answer never arrived. */
+function unreachable(e: unknown): OpenRouterError {
+  return new OpenRouterError(`Couldn't reach OpenRouter: ${messageOf(e)}`, 0);
 }
 
 // Spec: AI-3
@@ -219,25 +245,25 @@ export async function chat(apiKey: string, model: string, messages: ChatMessage[
   // are then re-read from the cache on every follow-up.
   if (model.startsWith("anthropic/")) body["cache_control"] = { type: "ephemeral" };
 
-  let lastError: Error = new OpenRouterError("OpenRouter request failed", 0);
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+  const again = retrier(opts.feature, model, opts.signal);
+  for (;;) {
     if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
     let res: Response;
     try {
       res = await post(apiKey, body, opts.signal);
     } catch (e) {
       if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
-      lastError = e instanceof Error ? e : new Error(String(e));
-      continue;
+      const err = unreachable(e);
+      if (await again("network", err)) continue;
+      throw err;
     }
     if (!res.ok) {
       const json = parseChatResponse(await res.json().catch(() => ({})));
       logUsage(opts.feature, model, usageOf(json));
       const err = new OpenRouterError(json.error?.message ?? `HTTP ${res.status}`, res.status);
       if (!RETRYABLE_STATUS.has(res.status)) throw err;
-      lastError = err;
-      continue;
+      if (await again("network", err)) continue;
+      throw err;
     }
     const state = await readStream(res, opts.onText);
     // Logged under the model asked for, so the Costs screen groups by the
@@ -245,12 +271,12 @@ export async function chat(apiKey: string, model: string, messages: ChatMessage[
     logUsage(opts.feature, model, state.usage);
     if (state.error) throw new OpenRouterError(state.error, res.status);
     if (state.text.trim() === "") {
-      lastError = new OpenRouterError("The model returned an empty answer", res.status);
-      continue;
+      const err = new OpenRouterError("The model returned an empty answer", res.status);
+      if (await again("unusable", err)) continue;
+      throw err;
     }
     return state.text;
   }
-  throw lastError;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,25 +343,25 @@ export async function chatRound(
   };
   if (model.startsWith("anthropic/")) body["cache_control"] = { type: "ephemeral" };
 
-  let lastError: Error = new OpenRouterError("OpenRouter request failed", 0);
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+  const again = retrier(opts.feature, model, opts.signal);
+  for (;;) {
     if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
     let res: Response;
     try {
       res = await post(apiKey, body, opts.signal);
     } catch (e) {
       if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
-      lastError = e instanceof Error ? e : new Error(String(e));
-      continue;
+      const err = unreachable(e);
+      if (await again("network", err)) continue;
+      throw err;
     }
     if (!res.ok) {
       const json = parseChatResponse(await res.json().catch(() => ({})));
       logUsage(opts.feature, model, usageOf(json));
       const err = new OpenRouterError(json.error?.message ?? `HTTP ${res.status}`, res.status);
       if (!RETRYABLE_STATUS.has(res.status)) throw err;
-      lastError = err;
-      continue;
+      if (await again("network", err)) continue;
+      throw err;
     }
     let state = emptyStreamState();
     let calls: ToolCall[] = [];
@@ -373,12 +399,12 @@ export async function chatRound(
     if (state.error) throw new OpenRouterError(state.error, res.status);
     const toolCalls = calls.filter((c) => c.function.name !== "").map((c, i) => ({ ...c, id: c.id || `call_${i}` }));
     if (state.text.trim() === "" && toolCalls.length === 0) {
-      lastError = new OpenRouterError("The model returned an empty answer", res.status);
-      continue;
+      const err = new OpenRouterError("The model returned an empty answer", res.status);
+      if (await again("unusable", err)) continue;
+      throw err;
     }
     return { text: state.text, toolCalls };
   }
-  throw lastError;
 }
 
 /** Part of a message to a model: text, or an image (a data URL). */
@@ -416,35 +442,36 @@ export async function chatJson(
     usage: { include: true },
     response_format: { type: "json_schema", json_schema: { name: format.name, strict: true, schema: format.schema } },
   };
-  let lastError: Error = new OpenRouterError("OpenRouter request failed", 0);
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (attempt > 0) await sleep(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+  const again = retrier(opts.feature, model, opts.signal);
+  for (;;) {
     if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
     let res: Response;
     try {
       res = await post(apiKey, body, opts.signal);
     } catch (e) {
       if (opts.signal?.aborted) throw new OpenRouterError("Stopped", 0);
-      lastError = e instanceof Error ? e : new Error(String(e));
-      continue;
+      const err = unreachable(e);
+      if (await again("network", err)) continue;
+      throw err;
     }
     const json = parseChatResponse(await res.json().catch(() => ({})));
     logUsage(opts.feature, model, usageOf(json));
     if (!res.ok || json.error) {
       const err = new OpenRouterError(json.error?.message ?? `HTTP ${res.status}`, res.status);
       if (res.ok || !RETRYABLE_STATUS.has(res.status)) throw err;
-      lastError = err;
-      continue;
+      if (await again("network", err)) continue;
+      throw err;
     }
     // Some models wrap the JSON in a code fence despite the format.
     const text = contentToText(json.choices?.[0]?.message?.content).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
     try {
       return parseJson(text);
     } catch {
-      lastError = new OpenRouterError("The model's answer wasn't JSON", res.status);
+      const err = new OpenRouterError("The model's answer wasn't JSON", res.status);
+      if (await again("unusable", err)) continue;
+      throw err;
     }
   }
-  throw lastError;
 }
 
 /** A human-readable message for any error. */

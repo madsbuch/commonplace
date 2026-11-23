@@ -7,6 +7,7 @@ import { addFile, isKind, KIND_NAMES, LIBRARY_TABLES, listItems, problemWith, si
 import { useTablesVersion } from "../lib/live";
 import { importArxiv } from "../lib/arxiv";
 import { parseArxivId } from "../lib/arxivModel";
+import { detailsOf, messageOf, note } from "../lib/diagnostics";
 
 type Filter = "all" | Kind;
 type Tab = "items" | "people" | "institutions";
@@ -80,7 +81,9 @@ export default function LibraryPage() {
       setArxivInput("");
       void navigate(`/library/${id}`);
     } catch (e) {
-      setProblems([e instanceof Error ? e.message : String(e)]);
+      // Spec: DIAG-1
+      note("error", "library", `Adding from arXiv failed: ${messageOf(e)}`, detailsOf(e));
+      setProblems([messageOf(e)]);
     } finally {
       setBusy(null);
     }
@@ -103,6 +106,8 @@ export default function LibraryPage() {
       }
     }
     setBusy(null);
+    // Spec: DIAG-1
+    for (const issue of issues) note("warning", "library", issue);
     setProblems(issues);
     if (files.length === 1 && last) void navigate(`/library/${last}`);
   };

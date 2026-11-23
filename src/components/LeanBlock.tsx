@@ -19,6 +19,7 @@ import type { LeanGoals, LeanMessage, LeanVerdict } from "../lib/schemas";
 import { ago } from "../lib/sync";
 import { useColorScheme } from "../lib/theme";
 import { InfoButton } from "./InfoButton";
+import { useNotedProblem } from "../lib/diagnostics";
 
 /** Typing pauses this long before a computer checks the block. */
 const CHECK_AFTER_MS = 900;
@@ -197,7 +198,8 @@ export function LeanBlock(props: {
   // Spec: LEAN-3
   // On a computer: checked once typing pauses, whenever the verdict doesn't hold.
   const [checking, setChecking] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  // Spec: DIAG-1
+  const [problem, setProblem] = useNotedProblem("lean");
   const loaded = stored !== null && hash !== null;
   useEffect(() => {
     if (!computer || !props.editable || !loaded || holds) return;
@@ -209,7 +211,7 @@ export function LeanBlock(props: {
         .finally(() => setChecking(false));
     }, CHECK_AFTER_MS);
     return () => clearTimeout(t);
-  }, [computer, props.editable, loaded, holds, blockId, name, text]);
+  }, [computer, props.editable, loaded, holds, blockId, name, text, setProblem]);
 
   // Spec: LEAN-4
   const [goals, setGoals] = useState<LeanGoals>(null);

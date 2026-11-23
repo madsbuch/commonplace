@@ -17,15 +17,19 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use crate::diagnostics::{self, Level};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_http::reqwest;
 
 type Result<T> = std::result::Result<T, String>;
 
 /// Passages spoken at once.
 const PARALLEL: usize = 3;
-/// Tries per passage before the recording is given up on.
-const TRIES: usize = 3;
+// Spec: WORK-4
+/// Seconds to wait before each try again when the network fails: three minutes
+/// in all (`work.network-patience`). A refusal that won't change is tried once more.
+const NETWORK_WAITS: [u64; 7] = [2, 5, 10, 20, 30, 45, 68];
+const REFUSED_WAITS: [u64; 1] = [2];
 const LEAD_IN: f64 = 0.4;
 const BETWEEN_PARAGRAPHS: f64 = 0.45;
 const BETWEEN_CHAPTERS: f64 = 1.2;
@@ -83,17 +87,15 @@ async fn api_key(pool: &SqlitePool) -> Result<String> {
 }
 
 /// Speaks a passage unless it's been spoken already; logs it in the ledger.
-async fn clip(pool: &SqlitePool, client: &reqwest::Client, key: &str, model: &str, voice: &str, text: &str) -> Result<()> {
+async fn clip(app: &AppHandle, pool: &SqlitePool, client: &reqwest::Client, key: &str, model: &str, voice: &str, text: &str) -> Result<()> {
     let k = clip_key(model, voice, text);
     let have: Option<i64> = sqlx::query_scalar("SELECT 1 FROM speech_clips WHERE key = ?").bind(&k).fetch_optional(pool).await.map_err(|e| e.to_string())?;
     if have.is_some() {
         return Ok(());
     }
-    let mut last = String::new();
-    for attempt in 0..TRIES {
-        if attempt > 0 {
-            tokio::time::sleep(Duration::from_secs(2 * attempt as u64 + 1)).await;
-        }
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
         match speak(client, key, model, voice, text).await {
             Ok(speech) => {
                 let pcm = resample(&speech.pcm, speech.rate);
@@ -118,10 +120,22 @@ async fn clip(pool: &SqlitePool, client: &reqwest::Client, key: &str, model: &st
                     .map_err(|e| e.to_string())?;
                 return Ok(());
             }
-            Err(e) => last = e,
+            Err(e) => {
+                let waits: &[u64] = if e.transient { &NETWORK_WAITS } else { &REFUSED_WAITS };
+                let Some(wait) = waits.get(attempt - 1) else { return Err(e.message) };
+                // Spec: DIAG-1
+                let preview: String = text.chars().take(80).collect();
+                diagnostics::report_with(
+                    app,
+                    Level::Warning,
+                    "audio",
+                    &format!("Speaking a passage failed (try {attempt}); trying again in {wait} s: {}", e.message),
+                    Some(&format!("model {model}, voice {voice}, {} characters: \"{preview}…\"", text.chars().count())),
+                );
+                tokio::time::sleep(Duration::from_secs(*wait)).await;
+            }
         }
     }
-    Err(last)
 }
 
 impl AudioService {
@@ -133,12 +147,22 @@ impl AudioService {
                 return;
             }
         }
+        // Spec: WORK-1, DIAG-1
+        // Begun before this returns: the script's writer ends its own work
+        // after, so the work never stops in between (Android won't let it
+        // start again with the app out of sight).
+        let work_id = format!("audio:{id}");
+        app.state::<crate::work::Work>().begin(&app, &work_id, "Speaking a recording");
         tauri::async_runtime::spawn(async move {
-            let result = run(&app, &id).await;
-            if let Err(e) = &result {
-                eprintln!("audio: {id}: {e}");
-                if let Ok(pool) = crate::db_pool(&app).await {
-                    let _ = set_status(&pool, &id, "failed", 0.0, Some(e)).await;
+            let result = run(&app, &id, &work_id).await;
+            let took = app.state::<crate::work::Work>().end(&app, &work_id).map(crate::work::took).unwrap_or_default();
+            match &result {
+                Ok(title) => diagnostics::report(&app, Level::Info, "audio", &format!("Finished: Speaking “{title}” ({took})")),
+                Err(e) => {
+                    diagnostics::report_with(&app, Level::Error, "audio", &format!("Failed: Speaking a recording ({took}): {e}"), Some(&format!("recording {id}")));
+                    if let Ok(pool) = crate::db_pool(&app).await {
+                        let _ = set_status(&pool, &id, "failed", 0.0, Some(e)).await;
+                    }
                 }
             }
             if let Ok(mut r) = self.running.lock() {
@@ -165,7 +189,8 @@ impl AudioService {
     }
 }
 
-async fn run(app: &AppHandle, id: &str) -> Result<()> {
+/// Makes the audio; its title, when done.
+async fn run(app: &AppHandle, id: &str, work_id: &str) -> Result<String> {
     let pool = crate::db_pool(app).await?;
     let (title, voice, model, script): (String, String, String, Option<String>) =
         sqlx::query_as("SELECT title, voice, speech_model, script FROM recordings WHERE id = ?")
@@ -176,7 +201,14 @@ async fn run(app: &AppHandle, id: &str) -> Result<()> {
             .ok_or("no such recording")?;
     let script: Script = serde_json::from_str(&script.ok_or("the recording has no script yet")?).map_err(|e| format!("its script can't be read: {e}"))?;
     let key = api_key(&pool).await?;
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(180)).build().map_err(|e| e.to_string())?;
+    app.state::<crate::work::Work>().begin(app, work_id, &format!("Speaking “{title}”"));
+    diagnostics::report(app, Level::Info, "audio", &format!("Started: Speaking “{title}”"));
+    // Connections left idle go stale when the phone sleeps: they're not reused for long.
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(180))
+        .pool_idle_timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // Every passage spoken (or found spoken), a few at a time.
     let passages: Vec<String> = script.chapters.iter().flat_map(|c| c.paragraphs.iter().cloned()).filter(|p| !p.trim().is_empty()).collect();
@@ -187,7 +219,7 @@ async fn run(app: &AppHandle, id: &str) -> Result<()> {
         let (pool, client, key, model, voice, done, app, id) =
             (pool.clone(), client.clone(), key.clone(), model.clone(), voice.clone(), done.clone(), app.clone(), id.to_string());
         async move {
-            let r = clip(&pool, &client, &key, &model, &voice, &text).await;
+            let r = clip(&app, &pool, &client, &key, &model, &voice, &text).await;
             let n = done.fetch_add(1, Ordering::SeqCst) + 1;
             // Speaking is most of the work: progress runs to 0.95 here.
             let progress = 0.95 * n as f64 / total as f64;
@@ -222,6 +254,7 @@ async fn run(app: &AppHandle, id: &str) -> Result<()> {
             stream.push(&pcm)?;
         }
     }
+    let named = title.clone();
     let (webm, seconds, chapters) = tauri::async_runtime::spawn_blocking(move || stream.finish(&title)).await.map_err(|e| e.to_string())??;
     let chapters: Vec<serde_json::Value> = chapters.iter().map(|c| json!({ "title": c.title, "start": c.start_ms as f64 / 1000.0 })).collect();
 
@@ -243,7 +276,7 @@ async fn run(app: &AppHandle, id: &str) -> Result<()> {
     for text in &passages {
         let _ = sqlx::query("DELETE FROM speech_clips WHERE key = ?").bind(clip_key(&model, &voice, text)).execute(&pool).await;
     }
-    Ok(())
+    Ok(named)
 }
 
 #[cfg(test)]

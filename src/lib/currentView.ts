@@ -23,6 +23,7 @@ export type ViewKind =
   | "lean-settings"
   | "sync"
   | "costs"
+  | "diagnostics"
   | "other";
 
 /** What the author has selected, as last seen outside the assistant. */
@@ -70,7 +71,7 @@ export function viewOfPath(path: string): Pick<CurrentView, "kind" | "id"> {
   if (a === "chats") return { kind: "chats", id: null };
   if (a === "settings" && b === "ai") return { kind: "ai-settings", id: null };
   if (a === "settings" && b === "lean") return { kind: "lean-settings", id: null };
-  if (a === "settings" && (b === "sync" || b === "costs")) return { kind: b, id: null };
+  if (a === "settings" && (b === "sync" || b === "costs" || b === "diagnostics")) return { kind: b, id: null };
   if (a === "memory" || a === "settings" || a === "sync" || a === "costs") return { kind: a, id: null };
   return { kind: "other", id: null };
 }
@@ -137,11 +138,12 @@ export const ROUTES: readonly { address: string; shows: string }[] = [
   { address: "/memory", shows: "Your memory." },
   { address: "/audio", shows: "The audio library: recordings of papers read aloud, and spoken summaries." },
   { address: "/audio/<recording id>", shows: "One recording in the player, with its chapters; `#t=<seconds>` is the moment playing." },
-  { address: "/settings", shows: "Settings: rows leading to AI and models, Lean, sync, AI costs and memory, and the appearance switch." },
+  { address: "/settings", shows: "Settings: rows leading to AI and models, Lean, sync, AI costs, memory and diagnostics, and the appearance switch." },
   { address: "/settings/ai", shows: "The OpenRouter key, the assistant's model and the model that reads library details." },
   { address: "/settings/lean", shows: "Whether this computer verifies Lean blocks (Lean with Mathlib), and setting that up." },
   { address: "/settings/sync", shows: "Sync with the author's other devices." },
   { address: "/settings/costs", shows: "What AI has cost; `?range=90d`, `1y` or `all` (the last 30 days without it)." },
+  { address: "/settings/diagnostics", shows: "What happened in the app on this device (failures, work done, screens opened), and the work running now; `?show=failures` shows only failures." },
   { address: "/sync", shows: "Leads to /settings/sync." },
   { address: "/costs", shows: "Leads to /settings/costs." },
 ];

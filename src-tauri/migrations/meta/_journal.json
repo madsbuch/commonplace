@@ -64,6 +64,13 @@
       "when": 1795427962708,
       "tag": "0008_recordings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795433285067,
+      "tag": "0009_diagnostics",
+      "breakpoints": true
     }
   ]
 }

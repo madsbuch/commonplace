@@ -5,6 +5,7 @@
 // added and when the author asks again; otherwise never (LIB-11).
 // ---------------------------------------------------------------------------
 
+import { beginWork } from "./work";
 import { useSyncExternalStore } from "react";
 import { getSetting, setSetting } from "./db";
 import { getApiKey } from "./aiSettings";
@@ -126,6 +127,8 @@ export async function readDetails(
     return false;
   }
   setStatus(itemId, { state: "reading" });
+  // Spec: WORK-1, DIAG-1
+  const work = beginWork("library", `Reading the details of “${(await getItem(itemId))?.title ?? itemId}”`);
   try {
     let pages: { text: string } | { images: string[] };
     if (opts.text !== undefined) {
@@ -162,11 +165,15 @@ export async function readDetails(
     else await fallBack(itemId, metadataAuthors);
     setStatus(itemId, null);
     notifyTablesChanged(["library_items", "people", "institutions", "authorships", "affiliations"]);
+    work.done();
     return true;
   } catch (e) {
+    work.failed(e);
     setStatus(itemId, { state: "failed", message: errorMessage(e) });
     await fallBack(itemId, metadataAuthors).catch(() => undefined);
     notifyTablesChanged(LIBRARY_TABLES);
     return false;
+  } finally {
+    work.done();
   }
 }

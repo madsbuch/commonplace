@@ -2,12 +2,14 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
 mod audio;
+mod diagnostics;
 // Spec: LEAN-7
 #[cfg(desktop)]
 mod lean;
 mod library;
 mod sync;
 mod type_id;
+mod work;
 #[cfg(test)]
 mod test_db;
 
@@ -80,6 +82,12 @@ fn migrations() -> Vec<Migration> {
             version: 9,
             description: "recordings",
             sql: include_str!("../migrations/0008_recordings.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "diagnostics",
+            sql: include_str!("../migrations/0009_diagnostics.sql"),
             kind: MigrationKind::Up,
         },
     ]
@@ -252,10 +260,16 @@ type SyncState<'a> = tauri::State<'a, std::sync::Arc<sync::service::SyncService>
 async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), String> {
     let pool = db_pool(&app).await?;
     svc.start(app.clone(), pool).await?;
+    // Spec: DIAG-2
+    // What Rust noted before the database was open goes in, with any crash since the last run.
+    if let Ok(dir) = app.path().app_config_dir() {
+        diagnostics::take_crashes(&app, &dir);
+    }
+    diagnostics::flush(app.clone());
     // Spec: AUD-6
     // Recordings this device was speaking carry on.
     if let Err(e) = audio_service(&app).resume(app.clone()).await {
-        eprintln!("audio: couldn't resume: {e}");
+        diagnostics::report(&app, diagnostics::Level::Warning, "audio", &format!("Recordings being spoken couldn't carry on: {e}"));
     }
     // Spec: LEAN-6
     // Computers verify Lean blocks changed on other devices.
@@ -270,7 +284,7 @@ async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), Str
             .sync_background()
             .schedule(tauri_plugin_sync_background::ScheduleArgs { db_path })
         {
-            eprintln!("sync: couldn't schedule background sync: {e}");
+            diagnostics::report(&app, diagnostics::Level::Warning, "sync", &format!("Background sync couldn't be scheduled: {e}"));
         }
     }
     Ok(())
@@ -286,7 +300,7 @@ async fn sync_check_instance(app: tauri::AppHandle) -> Result<(), String> {
     if let sync::instance::Check::Rotated { old_id, new_id } =
         sync::instance::check(&pool, &dir.join(DB_FILE)).await?
     {
-        eprintln!("sync: this database was a copy from elsewhere; device {old_id} is now {new_id}");
+        diagnostics::report(&app, diagnostics::Level::Info, "sync", &format!("This database was a copy from elsewhere; device {old_id} is now {new_id}."));
     }
     Ok(())
 }
@@ -295,6 +309,30 @@ async fn sync_check_instance(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn mark_db_copy(path: String) -> Result<(), String> {
     sync::instance::mark_copy(std::path::Path::new(&path)).await
+}
+
+// ---------------------------------------------------------------------------
+// Work in the background (src/work.rs) and diagnostics (src/diagnostics.rs)
+// ---------------------------------------------------------------------------
+
+// Spec: WORK-1
+/// The frontend's work `id` runs, as `title` says (again: renamed).
+#[tauri::command]
+async fn work_begin(app: tauri::AppHandle, id: String, title: String) {
+    app.state::<work::Work>().begin(&app, &id, &title);
+}
+
+/// The frontend's work `id` is done or failed.
+#[tauri::command]
+async fn work_end(app: tauri::AppHandle, id: String) {
+    app.state::<work::Work>().end(&app, &id);
+}
+
+// Spec: DIAG-3
+/// What runs now, for the diagnostics.
+#[tauri::command]
+async fn work_running(app: tauri::AppHandle) -> Vec<work::Running> {
+    app.state::<work::Work>().running()
 }
 
 #[tauri::command]
@@ -358,6 +396,9 @@ pub fn run() {
         .plugin(tauri_plugin_sync_background::init())
         // Spec: AUD-10
         .plugin(tauri_plugin_audio_player::init())
+        // Spec: WORK-2, WORK-3
+        .plugin(tauri_plugin_background_work::init())
+        .manage(work::Work::default())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))
         .manage(std::sync::Arc::new(audio::render::AudioService::default()));
 
@@ -384,7 +425,11 @@ pub fn run() {
                 );
                 std::process::exit(1);
             }
-            let _ = app;
+            // Spec: DIAG-2
+            // A crash is written beside the database, to be taken in next time.
+            if let Ok(dir) = app.path().app_config_dir() {
+                diagnostics::install_panic_hook(dir);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -407,6 +452,9 @@ pub fn run() {
             lean_set_up,
             lean_check,
             lean_goal,
+            work_begin,
+            work_end,
+            work_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
