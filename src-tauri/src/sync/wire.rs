@@ -21,6 +21,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
+// Spec: SYN-5
+/// A connection that closed before it began: another device trying every
+/// address at once lets go of the ones that lost, and a connection check
+/// only knocks. Not a failure.
+pub const CLOSED_UNOPENED: &str = "closed before it began";
+
 pub type Result<T> = std::result::Result<T, String>;
 
 pub const PURPOSE_SYNC: u8 = b'S';
@@ -107,10 +113,17 @@ impl Channel {
         finish(stream, hs).await
     }
 
-    /// Reads the purpose byte of an incoming connection.
+    /// Reads the purpose byte of an incoming connection; [`CLOSED_UNOPENED`]
+    /// when it closed before saying anything.
     pub async fn purpose(stream: &mut TcpStream) -> Result<u8> {
         let mut p = [0u8; 1];
-        timeout(HANDSHAKE_TIMEOUT, stream.read_exact(&mut p)).await.map_err(|_| "timed out")?.map_err(|e| e.to_string())?;
+        timeout(HANDSHAKE_TIMEOUT, stream.read_exact(&mut p)).await.map_err(|_| "timed out")?.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                CLOSED_UNOPENED.to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
         Ok(p[0])
     }
 
@@ -277,5 +290,15 @@ mod tests {
         c.send_bytes(b"pay me").await.unwrap();
         let got = tokio::time::timeout(Duration::from_secs(5), server).await.expect("refused at once, not timed out");
         assert_eq!(got.unwrap().unwrap_err(), "message failed authentication");
+    }
+
+    // Spec: SYN-5
+    #[tokio::test]
+    async fn a_connection_let_go_before_it_began_is_told_apart() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(TcpStream::connect(addr).await.unwrap());
+        let (mut incoming, _) = listener.accept().await.unwrap();
+        assert_eq!(Channel::purpose(&mut incoming).await.unwrap_err(), CLOSED_UNOPENED);
     }
 }

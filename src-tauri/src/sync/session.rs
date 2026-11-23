@@ -323,6 +323,8 @@ pub struct Outcome {
     /// Nothing moved and the last sync had ended identical, so the full
     /// comparison was skipped.
     pub digest_skipped: bool,
+    /// The address this device reached the other at; none when the other reached this one.
+    pub via: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize)]
@@ -464,6 +466,7 @@ async fn client_session(
             complete: true,
             differences: vec![],
             digest_skipped: true,
+            via: addr.map(|a| a.to_string()),
         });
     }
     ch.send(&Msg::Digest(engine::digest(pool).await?)).await?;
@@ -473,7 +476,7 @@ async fn client_session(
     let (complete, differences) = compare_digests(pool, &their_digest).await?;
     record_outcome(pool, &theirs.device_id, &theirs.epoch, addr, complete).await?;
     engine::remove_orphans(pool).await?;
-    Ok(Outcome { peer_id: theirs.device_id, peer_name: theirs.name, received, complete, differences, digest_skipped: false })
+    Ok(Outcome { peer_id: theirs.device_id, peer_name: theirs.name, received, complete, differences, digest_skipped: false, via: addr.map(|a| a.to_string()) })
 }
 
 /// Whether the last finished sync with `peer` ended with both identical.
@@ -516,6 +519,7 @@ async fn server_session(ch: &mut Channel, pool: &SqlitePool, me: &Hello, theirs:
                 complete: true,
                 differences: vec![],
                 digest_skipped: true,
+                via: None,
             });
         }
         _ => return Err("expected a digest".into()),
@@ -524,7 +528,7 @@ async fn server_session(ch: &mut Channel, pool: &SqlitePool, me: &Hello, theirs:
     let (complete, differences) = compare_digests(pool, &their_digest).await?;
     record_outcome(pool, &theirs.device_id, &theirs.epoch, None, complete).await?;
     engine::remove_orphans(pool).await?;
-    Ok(Outcome { peer_id: theirs.device_id, peer_name: theirs.name, received, complete, differences, digest_skipped: false })
+    Ok(Outcome { peer_id: theirs.device_id, peer_name: theirs.name, received, complete, differences, digest_skipped: false, via: None })
 }
 
 // ---------------------------------------------------------------------------

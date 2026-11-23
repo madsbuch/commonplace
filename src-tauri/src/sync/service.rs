@@ -116,7 +116,7 @@ impl SyncService {
         if outcome.received.changed_anything() || !outcome.complete {
             let level = if outcome.complete { Level::Info } else { Level::Warning };
             let differing = if outcome.complete { String::new() } else { format!("; still differing: {}", outcome.differences.join(", ")) };
-            diagnostics::report(app, level, "sync", &format!("Synced with {}: took in {}{differing}", outcome.peer_name, describe(&outcome.received)));
+            diagnostics::report(app, level, "sync", &format!("Synced with {}{}: took in {}{differing}", outcome.peer_name, at(outcome), describe(&outcome.received)));
         }
     }
 
@@ -147,7 +147,7 @@ impl SyncService {
                     a.last_round_at = Some(now_iso());
                 });
             }
-            Err(e) if e == "busy" => {}
+            Err(e) if e == "busy" || e == super::wire::CLOSED_UNOPENED => {}
             Err(e) => {
                 diagnostics::report(&app2, Level::Warning, "sync", &format!("A device's sync with this one failed: {e}"));
             }
@@ -423,7 +423,7 @@ impl SyncService {
         let found = self.showing(&session::pair_tag(&offer.token), Duration::from_secs(3)).await;
         let result = session::join(pool, &offer, &found, replace).await;
         match &result {
-            Ok(o) => diagnostics::report(app, Level::Info, "sync", &format!("Joined the book through {}: took in {}", o.peer_name, describe(&o.received))),
+            Ok(o) => diagnostics::report(app, Level::Info, "sync", &format!("Joined the book through {}{}: took in {}", o.peer_name, at(o), describe(&o.received))),
             Err(e) => diagnostics::report(app, Level::Error, "sync", &format!("Joining a book failed: {e}")),
         }
         self.set_activity(app, |a| {
@@ -521,6 +521,11 @@ pub async fn sync_round(pool: &SqlitePool, nearby: &[(String, Vec<SocketAddr>)])
         }
     }
     round
+}
+
+/// " at 192.168.1.44:47832": where this device reached the other, when it did.
+fn at(o: &Outcome) -> String {
+    o.via.as_ref().map(|v| format!(" at {v}")).unwrap_or_default()
 }
 
 /// What a sync took in, as the diagnostics say it.

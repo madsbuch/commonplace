@@ -120,7 +120,10 @@ The book syncs peer to peer over the local network, as Tally does
   (link-local ones without a scope; the scanning device tries each of its
   own, `check::candidates`). `Info.plist` declares the Bonjour service
   (`NSBonjourServices`), as Murmur's does. The fake Tauri layer records what's
-  announced (`/fake-lan`).
+  announced (`/fake-lan`). Trying every address at once leaves the other
+  device with connections that close before they begin
+  (`wire::CLOSED_UNOPENED`): not failures, so not noted. A sync or join
+  notes the address it went through (`Outcome::via`).
 - The UDP search stays beside it, so older versions still find each other:
   discovery answers on UDP 47831 and sync listens on TCP 47832 (or any free
   port), clear of Tally's 47821/47822, so both apps run side by side.
