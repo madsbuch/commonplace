@@ -381,7 +381,7 @@ if (import.meta.main) {
         }
         if (cmd === "work_running") return Response.json({ ok: running }, { headers: cors });
         if (cmd === "plugin:app|version") return Response.json({ ok: "0.1.0" }, { headers: cors });
-        if (cmd === "plugin:app|identifier") return Response.json({ ok: "com.madsbuch.mybook.dev" }, { headers: cors });
+        if (cmd === "plugin:app|identifier") return Response.json({ ok: "com.madsbuch.commonplace.dev" }, { headers: cors });
         if (cmd === "plugin:app|tauri_version") return Response.json({ ok: "2.99.0" }, { headers: cors });
         if (cmd === "plugin:sql|load") out = args["db"];
         else if (cmd === "plugin:sql|execute") {

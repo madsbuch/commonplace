@@ -308,8 +308,16 @@ read and show verdicts.
   `logo-android-foreground.svg` over the logo's ink blue, plus `logo-round.svg`
   and the logo for older launchers); `tauri icon` would overwrite it, so
   restore that folder after running it. `scripts/android-icons.mjs` copies it
-  into the generated Android project (CI runs it after `tauri android init`). The bundle id is still
-  `com.madsbuch.mybook`, so existing data stays where it is.
+  into the generated Android project (CI runs it after `tauri android init`). The identifier is
+  `com.madsbuch.commonplace` (`app.identifier`, APP-13). It was
+  `com.madsbuch.mybook`: on a computer, `src-tauri/src/earlier.rs` moves the
+  old folders over the first time it starts (the database with its instance
+  marker, so the device stays the same device); a phone gets the new app
+  beside the old one, empty, and joins the book. Sync's wire names
+  (`MYBOOK/1`, `mybook-pair:`, `mybook-book:`), the Kotlin packages of our
+  plugins (`com.madsbuch.mybook.*`, which the JNI entry point is named after)
+  and the crate (`my-book`) keep the old name: they're internal, and changing
+  the wire names would stop old and new versions syncing.
 - Colours are tokens in `src/App.css`, the spec's `color.*` values, light and
   dark. `src/lib/theme.ts` sets `data-theme` on `<html>` before the first
   paint (the choice is per device, in localStorage), animates a switch with
@@ -486,9 +494,9 @@ Book content leaves the device only that way.
 - `bun run tauri dev`: the app in development. It always runs as
   "Commonplace Dev" with data of its own, never as the real app:
   - desktop: `scripts/tauri.mjs` adds `src-tauri/tauri.dev.conf.json`
-    (`com.madsbuch.mybook.dev`); a debug build started any other way under
+    (`com.madsbuch.commonplace.dev`); a debug build started any other way under
     the real identifier refuses to start (`src-tauri/src/lib.rs`);
-  - Android: debug builds are the package `com.madsbuch.mybook.dev`
+  - Android: debug builds are the package `com.madsbuch.commonplace.dev`
     (`bundle.android.debugApplicationIdSuffix`), installed beside the real app.
 - `bun run build`: typecheck `src/`, lint everything, and bundle
 - `bun run lint`: ESLint only

@@ -66,6 +66,10 @@
     {
       "id": "APP-12",
       "text": "Lists offer no deleting: a thing is deleted from its own screen, behind its menu (⋯), and asks first."
+    },
+    {
+      "id": "APP-13",
+      "text": "The app is identified as `app.identifier` on every platform. A computer that ran it under its earlier identifier, `com.madsbuch.mybook`, keeps its book, recordings and settings: the first time it starts, the app moves its folders over. A phone can't move another app's data: the app installs beside the old one, starts empty, and gets the book by joining it."
     }
   ],
   "values": [
@@ -84,6 +88,12 @@
       "type": "text",
       "value": "Commonplace",
       "description": "What the app is called."
+    },
+    {
+      "id": "app.identifier",
+      "type": "text",
+      "value": "com.madsbuch.commonplace",
+      "description": "How the systems know the app (its Android package, its macOS bundle id, its folders' names); development builds add `.dev`."
     },
     {
       "id": "theme.transition",

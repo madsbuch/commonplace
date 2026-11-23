@@ -962,7 +962,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check(
       "one press copies everything for a coding agent: the app, how it's set up, and the log oldest first",
       copied.startsWith("# Commonplace diagnostics") &&
-        copied.includes("- Version: 0.1.0 (development build, com.madsbuch.mybook.dev") &&
+        copied.includes("- Version: 0.1.0 (development build, com.madsbuch.commonplace.dev") &&
         copied.includes("- Models: assistant ") &&
         copied.includes("## Running now") &&
         copied.indexOf("Opened /") < copied.indexOf("Failed: Answering") &&

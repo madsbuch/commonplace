@@ -2,14 +2,14 @@
 // development build can never run as the real app.
 //
 // The real app keeps its database in a folder named after its identifier
-// (com.madsbuch.mybook). A desktop `tauri dev` with that identifier would open
+// (com.madsbuch.commonplace). A desktop `tauri dev` with that identifier would open
 // the real database — and with sync, whatever an unfinished build does to it
 // would reach every device. So `dev` on the desktop always gets
-// src-tauri/tauri.dev.conf.json: "Commonplace Dev", com.madsbuch.mybook.dev, a
+// src-tauri/tauri.dev.conf.json: "Commonplace Dev", com.madsbuch.commonplace.dev, a
 // folder of its own.
 //
 // Android is kept apart differently: debug builds get the package
-// com.madsbuch.mybook.dev (bundle.android.debugApplicationIdSuffix in
+// com.madsbuch.commonplace.dev (bundle.android.debugApplicationIdSuffix in
 // src-tauri/tauri.conf.json), so they install beside the real app with their own data.
 // Its identifier can't change here — Tauri derives the Android JNI bindings
 // from it.
