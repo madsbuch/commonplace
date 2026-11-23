@@ -493,6 +493,40 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const back = await page.getByRole("link", { name: "← Settings" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
     check("a nested page leads back, and the old address leads to it", back);
 
+    // Spec: SYN-9, SYN-21, SYN-22
+    await page.goto(APP + "/settings/sync");
+    await page.getByRole("button", { name: "Show pairing code" }).click();
+    const qrImg = page.getByRole("img", { name: "Pairing code" });
+    await qrImg.waitFor({ timeout: 5000 });
+    await page.addScriptTag({ path: require.resolve("jsqr") });
+    const decoded = await qrImg.evaluate(async (img) => {
+      await img.decode();
+      // As a camera would see it: drawn small, a few pixels per module.
+      const c = document.createElement("canvas");
+      c.width = c.height = 300;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, 300, 300);
+      ctx.drawImage(img, 0, 0, 300, 300);
+      const data = ctx.getImageData(0, 0, 300, 300);
+      return window.jsQR(data.data, 300, 300)?.data ?? null;
+    });
+    check("the pairing QR code reads back as the code", decoded?.startsWith("mybook-pair:1:") && decoded.length > 300, String(decoded).slice(0, 40));
+    await page.getByRole("button", { name: "Done" }).click();
+    await page.getByRole("button", { name: "Scan code" }).click();
+    await page.waitForTimeout(800);
+    const camera = (await page.locator(".pairing-camera").isVisible()) || (await page.locator(".mantine-Alert-root", { hasText: "Paste the code instead" }).isVisible());
+    check("a computer scans with its webcam, or says to paste", camera);
+    if (await page.getByRole("button", { name: "Stop scanning" }).isVisible()) await page.getByRole("button", { name: "Stop scanning" }).click();
+    await page.getByLabel("Pairing code").fill(decoded ?? "");
+    await page.getByRole("button", { name: "Join", exact: true }).click();
+    await page.getByRole("button", { name: "Replace and join" }).waitFor({ timeout: 3000 });
+    check("a device holding data asks before it joins", (await page.locator(".mantine-Alert-root").innerText()).includes("holds"));
+    await page.getByRole("button", { name: "Replace and join" }).click();
+    await page.getByText("Joined The other device's book").waitFor({ timeout: 3000 });
+    const joins = await (await fetch(`${FAKE}/fake-joins`)).json();
+    check("and then joins, replacing what it held", joins.length === 1 && joins[0].replace === true && joins[0].code === decoded, JSON.stringify(joins).slice(0, 80));
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

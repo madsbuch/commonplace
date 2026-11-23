@@ -29,6 +29,7 @@
     "@tiptap/core": "3.33.0",
     "drizzle-orm": "^0.45.4",
     "fractional-indexing": "^4.0.0",
+    "jsqr": "1.4.0",
     "katex": "^0.19.1",
     "modern-screenshot": "^4.7.0",
     "pdfjs-dist": "^6.5.438",

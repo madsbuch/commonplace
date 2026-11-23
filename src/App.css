@@ -1769,3 +1769,76 @@ a.settings-row:hover {
     pointer-events: none;
   }
 }
+
+/* Spec: SYN-9, SYN-21 — pairing */
+.pairing-qr {
+  /* Always black on white, whatever the theme: scanners want contrast. */
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px;
+  width: min(100%, 360px);
+  margin: 0 auto 12px;
+}
+.pairing-qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+.pairing-camera-wrap {
+  margin-bottom: 10px;
+}
+.pairing-camera {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #000;
+  border-radius: 12px;
+}
+/* The phone's camera shows behind the app while it scans: everything else steps aside. */
+html.phone-scanning,
+html.phone-scanning body {
+  background: transparent !important;
+}
+html.phone-scanning body > *:not(.phone-scan-overlay) {
+  visibility: hidden;
+}
+.phone-scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+  color: #fff;
+  font-size: 15px;
+  text-align: center;
+}
+.phone-scan-frame {
+  width: min(72vw, 300px);
+  aspect-ratio: 1;
+  border: 3px solid #fff;
+  border-radius: 20px;
+  /* Dims everything outside the frame. */
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+}
+.phone-scan-overlay p {
+  margin: 0;
+  position: relative;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}
+.phone-scan-overlay button {
+  position: relative;
+  padding: 10px 28px;
+  border-radius: 999px;
+  border: none;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-weight: 600;
+}

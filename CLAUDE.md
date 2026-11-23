@@ -106,6 +106,15 @@ The book syncs peer to peer over the local network, as Tally does
   when another device's data arrives.
 - `cargo test` (in `src-tauri`) runs the sync tests: random histories that
   must converge, pairing over real sockets, restored copies.
+- Pairing (`src/screens/SyncPage.tsx`): either device shows the code (an SVG
+  QR, black on white with the standard quiet zone). A phone scans it with the
+  barcode plugin in windowed mode, the camera behind the app, under our own
+  frame and Cancel (`phone-scanning` on `<html>`; the plugin's full-screen
+  view has no way back); a computer scans with its webcam (jsQR); either can
+  paste. A device that holds data asks after it has the code, then joins with
+  `replace` (a backup first). `src-tauri/Info.plist` gives macOS the local
+  network and camera descriptions; without the first, macOS blocks sync
+  silently.
 
 ## The book: pages and blocks
 

@@ -131,6 +131,20 @@
       "related": [
         "#SYN-11"
       ]
+    },
+    {
+      "id": "SYN-21",
+      "text": "Either device can show the pairing code: a phone scans it with its camera, a computer with its webcam, and either can paste it instead.",
+      "related": [
+        "#SYN-9"
+      ]
+    },
+    {
+      "id": "SYN-22",
+      "text": "A device that already holds data can still join, once the author agrees after giving it the code; a complete copy of its database is saved first, then the book replaces it.",
+      "related": [
+        "#SYN-9"
+      ]
     }
   ],
   "values": [

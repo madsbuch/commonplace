@@ -127,6 +127,20 @@ function httpCommand(cmd: string, args: Record<string, unknown>): unknown {
 }
 
 if (import.meta.main) {
+  const joins: { code: string; replace: boolean }[] = [];
+  const fakeSyncStatus = (blocks: number) => ({
+    deviceId: "dev_this",
+    name: "This computer",
+    platform: "linux",
+    inBook: true,
+    devices: [{ id: "dev_this", name: "This computer", platform: "linux", isSelf: true, lastSyncAt: null, lastCompleteAt: null, complete: false }],
+    canJoin: blocks === 0,
+    held: blocks === 0 ? [] : [{ table: "blocks", rows: blocks }],
+    offerActive: false,
+    syncing: false,
+    lastError: null,
+    lastRoundAt: null,
+  });
   const db = openBookDb(process.argv[2] ?? ":memory:");
   const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type, x-item-id, x-media-type" };
   Bun.serve({
@@ -159,6 +173,7 @@ if (import.meta.main) {
         return Response.json({ ok: true }, { headers: cors });
       }
       if (url.pathname === "/fake-requests") return Response.json(chatRequests, { headers: cors });
+      if (url.pathname === "/fake-joins") return Response.json(joins, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -186,6 +201,21 @@ if (import.meta.main) {
           return Response.json({ ok: Buffer.from(row.data).toString("base64") }, { headers: cors });
         }
         if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
+        // Sync, enough for the pairing screen: a device that holds a book, a
+        // code as long as a real one, and joins recorded for the checks.
+        if (cmd === "sync_status") {
+          const pages = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM blocks").get());
+          return Response.json({ ok: fakeSyncStatus(pages.n) }, { headers: cors });
+        }
+        if (cmd === "sync_offer") {
+          const body = Buffer.from(Array.from({ length: 230 }, (_, i) => (i * 97 + 13) % 256)).toString("base64url");
+          return Response.json({ ok: `mybook-pair:1:${body}` }, { headers: cors });
+        }
+        if (cmd === "sync_join") {
+          joins.push({ code: String(args["code"]), replace: args["replace"] === true });
+          const outcome = { peer_id: "dev_other", peer_name: "The other device", received: { applied: 0, conflicts: 0, unique_merges: 0 }, complete: true, differences: [] };
+          return Response.json({ ok: { outcome, backup: args["replace"] === true ? "/backups/before-join.db" : null } }, { headers: cors });
+        }
         if (cmd === "plugin:sql|load") out = args["db"];
         else if (cmd === "plugin:sql|execute") {
           const r = db.query(positional(String(args["query"]))).run(...bindable(args["values"]));
