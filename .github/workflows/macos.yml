@@ -60,7 +60,13 @@ jobs:
       # (right-click → Open). Add APPLE_CERTIFICATE / APPLE_ID secrets and the
       # matching env vars here to sign with a certificate and notarize.
       - name: Build app
-        run: bun run tauri build --target universal-apple-darwin --bundles app,dmg
+        env:
+          # Spec: DIAG-4
+          # Which build this is, for the diagnostics (src/lib/build.ts).
+          VITE_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bun run tauri build --target universal-apple-darwin --bundles app,dmg
 
       - uses: actions/upload-artifact@v6
         with:

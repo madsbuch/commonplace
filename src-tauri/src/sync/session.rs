@@ -849,8 +849,11 @@ pub fn local_addrs(port: u16) -> Vec<String> {
         .unwrap_or_default()
         .into_iter()
         .filter(|i| !i.is_loopback())
-        .filter_map(|i| match i.ip() {
-            std::net::IpAddr::V4(v4) if v4.is_private() || v4.is_link_local() => Some(format!("{v4}:{port}")),
+        .filter_map(|i| match i.addr {
+            // Spec: SYN-23
+            // A lone address (/32) is a VPN's or a gateway's, not a local network another device is on.
+            if_addrs::IfAddr::V4(v4) if v4.netmask == std::net::Ipv4Addr::BROADCAST => None,
+            if_addrs::IfAddr::V4(v4) if v4.ip.is_private() || v4.ip.is_link_local() => Some(format!("{}:{port}", v4.ip)),
             _ => None,
         })
         .collect();

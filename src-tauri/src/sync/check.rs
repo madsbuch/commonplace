@@ -166,11 +166,14 @@ pub enum Finding {
     NotAnswering { label: String, ip: IpAddr },
     NotOpen { label: String },
     Failed { label: String, error: String },
+    /// This device would send traffic for its own network out of another interface (a VPN, a per-app setting).
+    RoutedAway { network: String, iface: String, via: String },
 }
 
 fn rank(f: &Finding) -> u8 {
     match f {
         Finding::Blocked => 0,
+        Finding::RoutedAway { .. } => 1,
         Finding::ThroughVpn { .. } => 1,
         Finding::OtherNetwork { .. } => 2,
         Finding::NotAnswering { .. } => 3,
@@ -186,11 +189,15 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
     if !on_network {
         return ("This device isn't on a local network: connect it to the same Wi-Fi as your other devices.".into(), None);
     }
-    if tried == 0 {
+    let worst = findings.iter().min_by_key(|f| rank(f));
+    if tried == 0 && !matches!(worst, Some(Finding::RoutedAway { .. })) {
         return ("There's no other device to try yet: show a pairing code on one device and scan it with the other.".into(), None);
     }
-    let worst = findings.iter().min_by_key(|f| rank(f));
     match worst {
+        Some(Finding::RoutedAway { network, iface, via }) => (
+            format!("This device sends Commonplace's traffic for its own network ({network}, on {iface}) out through {via} instead: a VPN, or a setting for this app, takes it off the local network, so other devices can't reach it and it can't reach them. Turn the VPN off, or let it allow the local network (\"Allow LAN\", or leave Commonplace out of it), and check that Commonplace may use Wi-Fi."),
+            None,
+        ),
         Some(Finding::Blocked) => (
             "macOS is keeping Commonplace off the local network, so this computer can't reach the others. Open System Settings → Privacy & Security → Local Network and turn Commonplace on, then try again; a new version of the app asks again. Meanwhile the other devices can still reach this computer: show the pairing code here and scan it with the phone.".into(),
             Some("local-network".into()),
@@ -204,7 +211,7 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
             None,
         ),
         Some(Finding::NotAnswering { label, ip }) => (
-            format!("{label} at {ip} doesn't answer. Is it on the same Wi-Fi and awake, with Commonplace open? Some routers keep Wi-Fi devices from reaching each other (guest networks, \"client isolation\")."),
+            format!("{label} at {ip} doesn't answer. Is it on the same Wi-Fi and awake, with Commonplace open? A VPN on it can keep it from answering (check the connection there too), and some routers keep Wi-Fi devices from reaching each other (guest networks, \"client isolation\")."),
             None,
         ),
         Some(Finding::NotOpen { label }) => (format!("{label} is on the network, but Commonplace isn't open on it: open it there and try again."), None),
@@ -226,6 +233,24 @@ pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>
     } else {
         let list: Vec<String> = lan.iter().map(|n| format!("{}/{} ({})", n.ip, n.prefix(), n.name)).collect();
         lines.push(Line { ok: Some(true), text: format!("This device is on the local network as {}.", list.join(", ")) });
+    }
+    // Spec: SYN-23
+    // Which way this app's traffic for its own network goes: out of that
+    // network's interface, unless a VPN or a setting for the app takes it.
+    let mut findings = Vec::new();
+    for n in &lan {
+        let Some(neighbour) = neighbour(n) else { continue };
+        let via = route_from(IpAddr::V4(neighbour));
+        let network = format!("{}/{}", Ipv4Addr::from(u32::from(n.ip) & u32::from(n.mask)), n.prefix());
+        match via {
+            Some(IpAddr::V4(v)) if v != n.ip => {
+                let via_name = nets.iter().find(|m| m.ip == v).map(|m| format!("{v} ({})", m.name)).unwrap_or_else(|| v.to_string());
+                lines.push(Line { ok: Some(false), text: format!("Traffic for {network} would leave from {via_name}, not from {} ({}).", n.ip, n.name) });
+                findings.push((String::new(), true, Finding::RoutedAway { network, iface: n.name.clone(), via: via_name }));
+            }
+            Some(_) => lines.push(Line { ok: Some(true), text: format!("Traffic for {network} leaves through {}.", n.name) }),
+            None => lines.push(Line { ok: None, text: format!("Couldn't tell which way traffic for {network} would go.") }),
+        }
     }
     lines.push(if port == 0 {
         Line { ok: Some(false), text: "Sync isn't listening here yet.".into() }
@@ -285,14 +310,50 @@ pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>
         }
     }
 
-    let mut findings = Vec::new();
     for t in &targets {
         let (line, finding) = try_one(t, &nets).await;
         lines.push(line);
-        findings.push(finding);
+        let near = match t.addr.ip() {
+            IpAddr::V4(v4) => lan.iter().any(|n| n.holds(v4)),
+            IpAddr::V6(_) => false,
+        };
+        findings.push((t.label.clone(), near, finding));
     }
-    let (verdict, fix) = verdict(!lan.is_empty(), targets.len(), &findings);
+    let (verdict, fix) = verdict(!lan.is_empty(), targets.len(), &by_device(findings));
     Report { verdict, fix, lines }
+}
+
+/// An address on `net` to ask the system the way to: the network's first host, or its second when that's this device.
+pub fn neighbour(net: &Net) -> Option<Ipv4Addr> {
+    if net.prefix() >= 31 {
+        return None;
+    }
+    let base = u32::from(net.ip) & u32::from(net.mask);
+    let first = Ipv4Addr::from(base + 1);
+    Some(if first == net.ip { Ipv4Addr::from(base + 2) } else { first })
+}
+
+/// What each device came to: reached at any address counts as reached, and
+/// an address of it on another network doesn't count when another of its
+/// addresses is on this one (a phone offers its VPN's address too).
+pub fn by_device(found: Vec<(String, bool, Finding)>) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let mut labels: Vec<&String> = Vec::new();
+    for (label, _, _) in &found {
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    for label in labels {
+        let mine: Vec<&(String, bool, Finding)> = found.iter().filter(|(l, _, _)| l == label).collect();
+        if label.is_empty() || !mine.iter().any(|(_, _, f)| *f == Finding::Reached) {
+            let any_near = mine.iter().any(|(_, near, _)| *near);
+            out.extend(mine.into_iter().filter(|(_, near, _)| *near || !any_near).map(|(_, _, f)| f.clone()));
+        } else {
+            out.push(Finding::Reached);
+        }
+    }
+    out
 }
 
 /// Tries one device: which way the packets would go, then a connection.
@@ -377,6 +438,35 @@ mod tests {
         let (line, _) = try_one(&Target { label: "Phone".into(), addr }, &home).await;
         assert_eq!(line.ok, Some(false));
         assert!(line.text.contains("Commonplace isn't open on it"), "{}", line.text);
+    }
+
+    #[test]
+    fn the_way_out_is_asked_for_a_neighbour_on_the_network() {
+        let wlan = Net { name: "wlan0".into(), ip: Ipv4Addr::new(192, 168, 1, 44), mask: Ipv4Addr::new(255, 255, 255, 0) };
+        assert_eq!(neighbour(&wlan), Some(Ipv4Addr::new(192, 168, 1, 1)));
+        let router = Net { name: "en0".into(), ip: Ipv4Addr::new(192, 168, 1, 1), mask: Ipv4Addr::new(255, 255, 255, 0) };
+        assert_eq!(neighbour(&router), Some(Ipv4Addr::new(192, 168, 1, 2)));
+        let vpn = Net { name: "vgate0".into(), ip: Ipv4Addr::new(172, 30, 232, 16), mask: Ipv4Addr::new(255, 255, 255, 255) };
+        assert_eq!(neighbour(&vpn), None);
+    }
+
+    #[test]
+    fn a_device_counts_by_its_address_on_this_network() {
+        let phone = |near: bool, f: Finding| ("Phone".to_string(), near, f);
+        let not_answering = Finding::NotAnswering { label: "Phone".into(), ip: "192.168.1.44".parse().unwrap() };
+        let other = Finding::OtherNetwork { label: "Phone".into(), theirs: Ipv4Addr::new(172, 30, 232, 16) };
+        let found = by_device(vec![phone(false, other.clone()), phone(true, not_answering.clone())]);
+        assert_eq!(found, vec![not_answering.clone()]);
+        assert!(verdict(true, 2, &found).0.starts_with("Phone at 192.168.1.44 doesn't answer"));
+        assert_eq!(by_device(vec![phone(false, other.clone())]), vec![other]);
+        assert_eq!(by_device(vec![phone(true, not_answering), phone(true, Finding::Reached)]), vec![Finding::Reached]);
+    }
+
+    #[test]
+    fn traffic_taken_off_the_network_is_named_even_with_nothing_to_try() {
+        let routed = Finding::RoutedAway { network: "192.168.1.0/24".into(), iface: "wlan0".into(), via: "172.30.232.16 (vgate0)".into() };
+        let (v, _) = verdict(true, 0, &[routed]);
+        assert!(v.starts_with("This device sends Commonplace's traffic for its own network (192.168.1.0/24, on wlan0) out through 172.30.232.16 (vgate0)"), "{v}");
     }
 
     #[test]

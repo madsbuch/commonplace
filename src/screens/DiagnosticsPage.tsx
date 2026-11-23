@@ -9,6 +9,7 @@ import { entryText, lasting } from "../lib/diagnosticsModel";
 import { diagnosticsReport } from "../lib/diagnosticsReport";
 import { useTablesVersion } from "../lib/live";
 import { runningWork, type RunningWork } from "../lib/work";
+import { buildLabel } from "../lib/build";
 import "./AiScreens.css";
 
 /** Entries shown at once; the copy has them all. */
@@ -104,6 +105,7 @@ export default function DiagnosticsPage() {
       </div>
 
       <p className="muted diag-status">
+        <span className="diag-build">Build {buildLabel()}. </span>
         {failures === null ? " " : failures === 0 ? "Nothing failed in the last day." : `${failures} ${failures === 1 ? "failure" : "failures"} in the last day.`}
       </p>
 

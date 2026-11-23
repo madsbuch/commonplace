@@ -130,7 +130,12 @@ jobs:
       # still times out after its own retries gets one more try here. The
       # Rust side is already built by then, so a second attempt is quick.
       - name: Build APK
+        env:
+          # Spec: DIAG-4
+          # Which build this is, for the diagnostics (src/lib/build.ts).
+          VITE_BUILD_COMMIT: ${{ github.sha }}
         run: |
+          export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           for i in 1 2; do
             bun run tauri android build --apk --target aarch64 && exit 0
             echo "APK build failed (attempt $i)"

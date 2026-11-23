@@ -134,7 +134,14 @@ The book syncs peer to peer over the local network, as Tally does
   about Local Network offers System Settings
   (`x-apple.systempreferences:…`, allowed in the opener's scope). Each check
   is noted in the diagnostics. macOS ties the permission to the build, so
-  an unsigned new version can need it turned on again.
+  an unsigned new version can need it turned on again. The check also asks
+  the system which way this app's traffic for its own network would go
+  (`route_from` a neighbour on each network): if it leaves from another
+  interface (a phone's VPN, `vgate0` or `tun0`, or a per-app network
+  setting), nothing on the network can reach the app, and the check says
+  so. A device counts by its address on this network: a VPN address it
+  also offers doesn't decide the verdict. Pairing codes leave out lone (/32)
+  addresses, a VPN's or a gateway's.
 
 ## The book: pages and blocks
 
@@ -427,10 +434,14 @@ that starts one carries on with it (`device`).
   when noted and again when copied (`maskKeys`, Rust `mask`). Rust errors
   are written with their whole cause (`diagnostics::chain`): reqwest's
   "error sending request" alone says nothing.
-- `/settings/diagnostics` (`DiagnosticsPage.tsx`) shows what runs, the log
-  (newest first, `?show=failures`), and copies everything as one text for a
-  coding agent (`diagnosticsReport.ts` gathers, `diagnosticsModel.ts`
-  formats; falls back to a selected textarea if the clipboard refuses).
+- `/settings/diagnostics` (`DiagnosticsPage.tsx`) shows the build, what
+  runs, and the log as one `<pre>` (newest first, an entry a line with its
+  details indented under it, as learn-polish shows its log;
+  `?show=failures`), and copies everything as one text for a coding agent
+  (`diagnosticsReport.ts` gathers, `diagnosticsModel.ts` formats; falls back
+  to a selected textarea if the clipboard refuses). CI stamps each build
+  with its commit and time (`VITE_BUILD_COMMIT`, `VITE_BUILD_TIME`;
+  `src/lib/build.ts`), so a pasted log says which build it came from.
 - New work that runs by itself goes through `beginWork(source, title)` /
   `asWork` (`src/lib/work.ts`), or in Rust `Work::begin`/`end`
   (`src-tauri/src/work.rs`). That notes it in the diagnostics and keeps it

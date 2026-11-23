@@ -58,7 +58,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build app
-        run: bun run tauri build --bundles deb,appimage
+        env:
+          # Spec: DIAG-4
+          # Which build this is, for the diagnostics (src/lib/build.ts).
+          VITE_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          bun run tauri build --bundles deb,appimage
 
       - uses: actions/upload-artifact@v6
         with:

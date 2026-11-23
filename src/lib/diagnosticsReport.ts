@@ -11,6 +11,7 @@ import { loadDiagnostics, messageOf } from "./diagnostics";
 import { reportText } from "./diagnosticsModel";
 import { leanStatus, leanVersion, runsLean } from "./lean";
 import { getDetailsModel } from "./libraryDetails";
+import { buildLabel } from "./build";
 import { copyLine, copyState, getSyncStatus, isAndroid } from "./sync";
 import { runningWork } from "./work";
 
@@ -45,6 +46,7 @@ async function facts(): Promise<[string, string][]> {
   const dev = identifier.endsWith(".dev");
   return [
     ["Version", `${version} (${dev ? "development" : "release"} build, ${identifier}; Tauri ${tauri})`],
+    ["Build", buildLabel()],
     ["Platform", `${isAndroid() ? "Android" : navigator.platform || "unknown"}; ${navigator.userAgent}`],
     ["Screen", `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x, ${document.documentElement.getAttribute("data-theme") ?? "system"} theme`],
     ["Language and time zone", `${navigator.language}, ${Intl.DateTimeFormat().resolvedOptions().timeZone}`],
