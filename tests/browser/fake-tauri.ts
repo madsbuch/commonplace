@@ -392,7 +392,7 @@ if (import.meta.main) {
           const pages = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM blocks").get());
           return Response.json({ ok: fakeSyncStatus(pages.n) }, { headers: cors });
         }
-        // Spec: SYN-5, SYN-25
+        // Spec: tandem.SYN-5, tandem.SYN-25
         // The LAN plugin as a computer runs it: what's announced is recorded for the checks.
         if (cmd === "plugin:lan|is_mobile") return Response.json({ ok: false }, { headers: cors });
         if (cmd === "plugin:lan|start") {
@@ -414,7 +414,7 @@ if (import.meta.main) {
           const body = Buffer.from(Array.from({ length: 230 }, (_, i) => (i * 97 + 13) % 256)).toString("base64url");
           return Response.json({ ok: `mybook-pair:1:${body}` }, { headers: cors });
         }
-        // Spec: SYN-23
+        // Spec: tandem.SYN-23
         // As a Mac the system keeps off the local network finds it.
         if (cmd === "sync_check") {
           return Response.json(

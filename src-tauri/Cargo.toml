@@ -45,7 +45,7 @@ tauri-plugin-sync-background = { path = "plugins/sync-background" }
 tauri-plugin-audio-player = { path = "plugins/audio-player" }
 # Spec: WORK-2, WORK-3 — work kept going out of sight.
 tauri-plugin-background-work = { path = "plugins/background-work" }
-# Spec: SYN-2 — finding the book's devices nearby, as Murmur does (mDNS, Android NSD).
+# Spec: tandem.SYN-5 — finding the book's devices nearby, as Murmur does (mDNS, Android NSD).
 tauri-plugin-lan = { path = "plugins/lan" }
 # Spec: LIB-28 — a blog post that builds itself, read on Android.
 tauri-plugin-page-render = { path = "plugins/page-render" }
@@ -64,4 +64,5 @@ futures-core = "0.3"
 [lints.rust]
 # No unsafe Rust; see CLAUDE.md. "deny" rather than "forbid" here, for one
 # audited exception: the JNI entry point in src/sync/background.rs.
+# Spec: keel.TYP-5
 unsafe_code = "deny"

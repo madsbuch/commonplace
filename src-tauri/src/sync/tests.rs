@@ -386,7 +386,7 @@ async fn run_history(seed: u64, devices_n: usize, steps: usize) {
     }
 }
 
-// Spec: SYN-11, SYN-12, SYN-20
+// Spec: tandem.SYN-11, tandem.SYN-12, SYN-20
 #[tokio::test(flavor = "multi_thread")]
 async fn random_histories_converge_between_two_devices() {
     for seed in 0..25 {
@@ -394,7 +394,7 @@ async fn random_histories_converge_between_two_devices() {
     }
 }
 
-// Spec: SYN-12
+// Spec: tandem.SYN-12
 #[tokio::test(flavor = "multi_thread")]
 async fn random_histories_converge_between_three_devices() {
     for seed in 100..115 {
@@ -510,6 +510,7 @@ async fn a_block_edited_on_both_devices_keeps_both_edits_as_revisions() {
     assert_eq!(revs, vec!["draft", "from the mac", "from the phone"]);
 }
 
+// Spec: tandem.SYN-2
 #[tokio::test]
 async fn edits_to_different_blocks_of_a_page_never_conflict() {
     let (a, b) = (device().await, device().await);
@@ -554,7 +555,7 @@ async fn deletes_reach_the_other_device_and_stay_deleted() {
     assert_eq!(n, 0);
 }
 
-// Spec: SYN-11
+// Spec: tandem.SYN-11
 #[tokio::test]
 async fn concurrent_edits_to_a_row_settle_on_the_later_one_everywhere() {
     let (a, b) = (device().await, device().await);
@@ -569,7 +570,7 @@ async fn concurrent_edits_to_a_row_settle_on_the_later_one_everywhere() {
     assert_eq!(content(&devices[0].pool, "m").await, "second");
 }
 
-// Spec: SYN-13
+// Spec: tandem.SYN-13
 #[tokio::test]
 async fn two_rows_that_collide_on_a_unique_column_end_up_as_the_lower_id() {
     let (a, b) = (device().await, device().await);

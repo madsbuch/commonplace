@@ -2,6 +2,13 @@
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Sync triggers",
   "summary": "Change tracking for sync lives in SQLite triggers kept in step with the schema.",
+  "deprecation": {
+    "reason": "Sync triggers are specified by the shared part Tandem, imported into this spec, with the same requirements.",
+    "replacedBy": [
+      "tandem/triggers"
+    ],
+    "date": "2026-11-23"
+  },
   "order": 1,
   "requirements": [
     {

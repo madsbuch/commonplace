@@ -8,10 +8,10 @@
 use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
 
-// Spec: SYN-18
-/// Days kept one per day: `sync.snapshot-daily` in the spec.
+// Spec: tandem.SYN-18
+/// Days kept one per day: `tandem.snapshot-daily` in the spec.
 pub const DAILY: i64 = 14;
-/// Beyond those, one per week back to this many days: `sync.snapshot-weekly`.
+/// Beyond those, one per week back to this many days: `tandem.snapshot-weekly`.
 pub const WEEKLY_UNTIL: i64 = 91;
 
 const PREFIX: &str = "book-";

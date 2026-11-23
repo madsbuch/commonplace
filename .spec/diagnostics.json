@@ -16,7 +16,10 @@
   "requirements": [
     {
       "id": "DIAG-1",
-      "text": "Each device keeps a log of what happened in the app on it: every failure, with its message, its details and what it came from; the work it did by itself (WORK-1), as it began, finished or failed and how long it took; and the screens it went through. The log keeps `diagnostics.kept`, and at most `diagnostics.most` entries; it stays on its device."
+      "text": "Each device keeps a log of what happened in the app on it: every failure, with its message, its details and what it came from; the work it did by itself (WORK-1), as it began, finished or failed and how long it took; and the screens it went through. The log keeps `diagnostics.kept`, and at most `diagnostics.most` entries; it stays on its device.",
+      "related": [
+        "#tandem.SYN-23"
+      ]
     },
     {
       "id": "DIAG-2",

@@ -6,7 +6,7 @@
 	     without this, macOS's Local Network privacy blocks it silently. -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Commonplace syncs your book with your other devices over your local network.</string>
-	<!-- Spec: SYN-5. The service the book's devices announce and look for (mDNS), as Murmur declares its own. -->
+	<!-- Spec: tandem.SYN-5. The service the book's devices announce and look for (mDNS), as Murmur declares its own. -->
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_commonplace._tcp</string>

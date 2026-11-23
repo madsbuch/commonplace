@@ -7,7 +7,10 @@
   "requirements": [
     {
       "id": "STO-1",
-      "text": "Each instance of the app stores all of its data in a single SQLite database."
+      "text": "Each instance of the app stores all of its data in a single SQLite database.",
+      "related": [
+        "#tandem.SYN-1"
+      ]
     }
   ]
 }

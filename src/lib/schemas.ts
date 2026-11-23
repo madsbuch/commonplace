@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+// Spec: keel.JSN-1, keel.JSN-2
+
 /**
  * The one sanctioned `JSON.parse`: always feed the result to a schema.
  * (eslint.config.js exempts this file from the ban.)
@@ -46,6 +48,7 @@ export function parseCommandFlag(raw: unknown): boolean {
 // ---------------------------------------------------------------------------
 // OpenRouter (AI): /chat/completions responses, streamed chunks, /models
 //
+// Spec: keel.JSN-3
 // Schemas for model/API output are forgiving: every field `.catch`es, so one
 // malformed part of a response never invalidates the rest of it, and missing
 // accounting never fails an answer that otherwise arrived fine.

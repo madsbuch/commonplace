@@ -13,7 +13,7 @@
 //!   first carrying the total length. A tampered or truncated stream is an
 //!   error, never a different message.
 
-// Spec: SYN-7
+// Spec: tandem.SYN-7
 use serde::{de::DeserializeOwned, Serialize};
 use snow::{Builder, HandshakeState, TransportState};
 use std::time::Duration;
@@ -21,7 +21,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /// A connection that closed before it began: another device trying every
 /// address at once lets go of the ones that lost, and a connection check
 /// only knocks. Not a failure.
@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(got.unwrap().unwrap_err(), "message failed authentication");
     }
 
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     #[tokio::test]
     async fn a_connection_let_go_before_it_began_is_told_apart() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

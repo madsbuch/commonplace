@@ -7,15 +7,38 @@
   "requirements": [
     {
       "id": "ENG-1",
-      "text": "The frontend is React and TypeScript in a Tauri 2 shell; SQLite runs in Rust and the frontend queries it through drizzle."
+      "text": "The frontend is React and TypeScript in a Tauri 2 shell; SQLite runs in Rust and the frontend queries it through drizzle.",
+      "deprecation": {
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
+        "replacedBy": [
+          "#keel.ENG-1"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "ENG-2",
-      "text": "`bun run build` typechecks `src/`, lints everything and bundles, and fails on any type or lint error."
+      "text": "`bun run build` typechecks `src/`, lints everything and bundles, and fails on any type or lint error.",
+      "deprecation": {
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
+        "replacedBy": [
+          "#keel.ENG-2"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "ENG-3",
-      "text": "`bun test` checks the spec: schema, unique ids, references, histories, and that every `Spec:` citation in the code names a requirement."
+      "text": "`bun test` checks the spec: schema, unique ids, references, histories, that every imported part is unchanged from where it was copied, and that every `Spec:` citation in the code names a requirement that holds here, not a waived one.",
+      "history": [
+        {
+          "version": 1,
+          "text": "`bun test` checks the spec: schema, unique ids, references, histories, and that every `Spec:` citation in the code names a requirement.",
+          "reason": "The spec imports shared parts: a copy that was edited, or code citing a requirement the product waived, is caught too.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "ENG-4",
@@ -30,13 +53,20 @@
     },
     {
       "id": "ENG-6",
-      "text": "Frontend packages are installed only once they have been published for `deps.minimum-age`."
+      "text": "Frontend packages are installed only once they have been published for `deps.minimum-age`.",
+      "deprecation": {
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
+        "replacedBy": [
+          "#keel.ENG-3"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "ENG-7",
       "text": "The macOS app is signed (ad hoc while there's no certificate), so macOS asks before letting it onto the local network instead of keeping it off without asking.",
       "related": [
-        "#SYN-24"
+        "#tandem.SYN-24"
       ]
     }
   ],
@@ -45,7 +75,17 @@
       "id": "deps.minimum-age",
       "type": "duration",
       "value": "14d",
-      "description": "How long a package version must have been published before it is installed."
+      "description": "How long a package version must have been published before it is installed.",
+      "deprecation": {
+        "reason": "The shared part Keel names this value; the app uses it as the part sets it.",
+        "replacedBy": [
+          "#keel.deps-minimum-age"
+        ],
+        "date": "2026-11-23"
+      }
     }
+  ],
+  "related": [
+    "keel"
   ]
 }

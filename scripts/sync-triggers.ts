@@ -12,7 +12,7 @@
 // after the column exists): the update trigger lists the columns it watches.
 // tests/sync-tracking.test.ts fails for any of these left undone.
 //
-// Spec: TRG-1, TRG-2, TRG-3, TRG-4
+// Spec: tandem.TRG-1, tandem.TRG-2, tandem.TRG-3, tandem.TRG-4
 // The SQL sticks to what Android 14's built-in SQLite (3.39) understands, so
 // the database stays readable by any SQLite an Android device might open it
 // with; tools/sqlite-android-compat checks it in CI.

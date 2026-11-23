@@ -1871,7 +1871,7 @@ a.settings-row:hover {
   }
 }
 
-/* Spec: SYN-9, SYN-21 — pairing */
+/* Spec: tandem.SYN-9, tandem.SYN-21 — pairing */
 .pairing-qr {
   /* Always black on white, whatever the theme: scanners want contrast. */
   background: #fff;
@@ -2542,7 +2542,7 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   font-size: 13px;
 }
 
-/* Spec: SYN-23 — checking the connection */
+/* Spec: tandem.SYN-23 — checking the connection */
 .sync-check-lines {
   list-style: none;
   margin: 10px 0 0;

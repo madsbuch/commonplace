@@ -65,7 +65,7 @@ export async function startSync(): Promise<void> {
   await invoke("sync_start");
 }
 
-// Spec: SYN-16
+// Spec: tandem.SYN-16
 /** Gives this database a new device id if it was written elsewhere. Before anything writes. */
 export async function checkInstance(): Promise<void> {
   await invoke("sync_check_instance");
@@ -79,11 +79,11 @@ export async function setDeviceName(name: string): Promise<void> {
   await invoke("sync_set_name", { name });
 }
 
-// Spec: SYN-9
-/** A pairing code for the QR, good for one device for `sync.pairing-lifetime`. */
+// Spec: tandem.SYN-9
+/** A pairing code for the QR, good for one device for `tandem.pairing-lifetime`. */
 export async function createPairingCode(): Promise<string> {
   const code = parseCommandString(await invoke("sync_offer"));
-  // Spec: SYN-25
+  // Spec: tandem.SYN-25
   // Announced nearby with the code's tag, so the device that scans it finds this one.
   void announceNearby();
   return code;
@@ -231,13 +231,13 @@ const CheckReportSchema = z.object({
 });
 export type CheckReport = z.infer<typeof CheckReportSchema>;
 
-// Spec: SYN-23
+// Spec: tandem.SYN-23
 /** Checks the connection to the book's devices (and the code last joined); a few seconds. */
 export async function checkConnection(): Promise<CheckReport> {
   return CheckReportSchema.parse(await invoke("sync_check"));
 }
 
-// Spec: SYN-24
+// Spec: tandem.SYN-24
 /** macOS's Local Network privacy settings, where the app is let onto the local network. */
 export const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
 

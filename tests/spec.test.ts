@@ -1,9 +1,11 @@
 // Checks the product spec in `.spec/` against the spec format
 // (https://github.com/madsbuch/better-github/blob/main/spec-llms.txt):
 // every item fits the schema, every reference resolves, versions carry
-// their history, no id is used twice, and every
-// `Spec: ID` citation in the code names a requirement the spec has.
+// their history, no id is used twice, every part imported from a shared
+// spec is the copy it was taken from, and every `Spec: ID` citation in the
+// code names a requirement that holds here.
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { z } from "zod";
@@ -97,6 +99,32 @@ const Item = z.strictObject({
     .array(z.strictObject({ src: z.string().min(1).regex(/^[^/]/), alt: z.string().optional(), caption: z.string().optional() }))
     .optional(),
   related: z.array(z.string().min(1)).optional(),
+  imports: z
+    .array(
+      z.strictObject({
+        id: z.string().regex(/^[a-z][a-z0-9-]{1,30}$/),
+        at: z.string().regex(/^[^/.](?:.*[^/])?$/),
+        from: z.string().min(1),
+        commit: z.string().regex(/^[0-9a-f]{40}$/),
+        tree: z.string().regex(/^[0-9a-f]{40}$/),
+        order: z.number().optional(),
+        values: z
+          .array(
+            z.strictObject({
+              id: z.string().min(1),
+              value: z.union([z.string(), z.number(), z.array(z.string())]),
+              dark: z.string().optional(),
+              reason: z.string().min(1),
+            }),
+          )
+          .optional(),
+        waived: z.array(z.strictObject({ ref: z.string().min(1), reason: z.string().min(1) })).optional(),
+      }),
+    )
+    .optional(),
+  shared: z
+    .strictObject({ id: z.string().regex(/^[a-z][a-z0-9-]{1,30}$/), logo: z.string().min(1).regex(/^[^/]/).optional() })
+    .optional(),
 });
 type Item = z.infer<typeof Item>;
 
@@ -151,6 +179,45 @@ function resolves(ref: string): boolean {
   return idSet.has(bare);
 }
 
+/** Git's id for a folder as it is on disk: what `git rev-parse <commit>:<folder>` gives when it's unchanged. */
+function gitTree(dir: string): string {
+  const entries = readdirSync(dir).map((name) => {
+    const path = join(dir, name);
+    const stat = statSync(path);
+    if (stat.isDirectory()) return { name, sortKey: `${name}/`, mode: "40000", id: gitTree(path) };
+    const bytes = readFileSync(path);
+    const blob = createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
+    return { name, sortKey: name, mode: (stat.mode & 0o111) !== 0 ? "100755" : "100644", id: blob };
+  });
+  // Git orders entries bytewise, a folder as if its name ended in "/".
+  entries.sort((a, b) => Buffer.compare(Buffer.from(a.sortKey), Buffer.from(b.sortKey)));
+  const body = Buffer.concat(
+    entries.flatMap((e) => [Buffer.from(`${e.mode} ${e.name}\0`), Buffer.from(e.id, "hex")]),
+  );
+  return createHash("sha1").update(`tree ${body.length}\0`).update(body).digest("hex");
+}
+
+const imports = items.get("")?.imports ?? [];
+/** The items of an imported part: its folder's index and everything under it. */
+function partItems(at: string): [string, Item][] {
+  return [...items].filter(([id]) => id === at || id.startsWith(`${at}/`));
+}
+
+/** Requirements the code may not cite: deprecated ones, those in deprecated items, and those an import waives. */
+const notHeld = new Set<string>();
+for (const [id, item] of items) {
+  for (const r of item.requirements ?? []) {
+    const inDeprecated = [...items].some(([other, o]) => o.deprecation && (id === other || id.startsWith(`${other}/`)) && other !== "");
+    if (r.deprecation || inDeprecated) notHeld.add(r.id);
+  }
+}
+for (const imp of imports) {
+  for (const w of imp.waived ?? []) {
+    if (w.ref.startsWith("#")) notHeld.add(w.ref.slice(1).replace(/@\d+$/, ""));
+    else for (const [, item] of partItems(w.ref)) for (const r of item.requirements ?? []) notHeld.add(r.id);
+  }
+}
+
 // Spec: ENG-3
 describe("spec", () => {
   test("every item fits the schema", () => {
@@ -201,7 +268,54 @@ describe("spec", () => {
     expect(bad).toEqual([]);
   });
 
-  test("code cites only requirements the spec has", () => {
+  test("imports and shared parts are where the root says", () => {
+    const bad: string[] = [];
+    for (const [id, item] of items) {
+      if (id !== "" && item.imports) bad.push(`${id}: imports belong on the root item`);
+      if (item.shared && (id === "" || id.includes("/"))) bad.push(`${id || "(root)"}: a shared part is a top-level folder`);
+      if (item.shared?.logo !== undefined && !existsSync(join(SPEC, item.shared.logo))) bad.push(`${id} logo ${item.shared.logo}`);
+    }
+    const ats = imports.map((imp) => imp.at);
+    if (new Set(ats).size !== ats.length) bad.push(`a folder is imported twice: ${ats.join(", ")}`);
+    for (const imp of imports) {
+      const where = `import ${imp.id} at ${imp.at}`;
+      if (items.get(imp.at)?.shared?.id !== imp.id) bad.push(`${where}: its index.json isn't the shared part ${imp.id}`);
+      const part = partItems(imp.at);
+      const ids = part.flatMap(([, item]) => [
+        ...(item.stories ?? []),
+        ...(item.requirements ?? []),
+        ...(item.values ?? []),
+      ]);
+      for (const x of ids) if (!x.id.startsWith(`${imp.id}.`)) bad.push(`${where}: ${x.id} lacks the part's prefix`);
+      const valueIds = new Set(part.flatMap(([, item]) => (item.values ?? []).map((v) => v.id)));
+      for (const v of imp.values ?? []) if (!valueIds.has(v.id)) bad.push(`${where}: values ${v.id} isn't one of its values`);
+      const partIds = new Set(ids.filter((x) => !("type" in x)).map((x) => x.id));
+      for (const w of imp.waived ?? []) {
+        const ok = w.ref.startsWith("#")
+          ? partIds.has(w.ref.slice(1).replace(/@\d+$/, ""))
+          : partItems(w.ref).length > 0 && (w.ref === imp.at || w.ref.startsWith(`${imp.at}/`));
+        if (!ok) bad.push(`${where}: waived ${w.ref} isn't a requirement, story or item of it`);
+      }
+    }
+    // A shared part's ids are its own: the product's entries never take its prefix.
+    for (const [id, item] of items) {
+      if (imports.some((imp) => id === imp.at || id.startsWith(`${imp.at}/`))) continue;
+      for (const x of [...(item.stories ?? []), ...(item.requirements ?? []), ...(item.values ?? [])]) {
+        const prefixed = imports.find((imp) => x.id.startsWith(`${imp.id}.`));
+        if (prefixed) bad.push(`${id || "(root)"} ${x.id} uses the prefix of the shared part ${prefixed.id}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  test("every imported part is the copy it was taken from", () => {
+    const changed = imports
+      .filter((imp) => !existsSync(join(SPEC, imp.at)) || gitTree(join(SPEC, imp.at)) !== imp.tree)
+      .map((imp) => `${imp.at} differs from ${imp.from} at ${imp.commit}: change it there and import it again`);
+    expect(changed).toEqual([]);
+  });
+
+  test("code cites only requirements that hold here", () => {
     const sources = [join(ROOT, "src"), join(ROOT, "src-tauri"), join(ROOT, "tests"), join(ROOT, "scripts")];
     const bad: string[] = [];
     for (const dir of sources) {
@@ -209,6 +323,7 @@ describe("spec", () => {
         for (const m of readFileSync(path, "utf8").matchAll(/^\s*(?:\/\/|\*|#)\s*Spec:\s*(.+)$/gm)) {
           for (const ref of (m[1] ?? "").split(",").map((s) => s.trim().replace(/@\d+$/, ""))) {
             if (!requirementIds.has(ref)) bad.push(`${relative(ROOT, path)}: ${ref}`);
+            else if (notHeld.has(ref)) bad.push(`${relative(ROOT, path)}: ${ref} is deprecated or waived`);
           }
         }
       }

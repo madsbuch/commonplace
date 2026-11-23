@@ -3,7 +3,7 @@
 //! opens the database itself — there's no app around to borrow a connection
 //! from — and syncs with whichever devices of the book answer.
 
-// Spec: SYN-17
+// Spec: tandem.SYN-17
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::time::Duration;
 
@@ -55,6 +55,7 @@ pub async fn run_once(db_path: &str, budget: Duration) -> String {
 // function by its exact symbol name, which takes `#[no_mangle]` — an unsafe
 // attribute, since two libraries exporting one name would clash. The name is
 // JNI's, unique to this class.
+// Spec: keel.TYP-5
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)]
 #[no_mangle]
