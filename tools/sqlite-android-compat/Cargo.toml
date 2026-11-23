@@ -8,5 +8,5 @@ rusqlite = { version = "0.28", features = ["bundled"] }
 
 [lints.rust]
 # No unsafe Rust; see CLAUDE.md.
-# Spec: engineering-rules.TYP-5
+# Spec: keel.TYP-5
 unsafe_code = "forbid"

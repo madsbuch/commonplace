@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-// Spec: engineering-rules.JSN-1, engineering-rules.JSN-2
+// Spec: keel.JSN-1, keel.JSN-2
 
 /**
  * The one sanctioned `JSON.parse`: always feed the result to a schema.
@@ -48,7 +48,7 @@ export function parseCommandFlag(raw: unknown): boolean {
 // ---------------------------------------------------------------------------
 // OpenRouter (AI): /chat/completions responses, streamed chunks, /models
 //
-// Spec: engineering-rules.JSN-3
+// Spec: keel.JSN-3
 // Schemas for model/API output are forgiving: every field `.catch`es, so one
 // malformed part of a response never invalidates the rest of it, and missing
 // accounting never fails an answer that otherwise arrived fine.

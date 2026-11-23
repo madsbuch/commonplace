@@ -9,9 +9,9 @@
       "id": "ENG-1",
       "text": "The frontend is React and TypeScript in a Tauri 2 shell; SQLite runs in Rust and the frontend queries it through drizzle.",
       "deprecation": {
-        "reason": "Engineering rules are specified by the shared part Engineering rules, imported into this spec, whose requirement promises the same.",
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
         "replacedBy": [
-          "#engineering-rules.ENG-1"
+          "#keel.ENG-1"
         ],
         "date": "2026-11-23"
       }
@@ -20,9 +20,9 @@
       "id": "ENG-2",
       "text": "`bun run build` typechecks `src/`, lints everything and bundles, and fails on any type or lint error.",
       "deprecation": {
-        "reason": "Engineering rules are specified by the shared part Engineering rules, imported into this spec, whose requirement promises the same.",
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
         "replacedBy": [
-          "#engineering-rules.ENG-2"
+          "#keel.ENG-2"
         ],
         "date": "2026-11-23"
       }
@@ -55,9 +55,9 @@
       "id": "ENG-6",
       "text": "Frontend packages are installed only once they have been published for `deps.minimum-age`.",
       "deprecation": {
-        "reason": "Engineering rules are specified by the shared part Engineering rules, imported into this spec, whose requirement promises the same.",
+        "reason": "Engineering rules are specified by the shared part Keel, imported into this spec, whose requirement promises the same.",
         "replacedBy": [
-          "#engineering-rules.ENG-3"
+          "#keel.ENG-3"
         ],
         "date": "2026-11-23"
       }
@@ -77,15 +77,15 @@
       "value": "14d",
       "description": "How long a package version must have been published before it is installed.",
       "deprecation": {
-        "reason": "The shared part Engineering rules names this value; the app uses it as the part sets it.",
+        "reason": "The shared part Keel names this value; the app uses it as the part sets it.",
         "replacedBy": [
-          "#engineering-rules.deps-minimum-age"
+          "#keel.deps-minimum-age"
         ],
         "date": "2026-11-23"
       }
     }
   ],
   "related": [
-    "engineering-rules"
+    "keel"
   ]
 }

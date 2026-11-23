@@ -35,11 +35,11 @@
       "tree": "ef45a0a59dfe1638f9a255ea3040fd5392fb6a70"
     },
     {
-      "id": "engineering-rules",
-      "at": "engineering-rules",
+      "id": "keel",
+      "at": "keel",
       "from": "madsbuch/spec-repo",
-      "commit": "48f69d4f71fcdf2533c3a40f578030b270597836",
-      "tree": "54bfd50d7c3c800660958fd4f64ea6f2506df643"
+      "commit": "ce91d3a805fa94f329fba96d246d2680fa61cc4c",
+      "tree": "3bf87eec1a1b970ebfe23588af8cc242b609af3b"
     }
   ]
 }

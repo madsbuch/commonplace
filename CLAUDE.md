@@ -40,8 +40,8 @@ before editing the spec).
   link to the part's with `related`. The product's own `SYN-` and `TRG-`
   requirements that Tandem took over are deprecated in its favour; `SYN-14`
   and `SYN-20` (revisions, chats) are the book's own.
-- The engineering rules are the shared part Engineering rules
-  (`.spec/engineering-rules`, ids `engineering-rules.ENG-`, `.TYP-`, `.JSN-`),
+- The engineering rules are the shared part Keel (`.spec/keel`, ids
+  `keel.ENG-`, `keel.TYP-`, `keel.JSN-`, value `keel.deps-minimum-age`),
   imported the same way: the stack, the build, the package age, type safety
   and the JSON boundary (the two sections below). The product's own `ENG-1`,
   `ENG-2` and `ENG-6` are deprecated in its favour; the rest of `ENG-` is the
@@ -57,7 +57,7 @@ before editing the spec).
 
 ## JSON boundary rule
 
-(`engineering-rules.JSN-*`)
+(`keel.JSN-*`)
 
 All untrusted JSON (SQLite JSON columns, model output, OpenRouter responses,
 settings blobs) is parsed through a zod schema in `src/lib/schemas.ts`.
@@ -73,7 +73,7 @@ settings blobs) is parsed through a zod schema in `src/lib/schemas.ts`.
 
 ## No casts, no `!`, no `any`, no unsafe
 
-(`engineering-rules.TYP-*`)
+(`keel.TYP-*`)
 
 ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
 `eslint-disable` comment can't switch them off (only
@@ -579,7 +579,7 @@ Book content leaves the device only that way.
 - `bun run tauri icon app-icon.png`: regenerate icons from `app-icon.png`
 
 Dependencies install only once published for two weeks (`bunfig.toml`,
-`engineering-rules.deps-minimum-age`).
+`keel.deps-minimum-age`).
 
 ## CI
 

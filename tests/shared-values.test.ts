@@ -1,5 +1,5 @@
 // Constants in the code follow the named values of the shared parts the
-// spec imports (`.spec/tandem`, `.spec/engineering-rules`), as the app sets
+// spec imports (`.spec/tandem`, `.spec/keel`), as the app sets
 // them: the part's own value, or the one in the import's `values` when the
 // app sets it differently.
 import { describe, expect, test } from "bun:test";
@@ -85,12 +85,12 @@ describe("Tandem's named values in the sync code", () => {
   });
 });
 
-describe("Engineering rules' named values in the build", () => {
-  // Spec: engineering-rules.ENG-3
-  test("packages install only once published for engineering-rules.deps-minimum-age", () => {
+describe("Keel's named values in the build", () => {
+  // Spec: keel.ENG-3
+  test("packages install only once published for keel.deps-minimum-age", () => {
     const m = /^minimumReleaseAge = (\d+)$/m.exec(readFileSync(join(ROOT, "bunfig.toml"), "utf8"));
     if (m?.[1] === undefined) throw new Error("bunfig.toml sets no minimumReleaseAge");
-    const age = sharedValue("engineering-rules", "index.json", "engineering-rules.deps-minimum-age");
+    const age = sharedValue("keel", "index.json", "keel.deps-minimum-age");
     expect(Number(m[1])).toBe(seconds(age));
   });
 });
