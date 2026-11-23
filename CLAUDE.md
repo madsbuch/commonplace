@@ -40,15 +40,24 @@ before editing the spec).
   link to the part's with `related`. The product's own `SYN-` and `TRG-`
   requirements that Tandem took over are deprecated in its favour; `SYN-14`
   and `SYN-20` (revisions, chats) are the book's own.
-  `tests/tandem-values.test.ts` holds the sync constants (`PAIRING_TTL`,
-  snapshots' `DAILY` and `WEEKLY_UNTIL`) to Tandem's values as the book sets
-  them (an override in the import's `values` wins).
+- The engineering rules are the shared part Keel (`.spec/keel`, ids
+  `keel.ENG-`, `keel.TYP-`, `keel.JSN-`, value `keel.deps-minimum-age`),
+  imported the same way: the stack, the build, the package age, type safety
+  and the JSON boundary (the two sections below). The product's own `ENG-1`,
+  `ENG-2` and `ENG-6` are deprecated in its favour; the rest of `ENG-` is the
+  product's own.
+- `tests/shared-values.test.ts` holds constants to the shared parts' values
+  as the app sets them (an override in the import's `values` wins): sync's
+  `PAIRING_TTL`, snapshots' `DAILY` and `WEEKLY_UNTIL`, and bunfig's
+  `minimumReleaseAge`.
 - `tests/spec.test.ts` (part of `bun test`) checks the spec: schema, unique
   ids, references, histories, that every imported part is unchanged (git's
   tree id of its folder, as `tree` records), and that every `Spec:` citation
   names a requirement that holds.
 
 ## JSON boundary rule
+
+(`keel.JSN-*`)
 
 All untrusted JSON (SQLite JSON columns, model output, OpenRouter responses,
 settings blobs) is parsed through a zod schema in `src/lib/schemas.ts`.
@@ -63,6 +72,8 @@ settings blobs) is parsed through a zod schema in `src/lib/schemas.ts`.
   strict, so corruption surfaces.
 
 ## No casts, no `!`, no `any`, no unsafe
+
+(`keel.TYP-*`)
 
 ESLint holds all TypeScript (`src/`, `tests/`, `scripts/`) to these, and an
 `eslint-disable` comment can't switch them off (only
@@ -567,7 +578,8 @@ Book content leaves the device only that way.
   `fake-tauri.ts`, injected by `fake-tauri-init.js`)
 - `bun run tauri icon app-icon.png`: regenerate icons from `app-icon.png`
 
-Dependencies install only once published for two weeks (`bunfig.toml`).
+Dependencies install only once published for two weeks (`bunfig.toml`,
+`keel.deps-minimum-age`).
 
 ## CI
 
