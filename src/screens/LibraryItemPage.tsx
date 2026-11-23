@@ -4,6 +4,7 @@ import { pageOfFragment } from "../lib/address";
 import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
+import { MoreMenu } from "../components/MoreMenu";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
@@ -123,7 +124,6 @@ export default function LibraryItemPage() {
   const version = useTablesVersion(LIBRARY_TABLES);
   const [item, setItem] = useState<LibraryItem | null | "missing">(null);
   const [fileHere, setFileHere] = useState<boolean | null>(null);
-  const [confirm, setConfirm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showContents, setShowContents] = useState(contentsWanted);
   const [page, setPage] = useState(1);
@@ -193,6 +193,18 @@ export default function LibraryItemPage() {
           <button type="button" aria-pressed={showDetails} onClick={() => setShowDetails((s) => !s)}>
             Details
           </button>
+          {/* Spec: LIB-8, APP-12 */}
+          <MoreMenu
+            label="More for this item"
+            actions={[
+              {
+                label: "Remove from the library",
+                confirm: "Really remove it?",
+                danger: true,
+                onClick: () => void removeItem(id).then(() => navigate("/library", { replace: true })),
+              },
+            ]}
+          />
         </div>
       </div>
       <div className="item-head">
@@ -209,16 +221,6 @@ export default function LibraryItemPage() {
             <button type="button" onClick={() => void readDetails(item.id)}>
               Read details again
             </button>
-            {/* Spec: LIB-8 */}
-            {confirm ? (
-              <button type="button" className="danger" onClick={() => void removeItem(id).then(() => navigate("/library", { replace: true }))}>
-                Really remove from the library?
-              </button>
-            ) : (
-              <button type="button" className="details-remove" onClick={() => setConfirm(true)}>
-                Remove from the library
-              </button>
-            )}
           </div>
         </>
       ) : null}

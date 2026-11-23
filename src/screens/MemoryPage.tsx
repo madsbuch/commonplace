@@ -30,8 +30,9 @@ function Entry(props: { entry: MemoryEntry }) {
           </option>
         ))}
       </select>
-      <button type="button" onClick={() => void deleteMemory(props.entry.id)}>
-        Delete
+      {/* Spec: APP-12 — only while the entry is being edited. */}
+      <button type="button" className="memory-forget" onClick={() => void deleteMemory(props.entry.id)}>
+        Forget
       </button>
     </li>
   );

@@ -62,6 +62,10 @@
       "related": [
         "#APP-10"
       ]
+    },
+    {
+      "id": "APP-12",
+      "text": "Lists offer no deleting: a thing is deleted from its own screen, behind its menu (⋯), and asks first."
     }
   ],
   "values": [

@@ -351,8 +351,10 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.locator(".library-details select").selectOption("book");
     await page.waitForTimeout(500);
     check("the author can change an item's details", (await q(`SELECT kind FROM library_items WHERE id = '${second}'`))[0]?.kind === "book");
-    await page.getByRole("button", { name: "Remove from the library" }).click();
-    await page.getByRole("button", { name: "Really remove from the library?" }).click();
+    // Spec: APP-12
+    await page.getByRole("button", { name: "More for this item" }).click();
+    await page.getByRole("menuitem", { name: "Remove from the library" }).click();
+    await page.getByRole("menuitem", { name: "Really remove it?" }).click();
     await page.waitForURL(/\/library$/);
     const left = await q(`SELECT (SELECT count(*) FROM library_items WHERE id = '${second}') AS items, (SELECT count(*) FROM library_files WHERE item_id = '${second}') AS files, (SELECT count(*) FROM authorships WHERE item_id = '${second}') AS ships`);
     check("removing an item removes its PDF and its authorships", left[0].items === 0 && left[0].files === 0 && left[0].ships === 0, JSON.stringify(left));
@@ -463,11 +465,16 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1500);
     check("retrying answers the question", (await page.locator(".chat-screen").innerText()).includes("Second time lucky."));
 
-    // Spec: CHAT-1
+    // Spec: CHAT-1, APP-12
     await page.goto(APP + "/chats");
     await page.waitForTimeout(600);
-    await page.locator(".chat-row").first().getByRole("button", { name: "Delete" }).click();
-    await page.getByRole("button", { name: "Really delete?" }).click();
+    check("the chats list offers no deleting", (await page.locator(".library-list button").count()) === 0);
+    await page.locator(".chat-row a").first().click();
+    await page.waitForURL(/\/chats\/chat_/);
+    await page.getByRole("button", { name: "More for this chat" }).click();
+    await page.getByRole("menuitem", { name: "Delete chat" }).click();
+    await page.getByRole("menuitem", { name: "Really delete this chat?" }).click();
+    await page.waitForURL(/\/chats$/);
     await page.waitForTimeout(600);
     check("a chat can be deleted, and the memory stays", (await q("SELECT count(*) AS n FROM chats"))[0].n === 1 && (await q("SELECT count(*) AS n FROM assistant_memory"))[0].n === 1);
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageEditor } from "../components/PageEditor";
+import { MoreMenu } from "../components/MoreMenu";
 import { PagePicker } from "../components/PagePicker";
 import { createPage, deletePage, loadPage, movePage, renamePage, type LoadedPage } from "../lib/book";
 import { toggleDock, useDockOpen } from "../lib/dock";
@@ -70,13 +71,11 @@ export default function PagePage() {
   const [loaded, setLoaded] = useState<LoadedPage | null | "missing">(null);
   const assistant = useDockOpen();
   const [moving, setMoving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const title = index.titles.get(id) ?? (loaded && loaded !== "missing" ? loaded.title : UNTITLED);
 
   useEffect(() => {
     let live = true;
     setLoaded(null);
-    setConfirmDelete(false);
     void loadPage(id).then((p) => {
       if (live) setLoaded(p ?? "missing");
     });
@@ -127,27 +126,23 @@ export default function PagePage() {
             >
               New subpage
             </button>
-            <button type="button" onClick={() => setMoving(true)}>
-              Move
-            </button>
-            {confirmDelete ? (
-              <button
-                type="button"
-                className="danger"
-                onClick={() =>
-                  void deletePage(id).then(() => {
-                    const parent = index.parents.get(id);
-                    void navigate(parent ? pagePath(parent) : "/", { replace: true });
-                  })
-                }
-              >
-                Really delete?
-              </button>
-            ) : (
-              <button type="button" onClick={() => setConfirmDelete(true)}>
-                Delete
-              </button>
-            )}
+            {/* Spec: APP-12 */}
+            <MoreMenu
+              label="More for this page"
+              actions={[
+                { label: "Move…", onClick: () => setMoving(true) },
+                {
+                  label: "Delete page",
+                  confirm: "Really delete this page?",
+                  danger: true,
+                  onClick: () =>
+                    void deletePage(id).then(() => {
+                      const parent = index.parents.get(id);
+                      void navigate(parent ? pagePath(parent) : "/", { replace: true });
+                    }),
+                },
+              ]}
+            />
           </div>
         </div>
         {loaded === null ? null : (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CHAT_TABLES, listChats, type ChatSummary } from "../lib/chats";
-import { newChat, removeChat } from "../lib/assistantRunner";
+import { newChat } from "../lib/assistantRunner";
 import { useTablesVersion } from "../lib/live";
 
 function when(iso: string): string {
@@ -9,12 +9,11 @@ function when(iso: string): string {
 }
 
 // Spec: CHAT-1
-/** Every chat, newest first: open one, start one, delete one. */
+/** Every chat, newest first: open one, or start one. A chat is deleted from its own menu (APP-12). */
 export default function ChatsPage() {
   const version = useTablesVersion(CHAT_TABLES);
   const navigate = useNavigate();
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
-  const [confirm, setConfirm] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
     void listChats().then((c) => {
@@ -46,15 +45,6 @@ export default function ChatsPage() {
               <span className="library-title">{c.title}</span>
               <span className="library-meta muted">{when(c.updatedAt)}</span>
             </Link>
-            {confirm === c.id ? (
-              <button type="button" className="danger" onClick={() => void removeChat(c.id).then(() => setConfirm(null))}>
-                Really delete?
-              </button>
-            ) : (
-              <button type="button" onClick={() => setConfirm(c.id)}>
-                Delete
-              </button>
-            )}
           </li>
         ))}
       </ul>

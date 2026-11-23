@@ -2144,3 +2144,37 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   font-size: 12px;
   white-space: pre-wrap;
 }
+
+/* Spec: APP-12 — a thing's own menu */
+.more-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+}
+.more-button:hover,
+.more-button[aria-expanded="true"] {
+  color: var(--fg);
+  border-color: var(--line);
+}
+.library-item-bar .more-button {
+  margin-left: auto;
+}
+.library-item-bar .library-item-title {
+  flex: 1;
+  min-width: 0;
+}
+/* Forgetting a memory entry shows only while it's being edited. */
+.memory-forget {
+  display: none;
+}
+.memory-entry:focus-within .memory-forget {
+  display: inline-block;
+}

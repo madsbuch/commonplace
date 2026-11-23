@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { createPortal } from "react-dom";
 import { InfoButton } from "../components/InfoButton";
+import { MoreMenu } from "../components/MoreMenu";
 import { Alert, Button, Group, Loader, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
 import {
   PAIRING_PREFIX,
@@ -147,9 +148,8 @@ function DeviceRow({ d, onRemove }: { d: SyncDevice; onRemove: (d: SyncDevice) =
             : "Not synced yet"}
         </Text>
       </div>
-      <Button variant="subtle" size="xs" color="red" onClick={() => onRemove(d)}>
-        Remove
-      </Button>
+      {/* Spec: APP-12 */}
+      <MoreMenu label={`More for ${d.name}`} actions={[{ label: "Remove from the book", danger: true, onClick: () => onRemove(d) }]} />
     </Group>
   );
 }
