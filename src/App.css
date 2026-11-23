@@ -2541,3 +2541,27 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
 .record-voice {
   font-size: 13px;
 }
+
+/* Spec: SYN-23 — checking the connection */
+.sync-check-lines {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+.sync-check-lines li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.sync-check-lines li span {
+  display: inline-block;
+  width: 1.2em;
+  color: var(--muted);
+}
+.sync-check-lines li.good span {
+  color: var(--lean-ok);
+}
+.sync-check-lines li.bad,
+.sync-check-lines li.bad span {
+  color: var(--lean-error);
+}

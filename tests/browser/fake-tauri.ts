@@ -338,6 +338,25 @@ if (import.meta.main) {
           const body = Buffer.from(Array.from({ length: 230 }, (_, i) => (i * 97 + 13) % 256)).toString("base64url");
           return Response.json({ ok: `mybook-pair:1:${body}` }, { headers: cors });
         }
+        // Spec: SYN-23
+        // As a Mac the system keeps off the local network finds it.
+        if (cmd === "sync_check") {
+          return Response.json(
+            {
+              ok: {
+                verdict:
+                  "macOS is keeping Commonplace off the local network. Open System Settings → Privacy & Security → Local Network and turn Commonplace on, then try again.",
+                fix: "local-network",
+                lines: [
+                  { ok: true, text: "This device is on the local network as 192.168.1.20/24 (en0)." },
+                  { ok: true, text: "Sync listens on TCP port 47832; devices search on UDP port 47831." },
+                  { ok: false, text: "Phone at 192.168.1.44:47832: No route to host (os error 65) after 2 ms, sent from 192.168.1.20 (en0)" },
+                ],
+              },
+            },
+            { headers: cors },
+          );
+        }
         if (cmd === "sync_join") {
           joins.push({ code: String(args["code"]), replace: args["replace"] === true });
           const outcome = { peer_id: "dev_other", peer_name: "The other device", received: { applied: 0, conflicts: 0, unique_merges: 0 }, complete: true, differences: [] };

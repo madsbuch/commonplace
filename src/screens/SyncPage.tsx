@@ -6,10 +6,14 @@ import { createPortal } from "react-dom";
 import { InfoButton } from "../components/InfoButton";
 import { MoreMenu } from "../components/MoreMenu";
 import { Alert, Button, Group, Loader, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  LOCAL_NETWORK_SETTINGS,
   PAIRING_PREFIX,
   ago,
+  blockedByLocalNetwork,
   cancelPairing,
+  checkConnection,
   copyLine,
   copyState,
   createPairingCode,
@@ -22,7 +26,7 @@ import {
   setDeviceName,
   syncNow,
 } from "../lib/sync";
-import type { SyncDevice, SyncStatus } from "../lib/sync";
+import type { CheckReport, SyncDevice, SyncStatus } from "../lib/sync";
 import { useNotedProblem } from "../lib/diagnostics";
 
 function errMsg(e: unknown): string {
@@ -184,6 +188,19 @@ export default function SyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   // Spec: DIAG-1
   const [error, setError] = useNotedProblem("sync");
+  // Spec: SYN-23
+  const [check, setCheck] = useState<CheckReport | null>(null);
+  const [checking, setChecking] = useState(false);
+  const checkRef = useRef<HTMLDivElement>(null);
+  const runCheck = useCallback(() => {
+    setChecking(true);
+    checkRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    void checkConnection()
+      .then(setCheck)
+      .catch((e: unknown) => setCheck({ verdict: `The check couldn't run: ${errMsg(e)}`, fix: null, lines: [] }))
+      .finally(() => setChecking(false));
+  }, []);
+  const openLocalNetwork = () => void openUrl(LOCAL_NETWORK_SETTINGS).catch((e: unknown) => setError(`Couldn't open System Settings (${errMsg(e)}).`));
   const [name, setName] = useState("");
   const [code, setCode] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
@@ -361,6 +378,17 @@ export default function SyncPage() {
       {error && (
         <Alert color="red" variant="light" mb="md" withCloseButton onClose={() => setError(null)}>
           {error}
+          {/* Spec: SYN-23, SYN-24 */}
+          <Group gap="xs" mt="sm">
+            {blockedByLocalNetwork(error) ? (
+              <Button size="xs" onClick={openLocalNetwork}>
+                Open Local Network settings
+              </Button>
+            ) : null}
+            <Button size="xs" variant="default" onClick={runCheck} loading={checking}>
+              Check the connection
+            </Button>
+          </Group>
         </Alert>
       )}
 
@@ -514,6 +542,37 @@ export default function SyncPage() {
                 </Group>
               </>
             )}
+          </Paper>
+
+          {/* Spec: SYN-23 */}
+          <Paper withBorder p="md" radius="md" ref={checkRef} className="sync-check">
+            <Group justify="space-between" align="center" mb={check ? "sm" : 0}>
+              <Title order={3} size="h4">
+                Connection
+              </Title>
+              <Button size="sm" variant="default" onClick={runCheck} loading={checking}>
+                Check the connection
+              </Button>
+            </Group>
+            {check ? (
+              <>
+                <Text fw={600} className="sync-check-verdict">
+                  {check.verdict}
+                </Text>
+                {check.fix === "local-network" ? (
+                  <Button size="sm" mt="sm" onClick={openLocalNetwork}>
+                    Open Local Network settings
+                  </Button>
+                ) : null}
+                <ul className="sync-check-lines">
+                  {check.lines.map((l, i) => (
+                    <li key={i} className={l.ok === false ? "bad" : l.ok ? "good" : ""}>
+                      <span aria-hidden>{l.ok === false ? "✗" : l.ok ? "✓" : "·"}</span> {l.text}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </Paper>
 
           {status.lastRoundAt && (

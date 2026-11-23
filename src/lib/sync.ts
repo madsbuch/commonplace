@@ -207,3 +207,30 @@ export function copyLine(state: CopyState, now: number = Date.now()): string {
 export function isAndroid(): boolean {
   return navigator.userAgent.includes("Android");
 }
+
+// ---------------------------------------------------------------------------
+// Checking the connection
+// ---------------------------------------------------------------------------
+
+const CheckReportSchema = z.object({
+  verdict: z.string(),
+  /** A setting that would fix it: "local-network" (macOS's Local Network privacy). */
+  fix: z.string().nullable(),
+  lines: z.array(z.object({ ok: z.boolean().nullable(), text: z.string() })),
+});
+export type CheckReport = z.infer<typeof CheckReportSchema>;
+
+// Spec: SYN-23
+/** Checks the connection to the book's devices (and the code last joined); a few seconds. */
+export async function checkConnection(): Promise<CheckReport> {
+  return CheckReportSchema.parse(await invoke("sync_check"));
+}
+
+// Spec: SYN-24
+/** macOS's Local Network privacy settings, where the app is let onto the local network. */
+export const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
+
+/** Whether a sync error says macOS keeps the app off the local network. */
+export function blockedByLocalNetwork(error: string): boolean {
+  return error.includes("Privacy & Security → Local Network");
+}

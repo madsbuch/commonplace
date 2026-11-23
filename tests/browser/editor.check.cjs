@@ -536,6 +536,13 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const joins = await (await fetch(`${FAKE}/fake-joins`)).json();
     check("and then joins, replacing what it held", joins.length === 1 && joins[0].replace === true && joins[0].code === decoded, JSON.stringify(joins).slice(0, 80));
 
+    // Spec: SYN-23, SYN-24
+    await page.locator(".sync-check").getByRole("button", { name: "Check the connection" }).click();
+    await page.locator(".sync-check-verdict").waitFor({ timeout: 5000 });
+    const checked = await page.locator(".sync-check").innerText();
+    check("checking the connection says what's in the way, and why", checked.includes("macOS is keeping Commonplace off the local network") && checked.includes("No route to host"), checked.slice(0, 300));
+    check("and leads to the setting that allows it", await page.locator(".sync-check").getByRole("button", { name: "Open Local Network settings" }).isVisible());
+
     // Spec: APP-10, APP-11, LIB-22
     await page.goto(`${APP}/library/${tocItem.id}#page=3`);
     await page.waitForTimeout(2500);

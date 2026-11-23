@@ -116,6 +116,20 @@ The book syncs peer to peer over the local network, as Tally does
   `replace` (a backup first). `src-tauri/Info.plist` gives macOS the local
   network and camera descriptions; without the first, macOS blocks sync
   silently.
+- Checking the connection (SYN-23, SYN-24; `src-tauri/src/sync/check.rs`,
+  the Connection card on Settings → Sync): this device's networks, whether
+  sync listens, which of the book's devices answer the search, and a timed
+  connection to each device with an address (the book's, and the code last
+  joined, kept by the service). "No route to host" is told apart by how soon
+  it comes: macOS refuses at once (under 150 ms) when its Local Network
+  privacy keeps the app off the network (Apple's TN3179), while a device
+  that doesn't answer fails after seconds; a refusal means the app isn't
+  open there, and the route (`route_from`) shows another network or a VPN.
+  Join and sync errors carry the same meaning (`check::connect`), and one
+  about Local Network offers System Settings
+  (`x-apple.systempreferences:…`, allowed in the opener's scope). Each check
+  is noted in the diagnostics. macOS ties the permission to the build, so
+  an unsigned new version can need it turned on again.
 
 ## The book: pages and blocks
 

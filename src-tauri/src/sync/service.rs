@@ -48,6 +48,8 @@ pub struct SyncService {
     activity: Mutex<Activity>,
     /// (book tag, device id) for answering discovery without the database.
     discovery_state: Arc<Mutex<Option<(String, String)>>>,
+    /// The device and addresses of the code last joined, for the connection check.
+    last_join: Mutex<Option<(String, Vec<String>)>>,
 }
 
 use super::now_iso;
@@ -189,6 +191,28 @@ impl SyncService {
         });
     }
 
+    // Spec: SYN-23, DIAG-1
+    /// Checks the connection, and notes what it found in the diagnostics.
+    pub async fn check(&self, app: &AppHandle) -> Result<super::check::Report, String> {
+        let pool = self.pool()?;
+        let joining = self.last_join.lock().ok().and_then(|j| j.clone());
+        let report = super::check::run(pool, self.port(), joining).await;
+        let fine = report.lines.iter().all(|l| l.ok != Some(false));
+        let details: Vec<String> = report
+            .lines
+            .iter()
+            .map(|l| format!("{} {}", match l.ok { Some(true) => "✓", Some(false) => "✗", None => "·" }, l.text))
+            .collect();
+        diagnostics::report_with(
+            app,
+            if fine { Level::Info } else { Level::Warning },
+            "sync",
+            &format!("Connection check: {}", report.verdict),
+            Some(&details.join("\n")),
+        );
+        Ok(report)
+    }
+
     pub fn kick(&self) {
         self.kick.notify_one();
     }
@@ -235,6 +259,9 @@ impl SyncService {
     pub async fn join(&self, app: &AppHandle, code: &str, replace: bool) -> Result<JoinResult, String> {
         let pool = self.pool()?;
         let offer = PairingOffer::decode(code)?;
+        if let Ok(mut j) = self.last_join.lock() {
+            *j = Some((offer.host_name.clone(), offer.addrs.clone()));
+        }
         let backup = if replace && !engine::data_tables(pool).await?.is_empty() {
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("backups");
             Some(backup_before_join(pool, &dir).await?.to_string_lossy().into_owned())
@@ -340,7 +367,7 @@ pub async fn sync_round(pool: &SqlitePool) -> Round {
         }
         match last_err {
             // Not around is normal; anything else is worth showing.
-            Some(e) if e.contains("no answer") || e.contains("refused") || e.contains("unreachable") => {}
+            Some(e) if e.contains("no answer") || e.contains("refused") || e.contains("unreachable") || e.contains("doesn't answer") => {}
             Some(e) => round.errors.push(e),
             None => {}
         }

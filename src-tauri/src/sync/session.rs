@@ -33,7 +33,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::time::timeout;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -42,7 +41,7 @@ pub const PROTOCOL: u32 = 1;
 /// enough that one transaction never holds the database for long.
 const BATCH_ROWS: i64 = 500;
 const BATCH_BYTES: usize = 4 * 1024 * 1024;
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
 /// How long a QR code works.
 // Spec: SYN-9
 /// `sync.pairing-lifetime` in the spec.
@@ -561,10 +560,8 @@ pub async fn sync_with(pool: &SqlitePool, addr: SocketAddr) -> Result<Option<Out
     let Some(_guard) = try_busy(&me.device_id) else {
         return Ok(None);
     };
-    let stream = timeout(CONNECT_TIMEOUT, TcpStream::connect(addr))
-        .await
-        .map_err(|_| format!("{addr}: no answer"))?
-        .map_err(|e| format!("{addr}: {e}"))?;
+    // Spec: SYN-24
+    let stream = super::check::connect(addr).await.0?;
     let mut ch = Channel::initiate(stream, PURPOSE_SYNC, &me.secret, None).await?;
     // Whoever answered at a discovered address has to be one of the book's
     // devices before this one sends or reads anything more.
@@ -689,17 +686,15 @@ pub async fn join(pool: &SqlitePool, offer: &PairingOffer, replace: bool) -> Res
     // nothing here.
     let (secret, public) = wire::generate_keypair();
     let new_id = super::new_uuid();
-    let mut last_error = String::from("the code holds no address");
+    let mut tried: Vec<String> = Vec::new();
     for addr in &offer.addrs {
         let Ok(addr) = addr.parse::<SocketAddr>() else { continue };
-        let stream = match timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await {
-            Ok(Ok(s)) => s,
-            Ok(Err(e)) => {
-                last_error = format!("{addr}: {e}");
-                continue;
-            }
-            Err(_) => {
-                last_error = format!("{addr}: no answer");
+        // Spec: SYN-24
+        // Each address's failure says what it means; all of them are kept.
+        let stream = match super::check::connect(addr).await.0 {
+            Ok(s) => s,
+            Err(e) => {
+                tried.push(e);
                 continue;
             }
         };
@@ -723,7 +718,10 @@ pub async fn join(pool: &SqlitePool, offer: &PairingOffer, replace: bool) -> Res
         let host_key = offer.host_key.clone();
         return client_session(&mut ch, pool, &hello, Some(addr), Some(&host_key)).await;
     }
-    Err(format!("couldn't reach {}: {last_error}", offer.host_name))
+    if tried.is_empty() {
+        return Err(format!("couldn't reach {}: the code holds no address", offer.host_name));
+    }
+    Err(format!("couldn't reach {}: {}", offer.host_name, tried.join("; ")))
 }
 
 // ---------------------------------------------------------------------------

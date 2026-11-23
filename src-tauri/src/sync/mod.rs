@@ -10,6 +10,7 @@
 //! - `background`: a sync with the app closed (Android, through JNI).
 
 pub mod background;
+pub mod check;
 pub mod discovery;
 pub mod engine;
 pub mod instance;

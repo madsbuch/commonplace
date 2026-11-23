@@ -371,6 +371,13 @@ async fn sync_join(
     svc.join(&app, &code, replace).await
 }
 
+// Spec: SYN-23
+/// Checks the connection to the book's devices (and the code last joined).
+#[tauri::command]
+async fn sync_check(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<sync::check::Report, String> {
+    svc.check(&app).await
+}
+
 #[tauri::command]
 fn sync_now(svc: SyncState<'_>) {
     svc.kick();
@@ -442,6 +449,7 @@ pub fn run() {
             sync_cancel_offer,
             sync_join,
             sync_now,
+            sync_check,
             sync_remove_device,
             library_save_file,
             library_read_file,

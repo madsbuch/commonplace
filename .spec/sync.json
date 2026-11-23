@@ -145,6 +145,17 @@
       "related": [
         "#SYN-9"
       ]
+    },
+    {
+      "id": "SYN-23",
+      "text": "Settings → Sync can check the connection: it shows this device's addresses on the local network, whether sync listens, which of the book's devices answer the search, and whether each device there's an address for, the book's and the one whose code was last joined, can be reached; then what stands in the way, in plain words, and what to do about it.",
+      "related": [
+        "#DIAG-1"
+      ]
+    },
+    {
+      "id": "SYN-24",
+      "text": "A sync or join that can't reach a device says why, and tells apart what it can: the computer keeping the app off the local network (then it leads to the setting that allows it), the device not answering, another network or a VPN, and the device not running the app."
     }
   ],
   "values": [
