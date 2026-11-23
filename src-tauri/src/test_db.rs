@@ -32,7 +32,7 @@ impl Scratch {
     pub(crate) fn new() -> Self {
         static N: AtomicU32 = AtomicU32::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "my-book-test-{}-{}",
+            "commonplace-test-{}-{}",
             std::process::id(),
             N.fetch_add(1, Ordering::SeqCst)
         ));

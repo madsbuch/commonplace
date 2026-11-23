@@ -62,7 +62,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: my-book-linux
+          name: commonplace-linux
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage

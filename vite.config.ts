@@ -19,7 +19,7 @@ function pdfjsResources(): Plugin {
   const dirs = ["standard_fonts", "cmaps", "iccs", "wasm"];
   const base = "/pdfjs/";
   return {
-    name: "my-book-pdfjs-resources",
+    name: "commonplace-pdfjs-resources",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? "").split("?")[0] ?? "";

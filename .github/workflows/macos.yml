@@ -61,7 +61,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: my-book-macos
+          name: commonplace-macos
           path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
 

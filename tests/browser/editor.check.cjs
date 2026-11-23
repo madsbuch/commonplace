@@ -35,7 +35,7 @@ async function waitFor(url) {
 const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: JSON.stringify({ sql }) })).json();
 
 (async () => {
-  const dir = mkdtempSync(join(tmpdir(), "my-book-check-"));
+  const dir = mkdtempSync(join(tmpdir(), "commonplace-check-"));
   const servers = [
     spawn("bun", ["tests/browser/fake-tauri.ts", join(dir, "book.db")], { cwd: ROOT, stdio: "ignore" }),
     spawn("bun", ["run", "dev"], { cwd: ROOT, stdio: "ignore" }),

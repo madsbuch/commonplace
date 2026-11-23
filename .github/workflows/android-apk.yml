@@ -140,7 +140,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: my-book-apk
+          name: commonplace-apk
           path: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
           if-no-files-found: error
 
