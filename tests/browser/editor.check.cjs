@@ -596,6 +596,42 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1800);
     check("and opening it scrolls that block to the top", (await topBlock()) === topBefore, `${await topBlock()} vs ${topBefore}`);
 
+    // Spec: BLK-5, BLK-6
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(url);
+    await page.waitForTimeout(1500);
+    if (await page.getByRole("button", { name: "Close the assistant" }).isVisible()) await page.getByRole("button", { name: "Close the assistant" }).click();
+    const lineBlock = (n) => page.locator(".bn-editor .bn-block-outer", { hasText: new RegExp(`^Line ${n}$`) });
+    const l3 = await lineBlock(3).boundingBox();
+    await page.mouse.move(l3.x + 60, l3.y + l3.height / 2);
+    await page.waitForTimeout(300);
+    const plus = await page.locator(".bn-side-menu button").first().boundingBox();
+    const handle = await page.locator('.bn-side-menu [draggable="true"]').boundingBox();
+    const text = await page.locator(".bn-editor .bn-inline-content").first().boundingBox();
+    check("on a phone the add button sits over the handle", plus && handle && handle.y >= plus.y + plus.height - 2 && Math.abs(handle.x - plus.x) < 6, JSON.stringify({ plus, handle }));
+    check("and the text starts close to the screen's edge", text && text.x <= 44, JSON.stringify(text));
+    const l1 = await lineBlock(1).boundingBox();
+    await page.evaluate(
+      async ({ from, to }) => {
+        const el = document.querySelector('.bn-side-menu [draggable="true"]');
+        const at = (x, y) => new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+        const fire = (type, t) =>
+          el.dispatchEvent(new TouchEvent(type, { touches: type === "touchend" ? [] : [t], targetTouches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+        fire("touchstart", at(from.x, from.y));
+        for (let i = 1; i <= 8; i++) {
+          fire("touchmove", at(from.x, from.y + ((to.y - from.y) * i) / 8));
+          await new Promise((r) => setTimeout(r, 40));
+        }
+        await new Promise((r) => setTimeout(r, 100));
+        fire("touchend", at(from.x, to.y));
+      },
+      { from: { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }, to: { x: 0, y: l1.y + 4 } },
+    );
+    await page.waitForTimeout(1500);
+    const order = (await q(`SELECT content FROM blocks WHERE parent_id = '${parent}' AND deleted_at IS NULL AND content LIKE '%Line %' ORDER BY position`)).map((r) => /Line \d+/.exec(r.content)?.[0]);
+    check("a finger drags a block by its handle", order.indexOf("Line 3") >= 0 && order.indexOf("Line 3") < order.indexOf("Line 1"), order.slice(0, 5).join(", "));
+    await page.setViewportSize({ width: 1200, height: 800 });
+
     // Spec: CHAT-8
     await chat([{ text: `It's on [page 4](/library/${tocItem.id}#page=4).` }]);
     if (await page.getByRole("button", { name: "Open the assistant" }).isVisible()) await page.getByRole("button", { name: "Open the assistant" }).click();

@@ -22,6 +22,7 @@ import { dbId, editorId } from "../blocks/ids";
 import { applySave, loadPage, moveBlockToPage, searchLinkTargets, type LoadedPage } from "../lib/book";
 import { planSave, type DocBlock, type Snapshot } from "../lib/bookModel";
 import { replaceFragment } from "../lib/address";
+import { installBlockTouchDrag } from "./blockTouchDrag";
 import { registerEditor, setDraggedBlock } from "../lib/editorBridge";
 import { setCursorBlock } from "../lib/currentView";
 import { useTablesVersion } from "../lib/live";
@@ -177,6 +178,24 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
   const block = useExtensionState(SideMenuExtension, { editor, selector: (state) => state?.block });
   const hovered = useRef<string | null>(null);
   hovered.current = block?.id ?? null;
+  // Spec: BLK-5
+  // A finger drags a block by its handle (HTML drag and drop can't start from one).
+  useEffect(
+    () =>
+      installBlockTouchDrag({
+        blockOfHandle: () => hovered.current,
+        move: (id, targetId, placement) => {
+          const moved = editor.getBlock(id);
+          if (!moved || !editor.getBlock(targetId)) return;
+          editor.transact(() => {
+            editor.removeBlocks([id]);
+            editor.insertBlocks([moved], targetId, placement);
+          });
+        },
+      }),
+    [editor],
+  );
+
   useEffect(() => {
     const onDragStart = (e: DragEvent) => {
       if (e.target instanceof Element && e.target.closest(".bn-side-menu") && hovered.current) {

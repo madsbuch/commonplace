@@ -82,6 +82,17 @@
     {
       "id": "BLK-4",
       "text": "The author can drag a block to another place in its page or into another page."
+    },
+    {
+      "id": "BLK-5",
+      "text": "On a phone, a block is dragged by its handle with a finger, the page scrolling when the finger nears its top or bottom.",
+      "related": [
+        "#BLK-4"
+      ]
+    },
+    {
+      "id": "BLK-6",
+      "text": "On a phone, a block's add button and handle stack vertically in a narrow margin, so its text keeps the screen's width."
     }
   ]
 }

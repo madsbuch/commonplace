@@ -176,6 +176,9 @@ a {
   }
   .screen {
     padding-top: 56px;
+    /* Spec: BLK-6 — the width goes to the text. */
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }
 
@@ -410,10 +413,50 @@ button.danger {
   padding-left: 54px;
   padding-right: 0;
 }
+/* Spec: BLK-5, BLK-6 */
+/* A finger on the handle drags the block, never the page. */
+.bn-side-menu [draggable="true"] {
+  touch-action: none;
+}
 @media (max-width: 760px) {
+  /* The add button over the handle, in a narrow margin: the text keeps the width. */
   .bn-container .bn-editor {
-    padding-left: 30px;
+    padding-left: 26px;
   }
+  .bn-container .bn-side-menu {
+    flex-direction: column;
+    align-items: center;
+    height: auto !important;
+    gap: 0;
+  }
+  .bn-container .bn-side-menu .mantine-UnstyledButton-root,
+  .bn-container .bn-side-menu > [draggable="true"] {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+.block-touch-dragging .bn-side-menu {
+  visibility: hidden;
+}
+.block-touch-dragging,
+.block-touch-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.block-touch-dragged {
+  opacity: 0.35;
+}
+.block-drop-line {
+  position: fixed;
+  z-index: 50;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
 }
 .page-block {
   border: none;

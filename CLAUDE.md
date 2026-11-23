@@ -143,6 +143,12 @@ The book syncs peer to peer over the local network, as Tally does
   `BLOCK_TYPES` (and its spec to `schema` if custom); storage and sync don't
   change. Rows of a type this build doesn't know show as a placeholder and
   are written back untouched (`src/blocks/unknown.tsx`).
+- On a phone (BLK-5, BLK-6) a finger drags a block by its handle
+  (`src/components/blockTouchDrag.ts`: touch events, a drop line, scrolling
+  near the edges, then `removeBlocks` + `insertBlocks` in one `transact`,
+  ids kept, so the save writes only the new position); HTML drag and drop,
+  the editor's own, can't start from a finger in the WebView. The add button
+  and the handle stack vertically in a 26px margin there.
 - Inline maths is a `math` inline node (`$…$` input rule, KaTeX); links are
   `pageLink` nodes holding the page's (and block's) id, showing live titles
   from `src/lib/pageIndex.ts`. Code blocks highlight with Shiki (JS regex
