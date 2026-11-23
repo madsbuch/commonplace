@@ -54,7 +54,7 @@ const insertBlock = (id: string, content: string) =>
 describe("sync tracking", () => {
   const db = migrated();
 
-  // Spec: TRG-1, SYN-10
+  // Spec: tandem.TRG-1, tandem.SYN-10
   test("every table is either tracked by all three triggers or declared local", () => {
     const tables = z.array(NameRow).parse(db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all()).map((t) => t.name);
     const triggers = new Set(z.array(NameRow).parse(db.query("SELECT name FROM sqlite_master WHERE type = 'trigger'").all()).map((t) => t.name));
@@ -74,7 +74,7 @@ describe("sync tracking", () => {
     expect(tables).toContain("revisions");
   });
 
-  // Spec: TRG-2, TRG-3, TRG-5
+  // Spec: tandem.TRG-2, tandem.TRG-3, tandem.TRG-5
   test("every update trigger watches every column of its table", () => {
     // A column added later (ALTER TABLE … ADD) must be added to the trigger's
     // list too (`bun scripts/sync-triggers.ts --retrigger <table>`), or
@@ -118,7 +118,7 @@ describe("sync tracking", () => {
     expect(must(versionOf(db, "blocks", "blk_same"), "a sync version").seq).toBe(before.seq);
   });
 
-  // Spec: SYN-15
+  // Spec: tandem.SYN-15
   test("upserts are recorded; device-local settings are not", () => {
     const upsert = (table: string, key: string, value: string) =>
       db.query(`INSERT INTO ${table} (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`).run(key, value);

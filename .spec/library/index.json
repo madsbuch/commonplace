@@ -117,7 +117,7 @@
       "text": "An item's PDF is stored in the database and syncs to the book's devices with the rest of the book.",
       "related": [
         "#STO-1",
-        "#SYN-10"
+        "#tandem.SYN-10"
       ]
     },
     {

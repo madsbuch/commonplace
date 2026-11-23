@@ -21,7 +21,7 @@ onDatabaseOpen(async () => {
     console.warn("Checking the database's instance failed", e);
   }
   startSync()
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     // Once sync listens: announced nearby, and again whenever that changes.
     .then(() => {
       void announceNearby();

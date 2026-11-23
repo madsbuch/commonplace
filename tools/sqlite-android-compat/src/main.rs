@@ -1,4 +1,4 @@
-// Spec: TRG-4
+// Spec: tandem.TRG-4
 // Applies Commonplace's migrations with SQLite 3.39 (what Android 14 ships) and
 // makes the writes the app makes, checking the sync triggers parse and
 // record them.

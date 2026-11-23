@@ -15,7 +15,16 @@
     },
     {
       "id": "ENG-3",
-      "text": "`bun test` checks the spec: schema, unique ids, references, histories, and that every `Spec:` citation in the code names a requirement."
+      "text": "`bun test` checks the spec: schema, unique ids, references, histories, that every imported part is unchanged from where it was copied, and that every `Spec:` citation in the code names a requirement that holds here, not a waived one.",
+      "history": [
+        {
+          "version": 1,
+          "text": "`bun test` checks the spec: schema, unique ids, references, histories, and that every `Spec:` citation in the code names a requirement.",
+          "reason": "The spec imports shared parts: a copy that was edited, or code citing a requirement the product waived, is caught too.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "ENG-4",
@@ -36,7 +45,7 @@
       "id": "ENG-7",
       "text": "The macOS app is signed (ad hoc while there's no certificate), so macOS asks before letting it onto the local network instead of keeping it off without asking.",
       "related": [
-        "#SYN-24"
+        "#tandem.SYN-24"
       ]
     }
   ],

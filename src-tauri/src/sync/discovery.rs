@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::time::{timeout, Instant};
 
-// Spec: SYN-5, SYN-6
+// Spec: tandem.SYN-5, tandem.SYN-6
 /// Tally uses 47821/47822; Commonplace stays clear of them so both run side by side.
 pub const PORT: u16 = 47831;
 const QUERY: &str = "MYBOOK/1 Q";
@@ -58,7 +58,7 @@ where
     }
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /// Binds the answering socket on every interface, sharing the port: another
 /// app may hold it too (an earlier version still installed, a development
 /// build beside the real one), and searches are broadcast, so each hears them.
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(parse_reply("MYBOOK/1 R tag id 47832"), Some(("tag", "id", 47832)));
     }
 
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     #[tokio::test]
     async fn two_apps_can_answer_on_the_same_port() {
         let port = 47_900 + (std::process::id() % 90) as u16;

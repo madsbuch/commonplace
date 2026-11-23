@@ -1,4 +1,4 @@
-//! Checking the connection (SYN-23, SYN-24): why this device can't reach
+//! Checking the connection (tandem.SYN-23, tandem.SYN-24): why this device can't reach
 //! another, in plain words, with what to do about it.
 //!
 //! "No route to host" alone can mean four different things, and how soon it
@@ -41,7 +41,7 @@ pub enum Reach {
     Failed,
 }
 
-// Spec: SYN-24
+// Spec: tandem.SYN-24
 /// Why an attempt failed, from what the system said and how soon it said it.
 pub fn classify(error: Option<ErrorKind>, timed_out: bool, took: Duration, macos: bool) -> Reach {
     if timed_out {
@@ -71,7 +71,7 @@ pub fn hint(reach: Reach) -> &'static str {
     }
 }
 
-// Spec: SYN-24
+// Spec: tandem.SYN-24
 /// A failed connection as sync says it: the address, the system's words, and what they mean.
 pub fn failure(addr: SocketAddr, error: &std::io::Error, took: Duration) -> String {
     let h = hint(classify(Some(error.kind()), false, took, cfg!(target_os = "macos")));
@@ -95,7 +95,7 @@ pub async fn connect(addr: SocketAddr) -> (std::result::Result<TcpStream, String
     (r, took)
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /// The addresses to try for `addrs`: a link-local IPv6 address without a
 /// scope is tried on each of this device's interfaces that has one.
 pub fn candidates(addrs: &[SocketAddr]) -> Vec<SocketAddr> {
@@ -131,7 +131,7 @@ pub fn announced(address: &str, port: u16) -> Option<SocketAddr> {
     }
 }
 
-// Spec: SYN-5, SYN-24
+// Spec: tandem.SYN-5, tandem.SYN-24
 /// Tries every address at once; the first to answer wins. When none does,
 /// what each one came to.
 pub async fn connect_any(addrs: &[SocketAddr]) -> std::result::Result<(TcpStream, SocketAddr), Vec<String>> {
@@ -238,7 +238,7 @@ fn rank(f: &Finding) -> u8 {
     }
 }
 
-// Spec: SYN-23
+// Spec: tandem.SYN-23
 /// The verdict from what was found: the first thing in the way, and what to do about it.
 pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String, Option<String>) {
     if !on_network {
@@ -275,7 +275,7 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
     }
 }
 
-// Spec: SYN-23
+// Spec: tandem.SYN-23
 /// Checks the connection: this device's networks, whether sync listens, which
 /// of the book's devices answer the search, and whether each device there's
 /// an address for (the book's, and the code last joined) can be reached.
@@ -295,7 +295,7 @@ pub async fn run(
         let list: Vec<String> = lan.iter().map(|n| format!("{}/{} ({})", n.ip, n.prefix(), n.name)).collect();
         lines.push(Line { ok: Some(true), text: format!("This device is on the local network as {}.", list.join(", ")) });
     }
-    // Spec: SYN-23
+    // Spec: tandem.SYN-23
     // Which way this app's traffic for its own network goes: out of that
     // network's interface, unless a VPN or a setting for the app takes it.
     let mut findings = Vec::new();
@@ -327,7 +327,7 @@ pub async fn run(
 
     let me = session::identity(pool).await.ok();
     let my_tag = me.as_ref().and_then(|m| m.book_id.as_deref()).map(session::book_tag).unwrap_or_default();
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     // What was found nearby (mDNS), with every address each announced.
     if nearby.is_empty() {
         lines.push(Line { ok: None, text: "No device has been found nearby (mDNS) yet.".into() });
@@ -561,7 +561,7 @@ mod tests {
         assert!(v.starts_with("This device sends Commonplace's traffic for its own network (192.168.1.0/24, on wlan0) out through 172.30.232.16 (vgate0)"), "{v}");
     }
 
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     #[test]
     fn announced_addresses_are_numeric_and_keep_their_scope() {
         assert_eq!(announced("192.168.1.44", 47832), Some("192.168.1.44:47832".parse().unwrap()));
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(candidates(&a), a);
     }
 
-    // Spec: SYN-5, SYN-24
+    // Spec: tandem.SYN-5, tandem.SYN-24
     #[tokio::test]
     async fn the_first_address_to_answer_wins() {
         let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

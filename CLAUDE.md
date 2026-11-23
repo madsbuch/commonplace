@@ -21,19 +21,32 @@ before editing the spec).
 - Requirement id prefixes: `BOOK-` (book), `PAGE-` (pages), `BLK-` (blocks),
   `PAR-`/`HEAD-`/`LIST-`/`CODE-`/`LEAN-` (block types), `LNK-` (links), `LIB-` (library), `AUD-` (the audio library), `PPL-` (people and institutions), `AST-`
   (assistant), `CHAT-` (chats), `ATL-` (assistant tools), `MEM-` (memory), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
-  `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
-  (sync triggers), `ID-` (row ids), `DIAG-` (diagnostics), `WORK-` (work in
+  `SYN-` (what syncing a book adds), `ENG-` (engineering), `DEV-` (development builds), `ID-` (row ids), `DIAG-` (diagnostics), `WORK-` (work in
   the background). Stories use `US-`. Requirements keep their
   id when moved, so older prefixes (e.g. `BOOK-5` under revisions) appear
   outside their home item.
 - A new block type is a new item in `.spec/book/blocks/` with its own prefix.
 - The spec never names code; code names the spec. Code or a test that exists
-  to meet a requirement carries `// Spec: SYN-1` (ids only) on its own line.
-  When a requirement changes, search for its id.
+  to meet a requirement carries `// Spec: BOOK-1` (ids only) on its own line.
+  When a requirement changes, search for its id. Code cites only
+  requirements that hold: not deprecated ones, not waived ones.
 - Constants in the code follow the spec's named values; change both together.
+- Sync is the shared part Tandem (`.spec/tandem`, ids `tandem.SYN-`,
+  `tandem.TRG-`, values `tandem.*`), copied from madsbuch/spec-repo and
+  recorded in `imports` in `.spec/index.json`; its collection is the book.
+  Never edit the copy: change the part in madsbuch/spec-repo and import it
+  again, then reconcile. What the book does differently goes in the import
+  (`values`, `waived`, each with its reason), and the product's own entries
+  link to the part's with `related`. The product's own `SYN-` and `TRG-`
+  requirements that Tandem took over are deprecated in its favour; `SYN-14`
+  and `SYN-20` (revisions, chats) are the book's own.
+  `tests/tandem-values.test.ts` holds the sync constants (`PAIRING_TTL`,
+  snapshots' `DAILY` and `WEEKLY_UNTIL`) to Tandem's values as the book sets
+  them (an override in the import's `values` wins).
 - `tests/spec.test.ts` (part of `bun test`) checks the spec: schema, unique
-  ids, references, histories, and that every `Spec:` citation names a real
-  requirement.
+  ids, references, histories, that every imported part is unchanged (git's
+  tree id of its folder, as `tree` records), and that every `Spec:` citation
+  names a requirement that holds.
 
 ## JSON boundary rule
 
@@ -100,13 +113,13 @@ The book syncs peer to peer over the local network, as Tally does
   (`src/lib/settings.ts`) and live in `device_settings`.
 - Development and release builds never sync with each other (`same_build`
   in `src-tauri/src/sync/session.rs`).
-- Devices find each other as Murmur does (SYN-5; github.com/madsbuch/murmur):
+- Devices find each other as Murmur does (tandem.SYN-5; github.com/madsbuch/murmur):
   `src-tauri/plugins/lan` is Murmur's LAN plugin, ported (Android's
   NsdManager in `LanPlugin.kt`, with a multicast lock, stopped while the app
   is paused; `mdns-sd` on computers). Each device announces
   `_commonplace._tcp` with its sync port and, in TXT, the book's tag, its
   device id and, while it shows a pairing code, the code's tag
-  (`session::pair_tag`, SYN-25); `src/lib/lan.ts` asks Rust what to announce
+  (`session::pair_tag`, tandem.SYN-25); `src/lib/lan.ts` asks Rust what to announce
   (`sync_announce`), announces again when that changes (a code shown or put
   away, a join, sync status, coming back in sight) and passes every device
   found, with all its addresses (IPv6 too, link-local with its scope), to
@@ -146,7 +159,7 @@ The book syncs peer to peer over the local network, as Tally does
   `replace` (a backup first). `src-tauri/Info.plist` gives macOS the local
   network and camera descriptions; without the first, macOS blocks sync
   silently.
-- Checking the connection (SYN-23, SYN-24; `src-tauri/src/sync/check.rs`,
+- Checking the connection (tandem.SYN-23, tandem.SYN-24; `src-tauri/src/sync/check.rs`,
   the Connection card on Settings → Sync): this device's networks, whether
   sync listens, which of the book's devices answer the search, and a timed
   connection to each device with an address (the book's, and the code last

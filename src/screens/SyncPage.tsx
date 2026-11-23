@@ -33,7 +33,7 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-// Spec: SYN-9
+// Spec: tandem.SYN-9
 /**
  * Scans a QR code with the phone's camera, through the barcode plugin. The
  * camera shows behind the app (`windowed`), which steps aside for it
@@ -76,7 +76,7 @@ function PhoneScanOverlay() {
   );
 }
 
-// Spec: SYN-21
+// Spec: tandem.SYN-21
 /** The computer's webcam, read frame by frame until a pairing code shows up (as in Tally). */
 function WebcamScanner({ onCode, onError }: { onCode: (c: string) => void; onError: (e: string) => void }) {
   const video = useRef<HTMLVideoElement | null>(null);
@@ -188,7 +188,7 @@ export default function SyncPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   // Spec: DIAG-1
   const [error, setError] = useNotedProblem("sync");
-  // Spec: SYN-23
+  // Spec: tandem.SYN-23
   const [check, setCheck] = useState<CheckReport | null>(null);
   const [checking, setChecking] = useState(false);
   const checkRef = useRef<HTMLDivElement>(null);
@@ -290,7 +290,7 @@ export default function SyncPage() {
     [refresh, setError],
   );
 
-  // Spec: SYN-9, SYN-22
+  // Spec: tandem.SYN-9, tandem.SYN-22
   /** A code in hand: an empty device joins at once; one holding data asks first. */
   const takeCode = useCallback(
     (raw: string) => {
@@ -378,7 +378,7 @@ export default function SyncPage() {
       {error && (
         <Alert color="red" variant="light" mb="md" withCloseButton onClose={() => setError(null)}>
           {error}
-          {/* Spec: SYN-23, SYN-24 */}
+          {/* Spec: tandem.SYN-23, tandem.SYN-24 */}
           <Group gap="xs" mt="sm">
             {blockedByLocalNetwork(error) ? (
               <Button size="xs" onClick={openLocalNetwork}>
@@ -544,7 +544,7 @@ export default function SyncPage() {
             )}
           </Paper>
 
-          {/* Spec: SYN-23 */}
+          {/* Spec: tandem.SYN-23 */}
           <Paper withBorder p="md" radius="md" ref={checkRef} className="sync-check">
             <Group justify="space-between" align="center" mb={check ? "sm" : 0}>
               <Title order={3} size="h4">

@@ -529,7 +529,7 @@ fn a_hello_from_an_older_version_never_skips() {
     assert_eq!(read, old);
 }
 
-// Spec: SYN-25
+// Spec: tandem.SYN-25
 #[test]
 fn a_code_has_a_tag_of_its_own() {
     let (a, b) = ([1u8; 32], [2u8; 32]);
@@ -538,7 +538,7 @@ fn a_code_has_a_tag_of_its_own() {
     assert_eq!(pair_tag(&a).len(), 16);
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 #[tokio::test]
 async fn one_listener_takes_ipv4_and_ipv6() {
     // Where there's no IPv6 at all (some CI containers), listen() falls back to IPv4.

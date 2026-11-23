@@ -45,7 +45,7 @@ tauri-plugin-sync-background = { path = "plugins/sync-background" }
 tauri-plugin-audio-player = { path = "plugins/audio-player" }
 # Spec: WORK-2, WORK-3 — work kept going out of sight.
 tauri-plugin-background-work = { path = "plugins/background-work" }
-# Spec: SYN-2 — finding the book's devices nearby, as Murmur does (mDNS, Android NSD).
+# Spec: tandem.SYN-5 — finding the book's devices nearby, as Murmur does (mDNS, Android NSD).
 tauri-plugin-lan = { path = "plugins/lan" }
 
 [target.'cfg(target_os = "android")'.dependencies]

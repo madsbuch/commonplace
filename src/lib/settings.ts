@@ -13,7 +13,7 @@ export const SETTING_KEYS = {
   lastChat: "last_chat",
 } as const;
 
-// Spec: SYN-15
+// Spec: tandem.SYN-15
 /** Keys that belong to one device and never sync. */
 export const DEVICE_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
   SETTING_KEYS.modelsCache,

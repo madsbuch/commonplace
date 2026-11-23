@@ -279,7 +279,7 @@ async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), Str
     // Computers verify Lean blocks changed on other devices.
     #[cfg(desktop)]
     lean_service(&app).start_background(app.clone());
-    // Spec: SYN-17
+    // Spec: tandem.SYN-17
     // Android also syncs with the app closed, every half hour on Wi-Fi.
     use tauri_plugin_sync_background::SyncBackgroundExt;
     if let Ok(dir) = app.path().app_config_dir() {
@@ -294,7 +294,7 @@ async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), Str
     Ok(())
 }
 
-// Spec: SYN-16
+// Spec: tandem.SYN-16
 /// Before anything is written to a freshly opened database: a copy of it
 /// from elsewhere (restored, put back) takes a new device id (instance.rs).
 #[tauri::command]
@@ -351,8 +351,8 @@ async fn sync_set_name(svc: SyncState<'_>, name: String) -> Result<(), String> {
     Ok(())
 }
 
-// Spec: SYN-9
-/// A pairing code for the QR, good for one device for `sync.pairing-lifetime`.
+// Spec: tandem.SYN-9
+/// A pairing code for the QR, good for one device for `tandem.pairing-lifetime`.
 #[tauri::command]
 async fn sync_offer(svc: SyncState<'_>) -> Result<String, String> {
     svc.offer().await
@@ -375,21 +375,21 @@ async fn sync_join(
     svc.join(&app, &code, replace).await
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /// What this device announces nearby (`plugin:lan|start`'s config); none until sync listens.
 #[tauri::command]
 async fn sync_announce(svc: SyncState<'_>) -> Result<Option<sync::service::Announce>, String> {
     svc.announcing().await
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /// A device the LAN plugin found nearby, passed on by the frontend.
 #[tauri::command]
 async fn sync_peer_found(svc: SyncState<'_>, peer: sync::service::Announced) -> Result<(), String> {
     svc.found_nearby(peer).await
 }
 
-// Spec: SYN-23
+// Spec: tandem.SYN-23
 /// Checks the connection to the book's devices (and the code last joined).
 #[tauri::command]
 async fn sync_check(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<sync::check::Report, String> {
@@ -423,7 +423,7 @@ pub fn run() {
         .plugin(tauri_plugin_audio_player::init())
         // Spec: WORK-2, WORK-3
         .plugin(tauri_plugin_background_work::init())
-        // Spec: SYN-5
+        // Spec: tandem.SYN-5
         .plugin(tauri_plugin_lan::init())
         .manage(work::Work::default())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))

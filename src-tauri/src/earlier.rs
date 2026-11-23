@@ -2,7 +2,7 @@
 //! `com.madsbuch.mybook`, and a computer's folders are named after the
 //! identifier. The first time it starts as `app.identifier`, what's in the
 //! old folders moves into the new ones: the database with its instance
-//! marker (so the device stays the same device, SYN-16), recordings,
+//! marker (so the device stays the same device, tandem.SYN-16), recordings,
 //! backups, snapshots, the Lean workspace. Phones can't do this: another
 //! app's data is out of reach there.
 

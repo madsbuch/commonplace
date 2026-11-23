@@ -3,7 +3,7 @@
   "title": "Sync",
   "summary": "Peer-to-peer sync between the devices of one book, over the local network.",
   "order": 7,
-  "description": "The author's phone and computers hold the same book. They sync directly with each other on the local network, without a server.",
+  "description": "The author's phone and computers hold the same book. They sync as the shared part Tandem says, the book being its collection; this part holds what syncing a book adds to that.",
   "stories": [
     {
       "id": "US-3",
@@ -11,10 +11,10 @@
       "want": "the same book on each of them",
       "soThat": "I can pick up wherever I left off",
       "requirements": [
-        "#SYN-1",
-        "#SYN-2",
-        "#SYN-11",
-        "#SYN-12",
+        "#tandem.SYN-1",
+        "#tandem.SYN-2",
+        "#tandem.SYN-11",
+        "#tandem.SYN-12",
         "#SYN-14"
       ]
     }
@@ -25,11 +25,25 @@
       "text": "Two instances of the app on the same local network can sync their databases with each other.",
       "related": [
         "#STO-1"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-1"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-2",
-      "text": "Sync merges the changes each instance made since they last synced, instead of replacing one database with the other."
+      "text": "Sync merges the changes each instance made since they last synced, instead of replacing one database with the other.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-2"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-3",
@@ -48,7 +62,14 @@
     },
     {
       "id": "SYN-4",
-      "text": "No book data passes through a server during sync."
+      "text": "No book data passes through a server during sync.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-4"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-5",
@@ -61,48 +82,112 @@
           "date": "2026-11-23"
         }
       ],
-      "version": 2
+      "version": 2,
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-5"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-6",
-      "text": "A discovery probe names the book by a short tag derived from its id, never by the id itself."
+      "text": "A discovery probe names the book by a short tag derived from its id, never by the id itself.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-6"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-7",
-      "text": "The channel between two devices is encrypted with the Noise protocol over TCP."
+      "text": "The channel between two devices is encrypted with the Noise protocol over TCP.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-7"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-8",
-      "text": "A peer is let in only when the key it proved in the handshake belongs to a device of the book."
+      "text": "A peer is let in only when the key it proved in the handshake belongs to a device of the book.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-8"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-9",
-      "text": "A new device joins by scanning a pairing QR code, which works for one device and for `sync.pairing-lifetime`."
+      "text": "A new device joins by scanning a pairing QR code, which works for one device and for `sync.pairing-lifetime`.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-9"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-10",
       "text": "Every table syncs unless it is explicitly local to the device.",
       "related": [
         "engineering/sync-triggers"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-10"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-11",
-      "text": "Concurrent changes to a row resolve to the version with the later hybrid logical clock."
+      "text": "Concurrent changes to a row resolve to the version with the later hybrid logical clock.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-11"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-12",
-      "text": "Every device reaches the same rows whatever order changes arrive in."
+      "text": "Every device reaches the same rows whatever order changes arrive in.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-12"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-13",
-      "text": "Two rows that collide on a unique column keep the one with the lower id; the other is deleted on every device."
+      "text": "Two rows that collide on a unique column keep the one with the lower id; the other is deleted on every device.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-13"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-14",
       "text": "A block edited on two devices before they sync keeps both edits as revisions, so no edit is lost.",
       "related": [
-        "#BOOK-5"
+        "#BOOK-5",
+        "#tandem.SYN-11"
       ],
       "history": [
         {
@@ -116,29 +201,64 @@
     },
     {
       "id": "SYN-15",
-      "text": "Settings that belong to one device (sync bookmarks, caches) are never synced."
+      "text": "Settings that belong to one device (sync bookmarks, caches) are never synced.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-15"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-16",
-      "text": "A database restored from an older copy is detected at startup, or at its first sync if its marker was restored with it, and then takes a new device id and syncs from scratch."
+      "text": "A database restored from an older copy is detected at startup, or at its first sync if its marker was restored with it, and then takes a new device id and syncs from scratch.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-16"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-17",
-      "text": "On Android, sync also runs while the app is closed."
+      "text": "On Android, sync also runs while the app is closed.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-17"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-18",
-      "text": "While the app runs, a desktop device keeps a daily copy of the database for `sync.snapshot-daily`, then one a week back to `sync.snapshot-weekly`."
+      "text": "While the app runs, a desktop device keeps a daily copy of the database for `sync.snapshot-daily`, then one a week back to `sync.snapshot-weekly`.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-18"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-19",
-      "text": "Development and release builds never sync with each other."
+      "text": "Development and release builds never sync with each other.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-19"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-20",
       "text": "A chat continued on two devices at once is split, the losing side kept as a new chat, so no turn is lost.",
       "related": [
-        "#SYN-11"
+        "#tandem.SYN-11"
       ]
     },
     {
@@ -146,25 +266,53 @@
       "text": "Either device can show the pairing code: a phone scans it with its camera, a computer with its webcam, and either can paste it instead.",
       "related": [
         "#SYN-9"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-21"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-22",
       "text": "A device that already holds data can still join, once the author agrees after giving it the code; a complete copy of its database is saved first, then the book replaces it.",
       "related": [
         "#SYN-9"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-22"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-23",
       "text": "Settings → Sync can check the connection: it shows this device's addresses on the local network, whether sync listens, which of the book's devices answer the search, and whether each device there's an address for, the book's and the one whose code was last joined, can be reached; then what stands in the way, in plain words, and what to do about it.",
       "related": [
         "#DIAG-1"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-23"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-24",
-      "text": "A sync or join that can't reach a device says why, and tells apart what it can: the computer keeping the app off the local network (then it leads to the setting that allows it), the device not answering, another network or a VPN, and the device not running the app."
+      "text": "A sync or join that can't reach a device says why, and tells apart what it can: the computer keeping the app off the local network (then it leads to the setting that allows it), the device not answering, another network or a VPN, and the device not running the app.",
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-24"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "SYN-25",
@@ -172,27 +320,56 @@
       "related": [
         "#SYN-5",
         "#SYN-9"
-      ]
+      ],
+      "deprecation": {
+        "reason": "Sync is specified by the shared part Tandem, imported into this spec, whose requirement promises the same of its collection, the book.",
+        "replacedBy": [
+          "#tandem.SYN-25"
+        ],
+        "date": "2026-11-23"
+      }
     }
   ],
   "values": [
     {
       "id": "sync.pairing-lifetime",
       "type": "duration",
-      "value": "10min"
+      "value": "10min",
+      "deprecation": {
+        "reason": "The shared part Tandem names this value; the book uses it as the part sets it.",
+        "replacedBy": [
+          "#tandem.pairing-lifetime"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "sync.snapshot-daily",
       "type": "duration",
-      "value": "14d"
+      "value": "14d",
+      "deprecation": {
+        "reason": "The shared part Tandem names this value; the book uses it as the part sets it.",
+        "replacedBy": [
+          "#tandem.snapshot-daily"
+        ],
+        "date": "2026-11-23"
+      }
     },
     {
       "id": "sync.snapshot-weekly",
       "type": "duration",
-      "value": "91d"
+      "value": "91d",
+      "deprecation": {
+        "reason": "The shared part Tandem names this value; the book uses it as the part sets it.",
+        "replacedBy": [
+          "#tandem.snapshot-weekly"
+        ],
+        "date": "2026-11-23"
+      }
     }
   ],
   "related": [
-    "engineering/ids"
+    "engineering/ids",
+    "tandem"
   ]
 }
