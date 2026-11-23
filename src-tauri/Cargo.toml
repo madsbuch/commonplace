@@ -47,6 +47,8 @@ tauri-plugin-audio-player = { path = "plugins/audio-player" }
 tauri-plugin-background-work = { path = "plugins/background-work" }
 # Spec: SYN-2 — finding the book's devices nearby, as Murmur does (mDNS, Android NSD).
 tauri-plugin-lan = { path = "plugins/lan" }
+# Spec: LIB-28 — a blog post that builds itself, read on Android.
+tauri-plugin-page-render = { path = "plugins/page-render" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The background sync's entry point (src/sync/background.rs).

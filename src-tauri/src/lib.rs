@@ -12,6 +12,7 @@ mod lean;
 mod library;
 mod sync;
 mod type_id;
+mod web;
 mod work;
 #[cfg(test)]
 mod test_db;
@@ -125,6 +126,34 @@ async fn library_save_file(app: tauri::AppHandle, item_id: String, media_type: S
 async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<String, String> {
     let bytes = library::read(&db_pool(&app).await?, &item_id).await?;
     Ok(library::encode(&bytes))
+}
+
+// ---------------------------------------------------------------------------
+// Web pages (src/web.rs): blog posts and their figures, by address
+// ---------------------------------------------------------------------------
+
+// Spec: LIB-28
+/// Fetches a page or a figure by its address (GET, http or https, no cookies).
+#[tauri::command]
+async fn web_get(url: String) -> Result<web::Fetched, String> {
+    web::get(&url).await
+}
+
+// Spec: LIB-28
+/// A page as it shows once its scripts have run: for posts that build themselves.
+#[tauri::command]
+async fn web_render(app: tauri::AppHandle, url: String) -> Result<web::Rendered, String> {
+    #[cfg(desktop)]
+    return web::render(&app, &url).await;
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_page_render::PageRenderExt;
+        let rendered = tauri::async_runtime::spawn_blocking(move || app.page_render().render(&url))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        Ok(web::Rendered { html: rendered.html, url: rendered.url })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +454,8 @@ pub fn run() {
         .plugin(tauri_plugin_background_work::init())
         // Spec: SYN-5
         .plugin(tauri_plugin_lan::init())
+        // Spec: LIB-28
+        .plugin(tauri_plugin_page_render::init())
         .manage(work::Work::default())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))
         .manage(std::sync::Arc::new(audio::render::AudioService::default()));
@@ -497,6 +528,8 @@ pub fn run() {
             sync_check,
             sync_announce,
             sync_peer_found,
+            web_get,
+            web_render,
             sync_remove_device,
             library_save_file,
             library_read_file,

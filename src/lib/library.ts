@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
-// The library: papers and books, each a PDF, an HTML version or both, with a
-// few details. The details live in `library_items`; the PDF's bytes in
+// The library: papers, books and blog posts, each a PDF, an HTML version or
+// both, with a few details. The details live in `library_items`; the PDF's bytes in
 // `library_files` and the HTML in `library_html`, kept apart so listing the
 // library never reads megabytes. Both sync like the rest of the
 // database (LIB-7). The bytes go through Rust commands (src-tauri/src/
@@ -18,9 +18,9 @@ import { removeItemAuthors } from "./people";
 
 // Spec: LIB-3
 /** `library.kinds` in the spec, as stored. */
-export const KINDS = ["paper", "book"] as const;
+export const KINDS = ["paper", "book", "post"] as const;
 export type Kind = (typeof KINDS)[number];
-export const KIND_NAMES: Record<Kind, string> = { paper: "Paper", book: "Book" };
+export const KIND_NAMES: Record<Kind, string> = { paper: "Paper", book: "Book", post: "Blog post" };
 
 export function isKind(x: unknown): x is Kind {
   return KINDS.some((k) => k === x);
@@ -146,6 +146,45 @@ export async function findByArxiv(arxivId: string): Promise<string | null> {
   const [row] = await select(`SELECT id FROM library_items WHERE arxiv_id = $1`, [arxivId]);
   const id = row?.["id"];
   return typeof id === "string" ? id : null;
+}
+
+// Spec: LIB-28
+/** The item whose HTML version came from `address`, if the library has it. */
+export async function findBySource(address: string): Promise<string | null> {
+  const [row] = await select(
+    `SELECT i.id AS id FROM library_html h JOIN library_items i ON i.id = h.item_id WHERE h.source_url = $1 LIMIT 1`,
+    [address],
+  );
+  const id = row?.["id"];
+  return typeof id === "string" ? id : null;
+}
+
+/** A blog post as read from its page (LIB-28). */
+export interface Post {
+  /** Where it was read, after redirects: kept as its HTML version's source and its file name. */
+  address: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  /** Its HTML version, self-contained and safe. */
+  html: string;
+  toc: TocEntry[];
+}
+
+// Spec: LIB-28
+/** Adds a blog post as an item of its own, its HTML version as read. Returns its id. */
+export async function addPost(post: Post): Promise<string> {
+  const id = newId("library_items");
+  const at = nowIso();
+  // The HTML first: a device that syncs the item before it shows it as on its way.
+  await saveHtml(id, post.html, post.address);
+  await execute(
+    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at)
+     VALUES ($1, 'post', $2, $3, $4, $5, $6, NULL, $7, $8, $8)`,
+    [id, post.title, post.authors.join(", "), post.year, post.address, new TextEncoder().encode(post.html).length, JSON.stringify(post.toc), at],
+  );
+  notifyTablesChanged(LIBRARY_TABLES);
+  return id;
 }
 
 // Spec: LIB-24

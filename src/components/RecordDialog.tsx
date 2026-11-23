@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getVoice, recordableSections, recordVerbatim } from "../lib/audio";
-import type { LibraryItem } from "../lib/library";
+import { KIND_NAMES, type LibraryItem } from "../lib/library";
 import { go } from "../lib/navigation";
 import { useNotedProblem } from "../lib/diagnostics";
 
@@ -24,7 +24,7 @@ export function RecordDialog(props: { item: LibraryItem; onClose: () => void }) 
         <label className="record-field">
           <span>What to read</span>
           <select value={chosen} onChange={(e) => setChosen(e.target.value)} aria-label="What to read">
-            <option value="">The whole {props.item.kind === "book" ? "book" : "paper"}</option>
+            <option value="">The whole {KIND_NAMES[props.item.kind].toLowerCase()}</option>
             {(sections ?? []).map((s) => (
               <option key={s.key} value={s.key}>
                 {" ".repeat(s.depth)}

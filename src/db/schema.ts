@@ -237,12 +237,12 @@ export const bookDevices = sqliteTable("book_devices", {
 // ---------------------------------------------------------------------------
 
 // Spec: LIB-1, LIB-3
-/** A paper or book in the library: its details. Its PDF is in `library_files`. */
+/** A paper, book or blog post in the library: its details. Its PDF is in `library_files`, its HTML version in `library_html`. */
 export const libraryItems = sqliteTable(
   "library_items",
   {
     id: rowId("library_items"),
-    /** "paper" | "book" (`library.kinds`). */
+    /** "paper" | "book" | "post" (`library.kinds`). For a post, `filename` is its address. */
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     /** As written ("Ada Lovelace, Charles Babbage"). */

@@ -251,9 +251,10 @@ read and show verdicts.
 
 ## The library
 
-- Papers and books (`src/lib/library.ts`): details in `library_items`, the
-  PDF's bytes in `library_files` (one per item, kept apart so listing never
-  reads megabytes). Both sync; removing an item deletes both rows.
+- Papers, books and blog posts (`src/lib/library.ts`; kinds `paper`,
+  `book`, `post`): details in `library_items`, the PDF's bytes in
+  `library_files` (one per item, kept apart so listing never reads
+  megabytes). Both sync; removing an item deletes both rows.
 - The bytes go through Rust (`src-tauri/src/library.rs`) as base64 strings
   both ways (`library_save_file`, `library_read_file`): the SQL plugin can
   only pass JSON, and raw IPC bodies (`invoke(cmd, bytes)`,
@@ -323,6 +324,32 @@ read and show verdicts.
   Items carry `arxiv_id`; adding one already there opens it, and its ⋯ menu
   fetches the HTML version again (`refetchArxivHtml`). The fake Tauri layer
   answers as arXiv for `1706.03762`, its page shaped like arXiv's own.
+- Adding a blog post by its address (LIB-28; `src/lib/web.ts`, pure parts
+  in `webModel.ts`): the Library's field takes an arXiv number or any web
+  address. Rust fetches the page (`web_get` in `src-tauri/src/web.rs`: a
+  plain GET with a browser's user agent, no cookies, http(s) only, at most
+  25 MB; figures go the same way), and Mozilla's Readability finds the post
+  in it. A page that builds itself in the browser (z.ai's blog: an empty
+  `<div id="root">`) reads as too little (`MIN_ARTICLE_TEXT`), so it's
+  rendered (`web_render`) and read again: on a computer a hidden
+  `WebviewWindow` of the app's webview (`page-render-N`, in no capability,
+  so the page can't call the app), its HTML taken with `eval_with_callback`
+  once its text stops growing; on Android the `page-render` plugin
+  (`src-tauri/plugins/page-render`, an off-screen WebView; only the APK build
+  compiles its Kotlin). Before Readability, KaTeX's and MathJax's drawings
+  give way to their MathML; after it, videos and embedded players become
+  links, and the post goes through `paperOf` (chrome out, headings named)
+  with its title as an `<h1>` without an id (not one of its sections), its
+  figures inlined and sanitized, as arXiv's HTML is. The item's `filename`
+  is the address it was read at (after redirects), also its HTML's
+  `source_url`, by which adding it again finds it. Title, byline and date
+  come from the page (Readability's metadata, a heading that holds the
+  short title, `time[datetime]`) and stand over the model's
+  (`readDetails`' `post`); the model reads the post and the top of the
+  page around it, and never changes a post's kind. Without a PDF,
+  `readDetails` reads an item's stored text. The fake Tauri layer answers
+  as two blogs (`blog.example.com`, served as HTML; `spa.example.com`, a
+  shell until rendered).
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -491,7 +518,8 @@ Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat
 completions, streamed, with the author's own key, through the HTTP plugin
 (`https://openrouter.ai/*`; the `http` capability's only other hosts are
 arXiv's, for fetching papers, where nothing but an identifier goes).
-Book content leaves the device only that way.
+Book content leaves the device only that way. (Blog posts are fetched by
+Rust, `web_get` and `web_render`, with nothing but their address.)
 
 - The key and the assistant's model are synced `settings`
   (`src/lib/aiSettings.ts`); the model list is fetched live and cached per

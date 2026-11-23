@@ -61,7 +61,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "search_library",
-    description: "Papers and books whose title or authors contain the words (all, newest first, for an empty query).",
+    description: "Papers, books and blog posts whose title or authors contain the words (all, newest first, for an empty query).",
     parameters: obj({ query: str("Words to look for; may be empty.") }, ["query"]),
   },
   {

@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Library",
-  "summary": "The papers and books the author reads, as PDFs in the app.",
+  "summary": "The papers, books and blog posts the author reads, in the app.",
   "order": 2,
-  "description": "What the book draws on sits next to it: papers and books, each a PDF with a few details, readable on every device.",
+  "description": "What the book draws on sits next to it: papers, books and blog posts, each a PDF, a text or both, with a few details, readable on every device.",
   "stories": [
     {
       "id": "US-10",
@@ -75,7 +75,16 @@
   "requirements": [
     {
       "id": "LIB-1",
-      "text": "The library holds papers and books, each with one PDF file."
+      "text": "The library holds papers, books and blog posts, each with a PDF, an HTML version, or both.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The library holds papers and books, each with one PDF file.",
+          "reason": "The author reads blog posts as well as papers and books, and wants them in the library beside them. A post has no PDF: its text is its HTML version, as an HTML file's is.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "LIB-2",
@@ -239,6 +248,15 @@
     {
       "id": "LIB-27",
       "text": "An HTML version keeps its figures, so it reads the same offline."
+    },
+    {
+      "id": "LIB-28",
+      "text": "The author adds a blog post by its address. Its text and figures, as the page shows them once it has run (a page that builds itself in the browser included), without the site's navigation and the like, become the item's HTML version; its title, authors and date come from the page where it gives them, and the model reads the rest. Only the address leaves the device. Adding an address already in the library opens it.",
+      "related": [
+        "#LIB-24",
+        "#LIB-25",
+        "#LIB-27"
+      ]
     }
   ],
   "values": [
@@ -247,9 +265,20 @@
       "type": "list",
       "value": [
         "Paper",
-        "Book"
+        "Book",
+        "Blog post"
       ],
-      "description": "What a library item can be."
+      "description": "What a library item can be.",
+      "history": [
+        {
+          "value": [
+            "Paper",
+            "Book"
+          ],
+          "reason": "The author reads blog posts as well as papers and books, and wants them in the library beside them.",
+          "date": "2026-11-23"
+        }
+      ]
     },
     {
       "id": "library.max-file-size",

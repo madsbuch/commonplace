@@ -14,6 +14,8 @@ import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
 import { getItem, hasFile, hasHtml, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, readHtml, removeItem, saveToc, updateItem, type LibraryItem } from "../lib/library";
 import type { TocEntry } from "../lib/schemas";
 import { useTablesVersion } from "../lib/live";
+import { hostOf } from "../lib/webModel";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 /** The details form: saved when a field is left. */
 function Details(props: { item: LibraryItem }) {
@@ -295,7 +297,24 @@ export default function LibraryItemPage() {
       <div className="item-head">
         <AuthorsEditor itemId={item.id} editing={false} />
         <p className="item-meta muted with-info">
-          <span>{[item.year, KIND_NAMES[item.kind], item.pages ? `${item.pages} pages` : null].filter(Boolean).join(" · ")}</span>
+          <span>
+            {[item.year, KIND_NAMES[item.kind], item.pages ? `${item.pages} pages` : null].filter(Boolean).join(" · ")}
+            {/* Spec: LIB-28 */}
+            {item.kind === "post" ? (
+              <>
+                {" · "}
+                <a
+                  href={item.filename}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void openUrl(item.filename);
+                  }}
+                >
+                  {hostOf(item.filename)}
+                </a>
+              </>
+            ) : null}
+          </span>
           <DetailsInfo itemId={item.id} />
         </p>
       </div>

@@ -158,6 +158,47 @@ function fakeArxiv(url: string): { status: number; type: string; bytes: Uint8Arr
   return null;
 }
 
+// Spec: LIB-28
+/** Two blogs: one that serves its posts as HTML, one whose pages build themselves (an empty shell until rendered). */
+const postText = (what: string) =>
+  Array.from({ length: 6 }, (_, i) => `<p>${what}, paragraph ${i + 1}: a compiler turns what people write into what machines run, and a good one says where it went wrong.</p>`).join("");
+const STATIC_POST = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>On Compilers | Example Blog</title>
+<meta property="og:title" content="On Compilers"><meta property="og:site_name" content="Example Blog">
+<meta property="article:published_time" content="2024-03-01T09:00:00Z"><script>window.evil = 1</script></head>
+<body><nav class="site-nav"><a href="/">Home</a> <a href="/archive">Archive</a> <a href="/about">About</a></nav>
+<header><a href="/">Example Blog</a></header>
+<main><article><h1>On Compilers</h1><p class="byline">By <span class="author">Grace Hopper and Ada Lovelace</span></p>
+${postText("Why")}
+<h2>Front ends</h2>${postText("Parsing")}
+<figure><img src="/images/fig.png" alt="A parse tree"><figcaption>Figure 1: A parse tree.</figcaption></figure>
+<p>Its cost is <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>O</mi><mo>(</mo><mi>n</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">O(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">O(n) drawn</span></span> in the input.</p>
+<video src="/media/talk.mp4" controls></video>
+<h2>Back ends</h2>${postText("Emitting")}</article></main>
+<aside class="related"><h3>Related posts</h3><a href="/other">Another post</a></aside>
+<footer>© 2024 Example Blog · <a href="/privacy">Privacy</a></footer></body></html>`;
+const SHELL_POST = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta property="og:title" content="Loops All the Way"><script type="module" src="/assets/app.js"></script></head><body><div id="root"></div></body></html>`;
+const RENDERED_POST = `<html><head><meta property="og:title" content="Loops All the Way"><title>Loops All the Way</title></head><body><div id="root">
+<div class="top"><div>2026-11-23 · Research</div><h1><p>Spa 2: Loops All the Way</p></h1></div>
+<div class="body">${postText("Looping")}<h1>The loop</h1><div><img src="https://cdn.example.org/loop.png" alt=""></div>${postText("Gates")}</div>
+<footer>Legal · Privacy</footer></div></body></html>`;
+const webRenders: string[] = [];
+
+function fakeWeb(url: string): { status: number; contentType: string; url: string; data: string } | null {
+  const ok = (body: string | Uint8Array, contentType: string, at = url) => ({
+    status: 200,
+    contentType,
+    url: at,
+    data: Buffer.from(typeof body === "string" ? new TextEncoder().encode(body) : body).toString("base64"),
+  });
+  // Served at its address with a trailing slash, as many blogs redirect.
+  if (url === "https://blog.example.com/posts/on-compilers") return ok(STATIC_POST, "text/html; charset=utf-8", `${url}/`);
+  if (url === "https://blog.example.com/images/fig.png") return ok(PNG, "image/png");
+  if (url === "https://spa.example.com/blog/loops") return ok(SHELL_POST, "text/html");
+  if (url === "https://cdn.example.org/loop.png") return ok(PNG, "image/png");
+  if (url === "https://blog.example.com/missing") return { status: 404, contentType: "text/html", url, data: Buffer.from("Not Found").toString("base64") };
+  return null;
+}
+
 /** One streamed round as server-sent events, the way OpenRouter sends it. */
 function sse(reply: z.infer<typeof ReplySchema>): string {
   const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
@@ -278,6 +319,7 @@ if (import.meta.main) {
       if (url.pathname === "/fake-joins") return Response.json(joins, { headers: cors });
       if (url.pathname === "/fake-work") return Response.json({ log: workLog, running }, { headers: cors });
       if (url.pathname === "/fake-lan") return Response.json(lanStarts, { headers: cors });
+      if (url.pathname === "/fake-web") return Response.json(webRenders, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
         const { sql } = z.object({ sql: z.string() }).parse(await req.json());
@@ -305,6 +347,19 @@ if (import.meta.main) {
           return Response.json({ ok: Buffer.from(row.data).toString("base64") }, { headers: cors });
         }
         if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
+        // Spec: LIB-28
+        // Rust's fetch and render, for the two blogs above; nowhere else answers.
+        if (cmd === "web_get") {
+          const got = fakeWeb(String(args["url"]));
+          if (!got) return Response.json({ err: `couldn't fetch ${String(args["url"])}: dns error` }, { headers: cors });
+          return Response.json({ ok: got }, { headers: cors });
+        }
+        if (cmd === "web_render") {
+          const url = String(args["url"]);
+          webRenders.push(url);
+          if (url === "https://spa.example.com/blog/loops") return Response.json({ ok: { html: RENDERED_POST, url } }, { headers: cors });
+          return Response.json({ err: `${url} didn't finish loading in 30 s` }, { headers: cors });
+        }
         // Sync, enough for the pairing screen: a device that holds a book, a
         // code as long as a real one, and joins recorded for the checks.
         // Spec: AUD-6, AUD-7

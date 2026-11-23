@@ -7,6 +7,8 @@ import { addFile, isKind, KIND_NAMES, LIBRARY_TABLES, listItems, problemWith, si
 import { useTablesVersion } from "../lib/live";
 import { importArxiv } from "../lib/arxiv";
 import { parseArxivId } from "../lib/arxivModel";
+import { importWebPage } from "../lib/web";
+import { hostOf, webAddress } from "../lib/webModel";
 import { detailsOf, messageOf, note } from "../lib/diagnostics";
 
 type Filter = "all" | Kind;
@@ -38,7 +40,7 @@ function Browse(props: { tab: "people" | "institutions"; query: string }) {
 }
 
 // Spec: LIB-1, LIB-2
-/** The papers and books: search, filter by kind, add PDFs by choosing or dropping them. */
+/** The papers, books and posts: search, filter by kind, add PDFs by choosing or dropping them, or arXiv papers and posts by address. */
 export default function LibraryPage() {
   const version = useTablesVersion(LIBRARY_TABLES);
   const navigate = useNavigate();
@@ -73,16 +75,19 @@ export default function LibraryPage() {
     );
   }, [items, query, filter]);
 
-  const [arxivInput, setArxivInput] = useState("");
-  const fromArxiv = async () => {
+  // Spec: LIB-23, LIB-28
+  // An arXiv number (or arXiv address) adds the paper; any other web address, the post there.
+  const [addressInput, setAddressInput] = useState("");
+  const arxivId = parseArxivId(addressInput);
+  const fromAddress = async () => {
     setProblems([]);
     try {
-      const id = await importArxiv(arxivInput, setBusy);
-      setArxivInput("");
+      const id = arxivId ? await importArxiv(addressInput, setBusy) : await importWebPage(addressInput, setBusy);
+      setAddressInput("");
       void navigate(`/library/${id}`);
     } catch (e) {
       // Spec: DIAG-1
-      note("error", "library", `Adding from arXiv failed: ${messageOf(e)}`, detailsOf(e));
+      note("error", "library", `Adding ${arxivId ? "from arXiv" : "from the web"} failed: ${messageOf(e)}`, detailsOf(e));
       setProblems([messageOf(e)]);
     } finally {
       setBusy(null);
@@ -149,26 +154,27 @@ export default function LibraryPage() {
           }}
         />
       </div>
-      {/* Spec: LIB-23 */}
+      {/* Spec: LIB-23, LIB-28 */}
       <form
         className="arxiv-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void fromArxiv();
+          void fromAddress();
         }}
       >
         <input
-          value={arxivInput}
-          onChange={(e) => setArxivInput(e.target.value)}
-          placeholder="arXiv number or address, e.g. 1706.03762"
-          aria-label="arXiv number or address"
+          value={addressInput}
+          onChange={(e) => setAddressInput(e.target.value)}
+          placeholder="arXiv number or web address"
+          aria-label="arXiv number or web address"
+          inputMode="url"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
           disabled={busy !== null}
         />
-        <button type="submit" disabled={busy !== null || parseArxivId(arxivInput) === null}>
-          Add from arXiv
+        <button type="submit" disabled={busy !== null || (arxivId === null && webAddress(addressInput) === null)}>
+          {arxivId ? "Add from arXiv" : "Add"}
         </button>
       </form>
       {busy ? <p className="muted">{busy}</p> : null}
@@ -180,7 +186,7 @@ export default function LibraryPage() {
       <div className="segmented library-tabs" role="tablist">
         {(["items", "people", "institutions"] as const).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k === "items" ? null : k)}>
-            {k === "items" ? "Papers and books" : k === "people" ? "People" : "Institutions"}
+            {k === "items" ? "Items" : k === "people" ? "People" : "Institutions"}
           </button>
         ))}
       </div>
@@ -193,7 +199,7 @@ export default function LibraryPage() {
         />
         {tab === "items" ? (
           <div className="segmented" role="tablist">
-            {(["all", "paper", "book"] as const).map((f) => (
+            {(["all", "paper", "book", "post"] as const).map((f) => (
               <button key={f} type="button" role="tab" aria-selected={filter === f} onClick={() => setKind(f === "all" ? null : f)}>
                 {f === "all" ? "All" : `${KIND_NAMES[f]}s`}
               </button>
@@ -206,7 +212,7 @@ export default function LibraryPage() {
       ) : (
         <>
           {items && items.length === 0 ? (
-            <p className="muted library-empty">No papers or books yet. Add a PDF, or drop one here.</p>
+            <p className="muted library-empty">Nothing here yet. Add a PDF or drop one here, or give an arXiv number or a post's address.</p>
           ) : null}
           <ul className="library-list">
             {shown.map((i) => (
@@ -214,7 +220,7 @@ export default function LibraryPage() {
                 <Link to={`/library/${i.id}`} className="library-row">
                   <span className="library-title">{i.title}</span>
                   <span className="library-meta muted">
-                    {[i.authors || null, i.year, KIND_NAMES[i.kind], i.pages ? `${i.pages} pages` : null, sizeText(i.fileSize)]
+                    {[i.authors || null, i.year, KIND_NAMES[i.kind], i.pages ? `${i.pages} pages` : null, i.kind === "post" ? hostOf(i.filename) : sizeText(i.fileSize)]
                       .filter((x) => x !== null && x !== "")
                       .join(" · ")}
                   </span>

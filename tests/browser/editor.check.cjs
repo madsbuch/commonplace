@@ -742,7 +742,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     });
     await page.goto(APP + "/library");
     await page.waitForTimeout(800);
-    await page.getByLabel("arXiv number or address").fill("arXiv:1706.03762v5");
+    await page.getByLabel("arXiv number or web address").fill("arXiv:1706.03762v5");
     await page.getByRole("button", { name: "Add from arXiv" }).click();
     await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
     await page.waitForTimeout(2500);
@@ -793,16 +793,80 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     // Spec: LIB-23
     await page.goto(APP + "/library");
     await page.waitForTimeout(600);
-    await page.getByLabel("arXiv number or address").fill("https://arxiv.org/abs/1706.03762");
+    await page.getByLabel("arXiv number or web address").fill("https://arxiv.org/abs/1706.03762");
     await page.getByRole("button", { name: "Add from arXiv" }).click();
     await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
     check("adding it again opens the one already there", page.url().includes(arx?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE arxiv_id = '1706.03762'"))[0].n === 1);
     await page.goto(APP + "/library");
     await page.waitForTimeout(600);
-    await page.getByLabel("arXiv number or address").fill("2101.99999");
+    await page.getByLabel("arXiv number or web address").fill("2101.99999");
     await page.getByRole("button", { name: "Add from arXiv" }).click();
     await page.waitForTimeout(1500);
     check("an unknown number says so", (await page.locator(".library-problem").innerText()).includes("arXiv doesn't know 2101.99999"));
+
+    // Spec: LIB-28
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({
+        answer: {
+          title: "The model's title",
+          authors: [
+            { name: "Grace Hopper", institutions: ["Example Labs"] },
+            { name: "Ada Lovelace", institutions: [] },
+          ],
+          year: 1999,
+          kind: "book",
+        },
+      }),
+    });
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or web address").fill("blog.example.com/posts/on-compilers");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(2500);
+    const post = (await q("SELECT i.id, i.title, i.year, i.kind, i.authors, i.filename, h.html, h.source_url FROM library_items i JOIN library_html h ON h.item_id = i.id WHERE i.kind = 'post'"))[0];
+    check("a blog post comes by its address, a post, with the title, byline and date its page gives", post?.title === "On Compilers" && post?.kind === "post" && post?.year === 2024 && post?.authors === "Grace Hopper, Ada Lovelace", JSON.stringify({ ...post, html: undefined }));
+    check("kept with the address it was read at", post?.source_url === "https://blog.example.com/posts/on-compilers/" && post?.filename === post?.source_url);
+    check("its text without the site's navigation, side bars, footer or scripts", post?.html.includes("Parsing, paragraph 6") && !post?.html.includes("Archive") && !post?.html.includes("Related posts") && !post?.html.includes("Privacy") && !post?.html.includes("<script") && !post?.html.includes("evil"), post?.html.slice(0, 400));
+    check("its figure inside it, its maths as MathML once, its video a link", post?.html.includes('src="data:image/png;base64,') && post?.html.includes('alttext="O(n)"') && !post?.html.includes("O(n) drawn") && post?.html.includes('href="https://blog.example.com/media/talk.mp4"') && !post?.html.includes("<video"));
+    const postAuthors = await q(`SELECT p.name, i.name AS inst FROM authorships s JOIN people p ON p.id = s.person_id LEFT JOIN affiliations a ON a.authorship_id = s.id LEFT JOIN institutions i ON i.id = a.institution_id WHERE s.item_id = '${post?.id}' ORDER BY s.position`);
+    check("the byline's authors stand, with the institutions the model read", postAuthors.map((a) => `${a.name}/${a.inst}`).join(", ") === "Grace Hopper/Example Labs, Ada Lovelace/null", JSON.stringify(postAuthors));
+    check("it opens as text, its sections as its contents, its site linked", (await page.locator(".html-reader").innerText()).includes("Front ends") && (await page.locator(".item-meta a", { hasText: "blog.example.com" }).count()) === 1);
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    const postToc = await page.locator(".toc").innerText();
+    check("the contents are its sections, not its title", postToc.includes("Front ends") && postToc.includes("Back ends") && !postToc.includes("On Compilers"), postToc);
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    check("the library lists it as a blog post from its site", (await page.locator(".library-row", { hasText: "On Compilers" }).innerText()).includes("Blog post · blog.example.com"));
+    await page.getByLabel("arXiv number or web address").fill("https://blog.example.com/posts/on-compilers#front-ends");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    check("adding its address again opens the one already there", page.url().includes(post?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE kind = 'post'"))[0].n === 1, page.url());
+
+    // A page that builds itself: an empty shell until it's rendered.
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({ answer: { title: "Ignored", authors: [{ name: "Lin Wei", institutions: ["Spa Inc."] }], year: 2026, kind: "paper" } }),
+    });
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or web address").fill("https://spa.example.com/blog/loops");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(2500);
+    const spa = (await q("SELECT i.id, i.title, i.year, i.kind, i.authors, h.html FROM library_items i JOIN library_html h ON h.item_id = i.id WHERE h.source_url = 'https://spa.example.com/blog/loops'"))[0];
+    const renders = await (await fetch(`${FAKE}/fake-web`)).json();
+    check("a page that builds itself is rendered and read", renders.includes("https://spa.example.com/blog/loops") && spa?.html.includes("Gates, paragraph 6") && spa?.html.includes('src="data:image/png;base64,'), JSON.stringify({ ...spa, html: spa?.html.slice(0, 300) }));
+    check("its title the heading that holds the page's short one; what the page doesn't give, the model's", spa?.title === "Spa 2: Loops All the Way" && spa?.kind === "post" && spa?.year === 2026 && spa?.authors === "Lin Wei", JSON.stringify({ ...spa, html: undefined }));
+    const spaRequest = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).at(-1));
+    check("the model reads the post and the page around it (where its date is)", spaRequest.includes("blog post in my library") && spaRequest.includes("Looping, paragraph 1") && spaRequest.includes("2026-11-23"), spaRequest.slice(0, 300));
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or web address").fill("https://nowhere.example.net/post");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForTimeout(1500);
+    check("an address that can't be reached says so", (await page.locator(".library-problem").innerText()).includes("couldn't fetch https://nowhere.example.net/post"), await page.locator(".library-problem").innerText());
 
     // Spec: LIB-25
     await page.setViewportSize({ width: 390, height: 800 });

@@ -9,10 +9,11 @@ import { beginWork } from "./work";
 import { useSyncExternalStore } from "react";
 import { getSetting, setSetting } from "./db";
 import { getApiKey } from "./aiSettings";
-import { getItem, isKind, LIBRARY_TABLES, readFile, updateItem, type KnownDetails } from "./library";
+import { getItem, hasFile, isKind, LIBRARY_TABLES, readFile, readHtml, updateItem, type KnownDetails } from "./library";
+import { hostOf } from "./webModel";
 import { notifyTablesChanged } from "./live";
 import { chatJson, errorMessage } from "./openrouter";
-import { DETAILS_FORMAT, detailsMessages, parseDetails } from "./libraryDetailsModel";
+import { DETAILS_FORMAT, detailsMessages, parseDetails, type PostDetails } from "./libraryDetailsModel";
 import { openPdf, type OpenPdf } from "./pdf";
 import { itemAuthors, setItemAuthors } from "./people";
 import { splitAuthors } from "./peopleModel";
@@ -116,7 +117,7 @@ async function fallBack(itemId: string, metadataAuthors: string | null): Promise
  */
 export async function readDetails(
   itemId: string,
-  opts: { bytes?: Uint8Array; text?: string; metadataAuthors?: string | null; known?: KnownDetails } = {},
+  opts: { bytes?: Uint8Array; text?: string; metadataAuthors?: string | null; known?: KnownDetails; post?: PostDetails } = {},
 ): Promise<boolean> {
   const metadataAuthors = opts.metadataAuthors ?? null;
   const key = await getApiKey();
@@ -127,14 +128,25 @@ export async function readDetails(
     return false;
   }
   setStatus(itemId, { state: "reading" });
+  const item = await getItem(itemId);
+  // Spec: LIB-28
+  // A post stays a post, its title as it stands, when it's read again.
+  const post = opts.post ?? (item?.kind === "post" ? { title: item.title, authors: [], year: null, site: hostOf(item.filename) } : undefined);
   // Spec: WORK-1, DIAG-1
-  const work = beginWork("library", `Reading the details of “${(await getItem(itemId))?.title ?? itemId}”`);
+  const work = beginWork("library", `Reading the details of “${item?.title ?? itemId}”`);
   try {
     let pages: { text: string } | { images: string[] };
     if (opts.text !== undefined) {
       // Spec: LIB-24
       // An HTML version: its text, as far as the first pages of a PDF would go.
       pages = { text: opts.text.slice(0, MAX_TEXT) };
+    } else if (!opts.bytes && !(await hasFile(itemId))) {
+      // Spec: LIB-24
+      // No PDF: the HTML version's text.
+      const html = await readHtml(itemId);
+      if (html === null) throw new Error("Neither its PDF nor its text is on this device yet.");
+      const { textOf } = await import("./paperHtml");
+      pages = { text: textOf(new DOMParser().parseFromString(html, "text/html").body).slice(0, MAX_TEXT) };
     } else {
       const bytes = opts.bytes ?? (await readFile(itemId));
       const pdf = await openPdf(bytes.slice());
@@ -144,21 +156,28 @@ export async function readDetails(
         pdf.close();
       }
     }
-    const raw = await chatJson(key, await getDetailsModel(), detailsMessages(pages, opts.known), DETAILS_FORMAT, { feature: "library_details" });
+    const raw = await chatJson(key, await getDetailsModel(), detailsMessages(pages, opts.known, post), DETAILS_FORMAT, { feature: "library_details" });
     const details = parseDetails(raw);
     if (!(await getItem(itemId))) return false;
-    // Spec: LIB-23
-    // What arXiv says stands over what the model read.
+    // Spec: LIB-23, LIB-28
+    // What arXiv says, or what a post's page gives of itself, stands over what the model read.
     const known = opts.known;
     await updateItem(itemId, {
-      ...(known ? { title: known.title, year: known.year } : details.title.trim() ? { title: details.title.trim(), year: details.year } : { year: details.year }),
-      ...(isKind(details.kind) && !known ? { kind: details.kind } : {}),
+      ...(known
+        ? { title: known.title, year: known.year }
+        : post
+          ? { title: post.title, year: post.year ?? details.year }
+          : details.title.trim()
+            ? { title: details.title.trim(), year: details.year }
+            : { year: details.year }),
+      ...(isKind(details.kind) && !known && !post ? { kind: details.kind } : {}),
     });
-    // arXiv's authors stand; the model gives their institutions when it read the same authors.
-    const authors = known
-      ? known.authors.map((name, i) => ({
+    // Those authors stand; the model gives their institutions when it read the same authors.
+    const given = known?.authors ?? (post && post.authors.length > 0 ? post.authors : null);
+    const authors = given
+      ? given.map((name, i) => ({
           name,
-          institutions: (details.authors.length === known.authors.length ? details.authors[i]?.institutions : undefined) ?? [],
+          institutions: (details.authors.length === given.length ? details.authors[i]?.institutions : undefined) ?? [],
         }))
       : details.authors.filter((a) => a.name.trim() !== "");
     if (authors.length > 0) await setItemAuthors(itemId, authors);

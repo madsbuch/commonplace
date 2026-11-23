@@ -1,0 +1,5 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Rendering a web page off screen (called from Rust, not the frontend)"
+permissions = ["allow-render"]
