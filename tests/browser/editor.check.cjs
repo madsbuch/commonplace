@@ -238,7 +238,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     // Spec: LIB-5, LIB-8
     await page.goto(APP + "/library/" + second);
     await page.waitForTimeout(800);
-    await page.getByRole("button", { name: "Details" }).click();
+    await page.getByRole("button", { name: "Details", exact: true }).click();
     await page.locator(".library-details select").selectOption("book");
     await page.waitForTimeout(500);
     check("the author can change an item's details", (await q(`SELECT kind FROM library_items WHERE id = '${second}'`))[0]?.kind === "book");

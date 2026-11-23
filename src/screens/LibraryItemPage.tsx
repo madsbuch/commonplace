@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AuthorsEditor } from "../components/AuthorsEditor";
+import { InfoButton } from "../components/InfoButton";
 import { PdfViewer } from "../components/PdfViewer";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
 import { getItem, hasFile, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, removeItem, updateItem, type LibraryItem } from "../lib/library";
@@ -61,18 +62,35 @@ function Details(props: { item: LibraryItem }) {
   );
 }
 
-/** What the model is doing with this item's details, if anything. */
-function DetailsStatusLine(props: { itemId: string }) {
+// Spec: APP-9, LIB-4, LIB-9, LIB-11
+/** Where the details come from, behind an ⓘ that also shows whether a model is reading them. */
+function DetailsInfo(props: { itemId: string }) {
   const status = useDetailsStatus(props.itemId);
-  if (!status) return null;
-  if (status.state === "reading") return <p className="details-status">Reading the details…</p>;
-  if (status.state === "no-key")
-    return (
-      <p className="details-status">
-        The details came from the PDF itself. <Link to="/settings">Add an OpenRouter key</Link> to have a model read them.
+  const tone = status?.state === "reading" ? "busy" : status?.state === "failed" ? "warning" : undefined;
+  return (
+    <InfoButton title="Where these details come from" {...(tone ? { tone } : {})}>
+      {status?.state === "reading" ? <p>A model is reading the details now.</p> : null}
+      {status?.state === "failed" ? (
+        <p className="info-error">
+          Reading the details failed: {status.message}{" "}
+          <button type="button" className="ai-link" onClick={() => void readDetails(props.itemId)}>
+            Try again
+          </button>
+        </p>
+      ) : null}
+      {status?.state === "no-key" ? (
+        <p>
+          These came from the PDF itself, as there's no OpenRouter key yet. <Link to="/settings">Add one in Settings</Link>, then
+          choose Read details again under Details.
+        </p>
+      ) : null}
+      <p>
+        When a PDF is added, a model reads its first pages for the title, the authors and their institutions, the year and
+        whether it's a paper or a book. Without a key, or if that fails, the PDF's own metadata is used.
       </p>
-    );
-  return <p className="details-status failed">Reading the details failed: {status.message}</p>;
+      <p>Change any of it under Details. Read details again there asks the model again and replaces what's shown.</p>
+    </InfoButton>
+  );
 }
 
 // Spec: LIB-5, LIB-6, LIB-8, LIB-11
@@ -134,8 +152,10 @@ export default function LibraryItemPage() {
       </div>
       <div className="item-head">
         <AuthorsEditor itemId={item.id} editing={false} />
-        <p className="item-meta muted">{[item.year, KIND_NAMES[item.kind], item.pages ? `${item.pages} pages` : null].filter(Boolean).join(" · ")}</p>
-        <DetailsStatusLine itemId={item.id} />
+        <p className="item-meta muted with-info">
+          <span>{[item.year, KIND_NAMES[item.kind], item.pages ? `${item.pages} pages` : null].filter(Boolean).join(" · ")}</span>
+          <DetailsInfo itemId={item.id} />
+        </p>
       </div>
       {showDetails ? (
         <>
@@ -144,7 +164,6 @@ export default function LibraryItemPage() {
             <button type="button" onClick={() => void readDetails(item.id)}>
               Read details again
             </button>
-            <span className="muted">The model reads the first pages and replaces the details above.</span>
           </div>
         </>
       ) : null}

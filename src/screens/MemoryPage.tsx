@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { InfoButton } from "../components/InfoButton";
 import { useTablesVersion } from "../lib/live";
 import { deleteMemory, isMemoryKind, listMemory, MEMORY_KIND_NAMES, MEMORY_KINDS, updateMemory, addMemory, type MemoryEntry } from "../lib/memory";
 
@@ -57,8 +58,14 @@ export default function MemoryPage() {
       <Link to="/chats" className="back-link">
         ← Chats
       </Link>
-      <h1>Memory</h1>
-      <p className="muted">What the assistant knows in every chat. It adds to this when you ask it to remember something; deleting a chat keeps it.</p>
+      <div className="with-info">
+        <h1>Memory</h1>
+        {/* Spec: APP-9 */}
+        <InfoButton title="The assistant's memory">
+          <p>What the assistant knows in every chat. It adds to this when you ask it to remember something, or tell it how you want to be helped.</p>
+          <p>Deleting a chat keeps the memory. Edit or delete anything here.</p>
+        </InfoButton>
+      </div>
       {MEMORY_KINDS.map((k) => {
         const of = (entries ?? []).filter((e) => e.kind === k);
         return (

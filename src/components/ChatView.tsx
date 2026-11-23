@@ -53,9 +53,6 @@ export function ChatView() {
       <div className="assistant-body">
         {items.length === 0 && !busy ? (
           <>
-            <p className="assistant-note">
-              Ask about what you have open, anything in the book or the library, or pick one of these. It reads by itself, and never writes the book.
-            </p>
             <div className="assistant-actions">
               {ACTION_BUTTONS.map((a) => (
                 <button key={a.key} type="button" className="assistant-chip" disabled={blocked} onClick={() => void send(a.prompt, a.key)}>

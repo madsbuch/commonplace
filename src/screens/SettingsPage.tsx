@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ModelPicker, modelSub } from "../components/ModelPicker";
+import { InfoButton } from "../components/InfoButton";
 import { SettingsRows } from "../components/SettingsRows";
 import { getDetailsModel, saveDetailsModel } from "../lib/libraryDetails";
 import {
@@ -131,21 +132,26 @@ export default function SettingsPage() {
       <SettingsRows />
 
       <section className="ai-section">
-        <h2>OpenRouter</h2>
-        <p className="muted">
-          The assistant runs on a model of your choice through{" "}
-          <a
-            href="https://openrouter.ai/keys"
-            onClick={(e) => {
-              e.preventDefault();
-              void openUrl("https://openrouter.ai/keys");
-            }}
-          >
-            OpenRouter
-          </a>
-          , with your own API key. The key syncs to your other devices with the book. Pages you ask about are sent to
-          OpenRouter and nowhere else.
-        </p>
+        <div className="with-info">
+          <h2>OpenRouter</h2>
+          {/* Spec: APP-9 */}
+          <InfoButton title="OpenRouter">
+            <p>
+              The assistant and the library run on models of your choice through{" "}
+              <a
+                href="https://openrouter.ai/keys"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void openUrl("https://openrouter.ai/keys");
+                }}
+              >
+                OpenRouter
+              </a>
+              , with your own API key.
+            </p>
+            <p>The key syncs to your other devices with the book. What you ask about is sent to OpenRouter and nowhere else.</p>
+          </InfoButton>
+        </div>
 
         {savedKey ? (
           <div className="ai-row">
@@ -227,8 +233,12 @@ export default function SettingsPage() {
 
       {/* Spec: LIB-10 */}
       <section className="ai-section">
-        <h2>Library details model</h2>
-        <p className="muted ai-small">Reads a new paper's or book's first pages for its title, authors, institutions and year.</p>
+        <div className="with-info">
+          <h2>Library details model</h2>
+          <InfoButton title="Library details model">
+            <p>The model that reads a new paper's or book's first pages for its title, authors, institutions, year and kind.</p>
+          </InfoButton>
+        </div>
         <div className="ai-row">
           <div className="model-current">
             <div className="model-name">{models.find((m) => m.id === detailsModel)?.name ?? detailsModel ?? "…"}</div>

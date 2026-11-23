@@ -197,6 +197,11 @@ The book syncs peer to peer over the local network, as Tally does
 - Fonts are bundled (`@fontsource-variable/literata` for the book,
   `@fontsource-variable/inter` for the interface), imported in `main.tsx`.
 - `Ctrl+K` / `⌘K` opens the page search (`src/components/QuickOpen.tsx`).
+- Explanations of how something works go behind an ⓘ
+  (`src/components/InfoButton.tsx`, a sheet on phones), never as grey text on
+  the screen; the screen's text says how things stand (APP-9). The ⓘ can
+  pulse while what it explains is under way (`tone="busy"`) or turn the
+  warning colour when it failed (`tone="warning"`), with the details inside.
 
 ## AI
 

@@ -1537,3 +1537,70 @@ a.settings-row:hover {
   margin: 0;
   width: 132px;
 }
+
+/* Spec: APP-9 — info buttons and the sheet behind them */
+.info-btn {
+  border: none;
+  padding: 2px;
+  border-radius: 999px;
+  color: var(--muted);
+  vertical-align: middle;
+  line-height: 0;
+}
+.info-btn:hover {
+  color: var(--accent);
+  background: transparent;
+}
+.info-btn.warning {
+  color: #c4372b;
+}
+.info-btn.busy svg {
+  animation: info-pulse 1.2s ease-in-out infinite;
+}
+@keyframes info-pulse {
+  50% {
+    opacity: 0.35;
+    color: var(--accent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .info-btn.busy svg {
+    animation: none;
+  }
+}
+.with-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.with-info > h1,
+.with-info > h2 {
+  margin-bottom: 0;
+}
+.info-sheet {
+  width: min(420px, 100%);
+}
+.info-body {
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.info-body p {
+  margin: 0 0 10px;
+}
+.info-body a {
+  color: var(--accent);
+}
+.info-body .info-error {
+  color: #c4372b;
+}
+@media (max-width: 760px) {
+  .info-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .info-sheet {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}

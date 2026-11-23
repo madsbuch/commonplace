@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { newChat, openLastChat, useAssistant } from "../lib/assistantRunner";
 import { setDockOpen } from "../lib/dock";
 import { ChatView } from "./ChatView";
+import { InfoButton } from "./InfoButton";
 
 // Spec: CHAT-3, ATL-1
 /**
@@ -19,7 +20,17 @@ export function AssistantDock() {
     <aside className="assistant" aria-label="Assistant">
       <div className="assistant-head">
         <div className="assistant-title">
-          <strong>Assistant</strong>
+          <span className="with-info">
+            <strong>Assistant</strong>
+            {/* Spec: APP-9 */}
+            <InfoButton title="The assistant">
+              <p>Ask about what you have open, or anything in the book or the library; or pick one of the suggestions.</p>
+              <p>
+                It looks at your screen and what you've selected, and reads pages and PDFs by itself. It never writes or changes
+                anything in the book or the library; it only keeps its chats and its memory.
+              </p>
+            </InfoButton>
+          </span>
           <span className="assistant-page">{s.chatId ? s.title || "New chat" : "No chat open"}</span>
         </div>
         <button type="button" className="assistant-ghost" title="Start a new chat" disabled={s.status === "running"} onClick={() => void newChat()}>

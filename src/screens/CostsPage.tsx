@@ -1,4 +1,5 @@
 import { BackToSettings } from "../components/SettingsRows";
+import { InfoButton } from "../components/InfoButton";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -88,11 +89,16 @@ export default function CostsPage() {
   return (
     <div className="screen ai-screen">
       <BackToSettings />
-      <h1>AI costs</h1>
-      <p className="muted">
-        What the assistant has cost, from what OpenRouter reported for each answer, on all your devices.{" "}
-        <Link to="/settings">Model and key</Link>
-      </p>
+      <div className="with-info">
+        <h1>AI costs</h1>
+        {/* Spec: APP-9 */}
+        <InfoButton title="AI costs">
+          <p>What the assistant and the library have cost, from what OpenRouter reported for each answer, on all your devices.</p>
+          <p>
+            <Link to="/settings">Model and key</Link>
+          </p>
+        </InfoButton>
+      </div>
 
       <div className="ai-filters" role="radiogroup" aria-label="Range">
         {RANGES.map((r) => (
