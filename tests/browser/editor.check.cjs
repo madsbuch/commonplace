@@ -901,6 +901,9 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("the summary's parts are its chapters", (await page.locator(".recording-chapters").innerText()).includes("The question") && JSON.parse(sum?.chapters ?? "[]").length === 2);
     const sumAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(-1));
     check("asked for the words five minutes take", sumAsk.includes("About 750 words"));
+    // Spec: AUD-4
+    const writers = (await q(`SELECT p.name FROM authorships s JOIN people p ON p.id = s.person_id WHERE s.item_id IN (${JSON.parse(sum?.items ?? "[]").map((i) => `'${i}'`).join(",")})`)).map((r) => r.name);
+    check("and told nothing of who wrote them", writers.length > 0 && writers.every((n) => !sumAsk.includes(n)), JSON.stringify(writers));
 
     // Spec: APP-12
     await page.getByRole("button", { name: "More for this recording" }).click();

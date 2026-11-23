@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chapterAt, clock, cut, isBibliography, MAX_PASSAGE, parseSpoken, parseSummary, passages, summaryPrompt, timeOfFragment, VOICES } from "../src/lib/audioModel";
+import { chapterAt, clock, cut, isBibliography, MAX_PASSAGE, parseSpoken, parseSummary, passages, summaryPrompt, timeOfFragment, VERBATIM_PROMPT, VOICES } from "../src/lib/audioModel";
 
 describe("passages for the speech model", () => {
   test("paragraphs stay whole when they fit, and short ones go together", () => {
@@ -39,6 +39,11 @@ describe("summaries", () => {
   test("ask for the words the length needs", () => {
     expect(summaryPrompt(5)).toContain("About 750 words");
     expect(summaryPrompt(30)).toContain("About 4500 words");
+  });
+  // Spec: AUD-3, AUD-4
+  test("neither a summary nor a reading says who wrote the work", () => {
+    expect(summaryPrompt(15)).toContain("never who wrote them");
+    expect(VERBATIM_PROMPT).toContain("Drop what isn't read aloud: the authors' names, their institutions");
   });
   test("come back as chapters", () => {
     expect(parseSummary({ title: "Attention", parts: [{ title: "The question", paragraphs: ["Why."] }, { title: "Empty", paragraphs: [] }] })).toEqual({

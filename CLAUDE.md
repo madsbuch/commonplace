@@ -301,9 +301,15 @@ read and show verdicts.
 
 ## Look and feel
 
-- The app is Commonplace (`app.name`); the logo is `src/assets/logo.svg`,
-  rendered to `app-icon.png` (`bun run tauri icon app-icon.png` makes the
-  desktop icons) and `.spec/assets/logo.png`. Android has its own set in
+- The app is Commonplace (`app.name`); the logo is a C of page edges with a
+  ribbon tucked between the pages, hanging out below. Every form of it comes
+  from one geometry in `scripts/logo.mjs` (`node scripts/logo.mjs`): the
+  SVGs (`src/assets/logo.svg`, `logo-round.svg`,
+  `logo-android-foreground.svg`, `public/favicon.svg`), `app-icon.png`,
+  `.spec/assets/logo.png` and Android's PNGs. `bun run tauri icon
+  app-icon.png` makes the desktop icons from it; then run the script again
+  and `git checkout src-tauri/icons/android/mipmap-anydpi-v26` (and drop
+  `src-tauri/icons/ios`), since `tauri icon` writes over Android's. Android has its own set in
   `src-tauri/icons/android` (an adaptive icon: the mark from
   `logo-android-foreground.svg` over the logo's ink blue, plus `logo-round.svg`
   and the logo for older launchers); `tauri icon` would overwrite it, so

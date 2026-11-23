@@ -115,6 +115,12 @@ export async function inlineImages(root: Element, base: string, get: (url: strin
   await Promise.all([worker(), worker(), worker(), worker()]);
 }
 
+// Spec: AUD-3, AUD-4
+/** Takes the authors out (names, institutions, contact details, notes on them): recordings say what a paper says, not who wrote it. */
+export function withoutAuthors(root: Element): void {
+  for (const e of root.querySelectorAll(".ltx_authors, .ltx_author_notes, .ltx_role_affiliation, .ltx_contact, .ltx_role_email, .ltx_role_address")) e.remove();
+}
+
 // Spec: LIB-25
 /** A stored HTML version as it's read: tidied (versions kept before the tidying improved too), and safe. */
 export function readablePaper(html: string): string {

@@ -115,7 +115,7 @@ export const VERBATIM_PROMPT = `You prepare a passage of a scientific paper or b
 
 - Keep every word of the prose exactly as written, in its order. Don't summarize, explain, shorten or add anything.
 - Say each formula the way a mathematician reads it aloud: "x squared plus y", "the sum over i from 1 to n of a sub i", "f of x", "for all x in A". Maths may be given as LaTeX between $ signs, or garbled by extraction from a PDF; read what it means. Keep a formula's number only if the text refers to it.
-- Drop what isn't read aloud: page numbers, running heads, footnote marks, numeric citation marks like [12], URLs, and hyphens that only split a word across lines.
+- Drop what isn't read aloud: the authors' names, their institutions, emails and footnotes about them; page numbers, running heads, footnote marks, numeric citation marks like [12], URLs, and hyphens that only split a word across lines.
 - Read figure and table captions. Leave out the body of a table and an algorithm's code, saying in a few words what it shows.
 - Split the passage into paragraphs as written.`;
 
@@ -142,7 +142,7 @@ export function summaryPrompt(minutes: number): string {
 
 - About ${words} words in all (${minutes} minutes read aloud). Spend them on what matters: the question, the ideas, the main results and how they're reached, and how the works relate to each other.
 - Written to be heard: plain sentences, no lists, no headings read out, no visual references ("as shown in the figure"). Formulas said the way a mathematician reads them aloud, and only where they help.
-- Name each work and its authors the first time it comes up.
+- What the works say, never who wrote them: name a work by its title, and never its authors, their institutions or anyone's role in writing it.
 - In parts of a few paragraphs each, each with a short title: these are the recording's chapters. Begin with what the recording is about.`;
 }
 

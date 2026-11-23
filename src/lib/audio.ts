@@ -160,7 +160,7 @@ function scope(flat: readonly Flat[], from: number | null): Flat[] {
 async function htmlChapters(item: LibraryItem, section: string | null): Promise<SourceChapter[] | null> {
   const html = await readHtml(item.id);
   if (html === null) return null;
-  const { sanitizePaper, sectionsOf, textOf } = await import("./paperHtml");
+  const { sanitizePaper, sectionsOf, textOf, withoutAuthors } = await import("./paperHtml");
   const root = new DOMParser().parseFromString(sanitizePaper(html), "text/html").body;
   const flat = flatten(sectionsOf(root));
   const anchor = section?.startsWith("html:") ? section.slice(5) : null;
@@ -173,10 +173,12 @@ async function htmlChapters(item: LibraryItem, section: string | null): Promise<
     return textOf(copy);
   };
   if (from === null) {
-    // What comes before the first section: the title, the authors, the abstract.
+    // What comes before the first section: the title and the abstract.
     const front = root.cloneNode(true);
     if (front instanceof Element) {
       for (const s of front.querySelectorAll("section[id]")) s.remove();
+      // Spec: AUD-3
+      withoutAuthors(front);
       const text = textOf(front);
       if (text.trim()) chapters.push({ title: item.title, text });
     }
@@ -238,8 +240,11 @@ async function pdfChapters(item: LibraryItem, section: string | null): Promise<S
 async function wholeText(item: LibraryItem, budget: number): Promise<string> {
   const html = await readHtml(item.id);
   if (html !== null) {
-    const { sanitizePaper, textOf } = await import("./paperHtml");
-    return textOf(new DOMParser().parseFromString(sanitizePaper(html), "text/html").body).slice(0, budget);
+    const { sanitizePaper, textOf, withoutAuthors } = await import("./paperHtml");
+    const body = new DOMParser().parseFromString(sanitizePaper(html), "text/html").body;
+    // Spec: AUD-4
+    withoutAuthors(body);
+    return textOf(body).slice(0, budget);
   }
   return (await pdfChapters(item, null)).map((c) => `${c.title}\n\n${c.text}`).join("\n\n").slice(0, budget);
 }
@@ -290,7 +295,9 @@ export async function writeScript(id: string): Promise<void> {
     if (rec.kind === "summary") {
       const budget = Math.floor(SUMMARY_BUDGET / items.length);
       const works = await Promise.all(
-        items.map(async (i, n) => `Work ${n + 1}: "${i.title}"${i.authors ? ` by ${i.authors}` : ""}${i.year ? ` (${i.year})` : ""}\n\n${await wholeText(i, budget)}`),
+        // Spec: AUD-4
+        // What they say, not who wrote them: no authors go to the model.
+        items.map(async (i, n) => `Work ${n + 1}: "${i.title}"${i.year ? ` (${i.year})` : ""}\n\n${await wholeText(i, budget)}`),
       );
       const raw = await chatJson(key, model, [{ role: "system", content: summaryPrompt(rec.minutes ?? 15) }, { role: "user", content: works.join("\n\n---\n\n") }], SUMMARY_FORMAT, {
         feature: "audio_script",

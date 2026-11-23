@@ -39,11 +39,29 @@
     },
     {
       "id": "AUD-3",
-      "text": "A verbatim recording reads the text as written. Formulas are said the way a mathematician reads them aloud, and figure captions are read; the bibliography, page numbers, running heads and footnote marks are not."
+      "text": "A verbatim recording reads the text as written. Formulas are said the way a mathematician reads them aloud, and figure captions are read; the authors, their institutions and contact details, the bibliography, page numbers, running heads and footnote marks are not.",
+      "history": [
+        {
+          "version": 1,
+          "text": "A verbatim recording reads the text as written. Formulas are said the way a mathematician reads them aloud, and figure captions are read; the bibliography, page numbers, running heads and footnote marks are not.",
+          "reason": "The author wants to hear what the papers say; who wrote them took the listener's time and isn't wanted.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-4",
-      "text": "The author can record a summary of one or more items, read by one narrator, at a length from `audio.summary-lengths`; the summary's parts are its chapters."
+      "text": "The author can record a summary of one or more items, read by one narrator, at a length from `audio.summary-lengths`: what the works say, never who wrote them; the summary's parts are its chapters.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The author can record a summary of one or more items, read by one narrator, at a length from `audio.summary-lengths`; the summary's parts are its chapters.",
+          "reason": "The author wants to hear what the papers say; who wrote them took the listener's time and isn't wanted.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-5",
