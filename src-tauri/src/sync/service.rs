@@ -50,6 +50,8 @@ pub struct SyncService {
     discovery_state: Arc<Mutex<Option<(String, String)>>>,
     /// The device and addresses of the code last joined, for the connection check.
     last_join: Mutex<Option<(String, Vec<String>)>>,
+    /// Why this device can't answer searches, if it can't.
+    discovery_problem: Mutex<Option<String>>,
 }
 
 use super::now_iso;
@@ -116,12 +118,31 @@ impl SyncService {
         .await?;
         self.port.store(port, Ordering::SeqCst);
 
+        // Spec: DIAG-2
+        if port != session::PREFERRED_PORT {
+            diagnostics::report(
+                &app,
+                Level::Warning,
+                "sync",
+                &format!("Sync listens on TCP port {port}: port {} is taken by another app (an earlier Commonplace still installed?).", session::PREFERRED_PORT),
+            );
+        }
+
         // Discovery answers.
-        if let Ok(socket) = discovery::bind_responder(discovery::PORT).await {
-            let state = self.discovery_state.clone();
-            tokio::spawn(discovery::respond(socket, move || {
-                state.lock().ok()?.clone().map(|(tag, id)| (tag, id, port))
-            }));
+        match discovery::bind_responder(discovery::PORT).await {
+            Ok(socket) => {
+                let state = self.discovery_state.clone();
+                tokio::spawn(discovery::respond(socket, move || {
+                    state.lock().ok()?.clone().map(|(tag, id)| (tag, id, port))
+                }));
+            }
+            Err(e) => {
+                let problem = format!("This device can't answer searches on UDP port {}: {e}", discovery::PORT);
+                diagnostics::report(&app, Level::Error, "sync", &problem);
+                if let Ok(mut d) = self.discovery_problem.lock() {
+                    *d = Some(problem);
+                }
+            }
         }
 
         // The loop: soon after a change, and every minute anyway.
@@ -196,7 +217,8 @@ impl SyncService {
     pub async fn check(&self, app: &AppHandle) -> Result<super::check::Report, String> {
         let pool = self.pool()?;
         let joining = self.last_join.lock().ok().and_then(|j| j.clone());
-        let report = super::check::run(pool, self.port(), joining).await;
+        let discovery = self.discovery_problem.lock().ok().and_then(|d| d.clone());
+        let report = super::check::run(pool, self.port(), discovery, joining).await;
         let fine = report.lines.iter().all(|l| l.ok != Some(false));
         let details: Vec<String> = report
             .lines

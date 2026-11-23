@@ -62,7 +62,7 @@ pub fn classify(error: Option<ErrorKind>, timed_out: bool, took: Duration, macos
 pub fn hint(reach: Reach) -> &'static str {
     match reach {
         Reach::BlockedHere => {
-            "macOS is keeping Commonplace off the local network: turn it on in System Settings → Privacy & Security → Local Network, then try again"
+            "macOS is keeping Commonplace off the local network: turn it on in System Settings → Privacy & Security → Local Network, or show the code here and scan it with the other device, which can still reach this one"
         }
         Reach::NotAnswering => "the device doesn't answer: is it on the same Wi-Fi and awake, with Commonplace open?",
         Reach::Refused => "the device is there, but Commonplace isn't open on it",
@@ -192,7 +192,7 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
     let worst = findings.iter().min_by_key(|f| rank(f));
     match worst {
         Some(Finding::Blocked) => (
-            "macOS is keeping Commonplace off the local network. Open System Settings → Privacy & Security → Local Network and turn Commonplace on, then try again. A new version of the app can need it turned on again.".into(),
+            "macOS is keeping Commonplace off the local network, so this computer can't reach the others. Open System Settings → Privacy & Security → Local Network and turn Commonplace on, then try again; a new version of the app asks again. Meanwhile the other devices can still reach this computer: show the pairing code here and scan it with the phone.".into(),
             Some("local-network".into()),
         ),
         Some(Finding::ThroughVpn { label, via }) => (
@@ -217,7 +217,7 @@ pub fn verdict(on_network: bool, tried: usize, findings: &[Finding]) -> (String,
 /// Checks the connection: this device's networks, whether sync listens, which
 /// of the book's devices answer the search, and whether each device there's
 /// an address for (the book's, and the code last joined) can be reached.
-pub async fn run(pool: &SqlitePool, port: u16, joining: Option<(String, Vec<String>)>) -> Report {
+pub async fn run(pool: &SqlitePool, port: u16, discovery_problem: Option<String>, joining: Option<(String, Vec<String>)>) -> Report {
     let mut lines = Vec::new();
     let nets = networks();
     let lan: Vec<&Net> = nets.iter().filter(|n| n.ip.is_private() || n.ip.is_link_local()).collect();
@@ -229,8 +229,14 @@ pub async fn run(pool: &SqlitePool, port: u16, joining: Option<(String, Vec<Stri
     }
     lines.push(if port == 0 {
         Line { ok: Some(false), text: "Sync isn't listening here yet.".into() }
+    } else if port != session::PREFERRED_PORT {
+        Line { ok: None, text: format!("Sync listens on TCP port {port}: port {} is taken by another app (an earlier Commonplace still installed?).", session::PREFERRED_PORT) }
     } else {
-        Line { ok: Some(true), text: format!("Sync listens on TCP port {port}; devices search on UDP port {}.", discovery::PORT) }
+        Line { ok: Some(true), text: format!("Sync listens on TCP port {port}.") }
+    });
+    lines.push(match &discovery_problem {
+        Some(p) => Line { ok: Some(false), text: format!("{p}: other devices won't find this one by searching.") },
+        None => Line { ok: Some(true), text: format!("It answers searches on UDP port {}.", discovery::PORT) },
     });
 
     let me = session::identity(pool).await.ok();

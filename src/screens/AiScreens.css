@@ -319,76 +319,15 @@
   margin: 0;
   padding-left: 18px;
 }
-.diag-list {
-  list-style: none;
+.diag-log {
   margin: 8px 0 0;
-  padding: 0;
-}
-.diag-day {
+  padding: 10px 12px;
+  font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  margin: 14px 0 4px;
-}
-.diag-entry {
-  border-bottom: 1px solid var(--line);
-}
-.diag-line {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 10px;
-  align-items: baseline;
-  width: 100%;
-  padding: 6px 2px;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  color: var(--fg);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.diag-line:disabled {
-  cursor: default;
-  opacity: 1;
-}
-.diag-line time {
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-.diag-source {
-  color: var(--muted);
-  min-width: 5.5em;
-}
-.diag-message {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-/* The red and amber Lean's verdicts use, light and dark. */
-.diag-entry.level-error .diag-message {
-  color: var(--lean-error);
-  font-weight: 500;
-}
-.diag-entry.level-warning .diag-message {
-  color: var(--lean-sorry);
-}
-.diag-details {
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  max-height: 320px;
-  overflow: auto;
-  font-size: 12px;
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background: var(--hover);
   border-radius: 6px;
-}
-@media (max-width: 760px) {
-  .diag-line {
-    grid-template-columns: auto 1fr;
-  }
-  .diag-message {
-    grid-column: 1 / -1;
-  }
+  user-select: text;
 }

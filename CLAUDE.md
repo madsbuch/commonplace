@@ -102,6 +102,11 @@ The book syncs peer to peer over the local network, as Tally does
   in `src-tauri/src/sync/session.rs`).
 - Discovery answers on UDP 47831 and sync listens on TCP 47832 (or any free
   port), clear of Tally's 47821/47822, so both apps run side by side.
+  Discovery's socket shares its port (`SO_REUSEADDR`/`SO_REUSEPORT`,
+  `discovery::bind_responder`): an earlier version still installed, or a
+  development build beside the real one, holds it too, and searches are
+  broadcast, so each hears them. A taken port is noted in the diagnostics
+  and shown by the connection check.
 - `src/lib/syncBoot.ts` (imported by `main.tsx`) checks the database's
   instance before anything writes, starts sync, and refreshes the screens
   when another device's data arrives.
@@ -534,4 +539,8 @@ Dependencies install only once published for two weeks (`bunfig.toml`).
   SDK and NDK), commit it and run the script once; CI then uses it as is.
 - Release signing for Android reads the secrets `ANDROID_KEYSTORE` (base64),
   `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; without them the APK
-  is unsigned. macOS builds are unsigned.
+  is unsigned. macOS builds are signed ad hoc (`bundle.macOS.signingIdentity`
+  `"-"`, no hardened runtime; ENG-7): since macOS 15, an unsigned app is kept
+  off the local network without being asked ("No route to host"), and sync
+  can't reach out. Not notarized. Incoming connections aren't held back
+  (TN3179), so another device can still reach an unsigned computer.

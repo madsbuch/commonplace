@@ -31,6 +31,13 @@
     {
       "id": "ENG-6",
       "text": "Frontend packages are installed only once they have been published for `deps.minimum-age`."
+    },
+    {
+      "id": "ENG-7",
+      "text": "The macOS app is signed (ad hoc while there's no certificate), so macOS asks before letting it onto the local network instead of keeping it off without asking.",
+      "related": [
+        "#SYN-24"
+      ]
     }
   ],
   "values": [

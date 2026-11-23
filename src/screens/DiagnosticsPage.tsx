@@ -1,11 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { InfoButton } from "../components/InfoButton";
 import { MoreMenu } from "../components/MoreMenu";
 import { BackToSettings } from "../components/SettingsRows";
 import { useQueryParam } from "../lib/address";
 import { emptyDiagnostics, failuresSince, flush, loadDiagnostics, messageOf, type DiagnosticEntry } from "../lib/diagnostics";
-import { lasting, stamp } from "../lib/diagnosticsModel";
+import { entryText, lasting } from "../lib/diagnosticsModel";
 import { diagnosticsReport } from "../lib/diagnosticsReport";
 import { useTablesVersion } from "../lib/live";
 import { runningWork, type RunningWork } from "../lib/work";
@@ -14,26 +14,6 @@ import "./AiScreens.css";
 /** Entries shown at once; the copy has them all. */
 const SHOWN = 400;
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function Entry(props: { entry: DiagnosticEntry }) {
-  const e = props.entry;
-  const [open, setOpen] = useState(false);
-  const more = e.details !== null || (e.screen !== null && e.source !== "screen");
-  return (
-    <li className={`diag-entry level-${e.level}`}>
-      <button type="button" className="diag-line" aria-expanded={more ? open : undefined} disabled={!more} onClick={() => setOpen((o) => !o)}>
-        <time dateTime={new Date(e.at).toISOString()}>{stamp(e.at).slice(11, 23)}</time>
-        <span className="diag-source">{e.source}</span>
-        <span className="diag-message">{e.message}</span>
-      </button>
-      {open ? (
-        <pre className="diag-details">
-          {[e.screen && e.source !== "screen" ? `on ${e.screen}` : null, e.details].filter(Boolean).join("\n")}
-        </pre>
-      ) : null}
-    </li>
-  );
-}
 
 // Spec: DIAG-3, DIAG-4, DIAG-6
 /** Settings → Diagnostics: the work running now, what happened on this device, and a copy of all of it. */
@@ -173,18 +153,11 @@ export default function DiagnosticsPage() {
       {entries === null ? null : entries.length === 0 ? (
         <p className="muted">{failuresOnly ? "Nothing failed." : "Nothing yet."}</p>
       ) : (
-        <ul className="diag-list">
-          {entries.map((e, i) => {
-            const day = stamp(e.at).slice(0, 10);
-            const prev = entries[i - 1];
-            return (
-              <Fragment key={e.id}>
-                {!prev || stamp(prev.at).slice(0, 10) !== day ? <li className="diag-day">{day}</li> : null}
-                <Entry entry={e} />
-              </Fragment>
-            );
-          })}
-        </ul>
+        // As plain text, one entry a line and its details indented under it,
+        // as the copy has them: selected and copied, it reads the same.
+        <pre className="diag-log" aria-label="What happened">
+          {entries.map(entryText).join("\n")}
+        </pre>
       )}
     </div>
   );

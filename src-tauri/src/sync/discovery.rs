@@ -58,9 +58,20 @@ where
     }
 }
 
-/// Binds the answering socket on every interface.
+// Spec: SYN-2
+/// Binds the answering socket on every interface, sharing the port: another
+/// app may hold it too (an earlier version still installed, a development
+/// build beside the real one), and searches are broadcast, so each hears them.
 pub async fn bind_responder(port: u16) -> std::io::Result<UdpSocket> {
-    UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).await
+    use socket2::{Domain, Protocol, Socket, Type};
+    let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    s.set_reuse_address(true)?;
+    #[cfg(unix)]
+    s.set_reuse_port(true)?;
+    s.set_broadcast(true)?;
+    s.set_nonblocking(true)?;
+    s.bind(&SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port).into())?;
+    UdpSocket::from_std(s.into())
 }
 
 /// Where to send a probe: the broadcast address, plus each address a peer
@@ -133,6 +144,15 @@ mod tests {
         assert_eq!(parse_query("hello"), None);
         assert_eq!(parse_reply("MYBOOK/1 R tag id notaport"), None);
         assert_eq!(parse_reply("MYBOOK/1 R tag id 47832"), Some(("tag", "id", 47832)));
+    }
+
+    // Spec: SYN-2
+    #[tokio::test]
+    async fn two_apps_can_answer_on_the_same_port() {
+        let port = 47_900 + (std::process::id() % 90) as u16;
+        let first = bind_responder(port).await.expect("first");
+        let second = bind_responder(port).await.expect("second, beside the first");
+        assert_eq!(first.local_addr().unwrap().port(), second.local_addr().unwrap().port());
     }
 
     #[test]

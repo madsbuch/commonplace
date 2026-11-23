@@ -937,16 +937,19 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.locator(".settings-row", { hasText: "Diagnostics" }).click();
     await page.waitForURL(/\/settings\/diagnostics$/);
     await page.waitForTimeout(1000);
-    const log = await page.locator(".diag-list").innerText();
+    const log = await page.locator(".diag-log").innerText();
     check("the log has the failed answer with what the model said", log.includes("Failed: Answering") && log.includes("bad day"), log.slice(0, 400));
     check("and what nothing caught", log.includes("A failure nothing caught, from the checks"));
     check("and the work done, and the screens opened", log.includes("Finished: Writing the script for") && log.includes("Opened /library"));
     await page.getByRole("radio", { name: "Failures" }).click();
     await page.waitForTimeout(600);
-    const failuresOnly = await page.locator(".diag-list").innerText();
+    const failuresOnly = await page.locator(".diag-log").innerText();
     check("failures alone, when chosen, with the address saying so", page.url().endsWith("?show=failures") && failuresOnly.includes("Failed: Answering") && !failuresOnly.includes("Opened /"), page.url());
-    await page.locator(".diag-entry", { hasText: "Failed: Answering" }).first().locator(".diag-line").click();
-    check("an entry opens to its details and where it happened", (await page.locator(".diag-details").first().innerText()).includes("on /chats/chat_"));
+    check(
+      "the log is plain text, an entry a line with its details under it, as copied",
+      /\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3} [+-]\d\d:\d\d  ERROR {4}assistant  Failed: Answering[^\n]*\n {4}on \/chats\/chat_/.test(failuresOnly),
+      failuresOnly.slice(0, 300),
+    );
     if (process.env.CHECK_SHOTS) {
       await page.setViewportSize({ width: 390, height: 800 });
       await page.goto(APP + "/settings/diagnostics");
