@@ -224,6 +224,19 @@ The book syncs peer to peer over the local network, as Tally does
 - Fonts are bundled (`@fontsource-variable/literata` for the book,
   `@fontsource-variable/inter` for the interface), imported in `main.tsx`.
 - `Ctrl+K` / `⌘K` opens the page search (`src/components/QuickOpen.tsx`).
+- Every screen has an address, and the address holds what the screen shows
+  within it (APP-10), kept current by replacing, never pushing (APP-11), so
+  Back leaves the screen. Where it's scrolled to is the fragment: `#page=12`
+  on a library item (the PDF page in view), `#blk_…` on a page (the block at
+  the top of the view). `replaceFragment` (`src/lib/address.ts`) writes it
+  straight to `history.replaceState`, past the router, at most every 250ms
+  (WebKit refuses floods), and only while the same screen is up; so the
+  router's location changes only on navigations, and screens react to those
+  (`location.key`) to jump. What's chosen is the query, through
+  `useQueryParam` (library `tab`/`q`/`kind`, history `at`, costs `range`). A
+  new screen, or new state on one, goes in the address and in `ROUTES`.
+  Assistant answers may link to addresses; `Markdown.tsx` opens them in the
+  app.
 - Settings (`/settings`) holds only rows (`src/components/SettingsRows.tsx`),
   each with a line on how its part stands, opening a page nested in it:
   `/settings/ai` (the OpenRouter key and models), `/settings/sync`,

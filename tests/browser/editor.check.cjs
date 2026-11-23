@@ -271,6 +271,8 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.keyboard.press("Enter");
     await page.waitForTimeout(800);
     check("the author can go to a page by its number", (await page.locator(".pdf-toolbar").innerText()).includes("5 / 6"));
+    // Spec: LIB-22
+    check("the PDF page in view is in the address", page.url().endsWith("#page=5"), page.url());
 
     // Spec: LIB-18
     const zoomLabel = () => page.locator(".pdf-zoom-fit").textContent();
@@ -526,6 +528,84 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByText("Joined The other device's book").waitFor({ timeout: 3000 });
     const joins = await (await fetch(`${FAKE}/fake-joins`)).json();
     check("and then joins, replacing what it held", joins.length === 1 && joins[0].replace === true && joins[0].code === decoded, JSON.stringify(joins).slice(0, 80));
+
+    // Spec: APP-10, APP-11, LIB-22
+    await page.goto(`${APP}/library/${tocItem.id}#page=3`);
+    await page.waitForTimeout(2500);
+    check("an address with a PDF page opens the PDF there", (await page.locator(".pdf-toolbar").innerText()).includes("3 / 6"));
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(800);
+    await page.locator(".library-search").fill("contents");
+    await page.locator(".library-filters [role=tab]", { hasText: "Papers" }).click();
+    await page.waitForTimeout(400);
+    check("the library's search and kind are in the address", /[?&]q=contents/.test(page.url()) && /[?&]kind=paper/.test(page.url()), page.url());
+    await page.reload();
+    await page.waitForTimeout(1000);
+    check("and opening it searches and filters again", (await page.locator(".library-search").inputValue()) === "contents" && (await page.locator(".library-filters [aria-selected=true]").innerText()).startsWith("Paper"));
+    await page.locator(".library-list a, .library-item-row a, a[href^='/library/lib_']", { hasText: "With Contents" }).first().click();
+    await page.waitForURL(/\/library\/lib_/);
+    await page.waitForTimeout(2000);
+    await page.locator(".pdf-pages").evaluate((el) => el.scrollBy(0, 2500));
+    await page.waitForTimeout(800);
+    check("scrolling the PDF keeps the address current", /#page=[2-6]$/.test(page.url()), page.url());
+    await page.goBack();
+    await page.waitForTimeout(600);
+    check("and going back leaves the PDF, not the page before", /\/library\?/.test(page.url()), page.url());
+
+    // Spec: APP-10
+    await page.goto(url + "/history");
+    await page.waitForTimeout(1200);
+    await page.locator(".moments button").last().click();
+    await page.waitForTimeout(400);
+    check("the moment the history shows is in the address", page.url().includes("?at="), page.url());
+    await page.reload();
+    await page.waitForTimeout(1200);
+    check("and opening it shows that moment", await page.locator(".moments button").last().evaluate((b) => b.classList.contains("active")));
+    await page.goto(APP + "/settings/costs");
+    await page.getByRole("radio", { name: "Last 90 days" }).click();
+    await page.waitForTimeout(300);
+    await page.reload();
+    await page.waitForTimeout(800);
+    check("the costs' range is in the address", page.url().endsWith("?range=90d") && (await page.getByRole("radio", { name: "Last 90 days" }).getAttribute("aria-checked")) === "true", page.url());
+
+    // Spec: PAGE-6
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    await page.locator(".bn-editor p").last().click();
+    await page.keyboard.press("End");
+    for (let i = 1; i <= 40; i++) {
+      await page.keyboard.press("Enter");
+      await page.keyboard.type(`Line ${i}`);
+    }
+    await page.waitForTimeout(1500);
+    const topBlock = () =>
+      page.evaluate(() => {
+        const main = document.querySelector(".main");
+        const line = main.getBoundingClientRect().top + 8;
+        const hit = [...document.querySelectorAll(".bn-editor .bn-block-outer[data-id]")].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.top <= line && r.bottom > line;
+        });
+        return hit.at(-1)?.textContent ?? null;
+      });
+    await page.locator(".main").evaluate((el) => el.scrollTo(0, 700));
+    await page.waitForTimeout(800);
+    const topBefore = await topBlock();
+    check("a page's address names the block at the top of the view", /#blk_[0-9a-z]+$/.test(page.url()) && topBefore !== null, `${page.url()} ${topBefore}`);
+    await page.reload();
+    await page.waitForTimeout(1800);
+    check("and opening it scrolls that block to the top", (await topBlock()) === topBefore, `${await topBlock()} vs ${topBefore}`);
+
+    // Spec: CHAT-8
+    await chat([{ text: `It's on [page 4](/library/${tocItem.id}#page=4).` }]);
+    if (await page.getByRole("button", { name: "Open the assistant" }).isVisible()) await page.getByRole("button", { name: "Open the assistant" }).click();
+    await page.locator(".assistant").getByRole("button", { name: "New", exact: true }).click();
+    await page.locator(".assistant textarea").fill("Where is the halting problem?");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.locator(".assistant a", { hasText: "page 4" }).click({ timeout: 5000 });
+    await page.waitForURL(/\/library\/lib_.*#page=4$/);
+    await page.waitForTimeout(2500);
+    check("an address in an answer opens in the app, at the page", (await page.locator(".pdf-toolbar").innerText()).includes("4 / 6"));
 
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {

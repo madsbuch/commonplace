@@ -46,7 +46,8 @@
         "#LIB-17",
         "#LIB-18",
         "#LIB-19",
-        "#LIB-20"
+        "#LIB-20",
+        "#LIB-22"
       ]
     }
   ],
@@ -158,11 +159,30 @@
     },
     {
       "id": "LIB-20",
-      "text": "The viewer reopens an item at the page last read on that device."
+      "text": "An item opened at an address that names no page reopens at the page last read on that device.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The viewer reopens an item at the page last read on that device.",
+          "reason": "The item's address now names the page in view (LIB-22); a page in the address comes first, so a link to a page goes there.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2,
+      "related": [
+        "#LIB-22"
+      ]
     },
     {
       "id": "LIB-21",
       "text": "The author can go to a page of a PDF by its number."
+    },
+    {
+      "id": "LIB-22",
+      "text": "An item's address holds the PDF page in view, `#page=<n>`, so a link can open a PDF at a page.",
+      "related": [
+        "#APP-10"
+      ]
     }
   ],
   "values": [

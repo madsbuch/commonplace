@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { pageOfFragment } from "../lib/address";
 import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
@@ -126,7 +127,20 @@ export default function LibraryItemPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [showContents, setShowContents] = useState(contentsWanted);
   const [page, setPage] = useState(1);
-  const [jump, setJump] = useState<{ page: number; seq: number } | null>(null);
+  const [jump, setJump] = useState<{ itemId: string; page: number; seq: number } | null>(null);
+
+  // Spec: LIB-22, APP-10
+  // The address names the page to open at; a later navigation (a link to
+  // another page of it, Back) goes there. Scrolling writes the address past
+  // the router, so the router's changes are always navigations.
+  const location = useLocation();
+  const [start, setStart] = useState(() => ({ id, key: location.key, page: pageOfFragment(location.hash) }));
+  if (start.id !== id) setStart({ id, key: location.key, page: pageOfFragment(location.hash) });
+  useEffect(() => {
+    if (location.key === start.key) return;
+    const p = pageOfFragment(location.hash);
+    if (p !== null) setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
+  }, [location.key, location.hash, start.key, id]);
 
   useEffect(() => {
     let live = true;
@@ -225,7 +239,7 @@ export default function LibraryItemPage() {
                 toc={toc}
                 page={page}
                 onPick={(p) => {
-                  setJump((j) => ({ page: p, seq: (j?.seq ?? 0) + 1 }));
+                  setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
                   // On a phone the contents cover the page: get out of the way.
                   if (window.matchMedia("(max-width: 760px)").matches) setShowContents(false);
                 }}
@@ -233,11 +247,13 @@ export default function LibraryItemPage() {
             </aside>
           ) : null}
           <PdfViewer
+            key={id}
             load={load}
+            initialPage={start.id === id ? start.page : null}
             itemId={id}
             onOpen={onOpen}
             onPage={setPage}
-            jump={jump}
+            jump={jump?.itemId === id ? jump : null}
             toolbarStart={
               toc.length > 0 ? (
                 <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>

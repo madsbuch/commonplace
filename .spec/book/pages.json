@@ -42,6 +42,13 @@
       "related": [
         "#LNK-3"
       ]
+    },
+    {
+      "id": "PAGE-6",
+      "text": "A page's address holds the block at the top of the view, `#<block id>`; opening it scrolls that block to the top.",
+      "related": [
+        "#APP-10"
+      ]
     }
   ]
 }

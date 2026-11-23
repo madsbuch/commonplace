@@ -75,6 +75,11 @@ export function setPath(path: string, address = path): void {
   view = { path, address, ...next, cursorBlockId: same ? view.cursorBlockId : null, pdf: same ? view.pdf : null };
 }
 
+/** Called when a screen writes where it's scrolled to into the address (lib/address.ts). */
+export function setAddress(address: string): void {
+  view = { ...view, address };
+}
+
 /** Called by the page editor when the cursor moves to another block. */
 export function setCursorBlock(id: string | null): void {
   view = { ...view, cursorBlockId: id };
@@ -89,14 +94,24 @@ export function currentView(): CurrentView {
   return view;
 }
 
-// Spec: ATL-1
-/** What each kind of address shows, for the assistant to read the address by. */
+// Spec: ATL-1, APP-10
+/**
+ * What each kind of address shows, for the assistant to read the address by.
+ * Every screen's address also holds what it shows within it (APP-10): a new
+ * screen, or a new kind of state on one, adds it here.
+ */
 export const ROUTES: readonly { address: string; shows: string }[] = [
   { address: "/", shows: "The book's front page (reopens the last page)." },
-  { address: "/page/<page id>", shows: "A page of the book, in the editor. A `#<block id>` fragment scrolls to one of its blocks." },
-  { address: "/page/<page id>/history", shows: "The page as it was at a chosen moment." },
-  { address: "/library", shows: "The papers and books; `?tab=people` or `?tab=institutions` lists those instead." },
-  { address: "/library/<item id>", shows: "One paper or book: its details and its PDF in a viewer." },
+  {
+    address: "/page/<page id>",
+    shows: "A page of the book, in the editor. `#<block id>` is the block at the top of the view: opening it scrolls that block to the top.",
+  },
+  { address: "/page/<page id>/history", shows: "The page as it was at a chosen moment, `?at=<time>` (the latest without it)." },
+  {
+    address: "/library",
+    shows: "The papers and books; `?tab=people` or `?tab=institutions` lists those instead, `?q=<words>` searches, `?kind=paper` or `?kind=book` filters.",
+  },
+  { address: "/library/<item id>", shows: "One paper or book: its details and its PDF in a viewer. `#page=<n>` is the PDF page in view, and opens the PDF there." },
   { address: "/library/people/<person id>", shows: "A person: what they wrote, where they were, who they wrote with." },
   { address: "/library/institutions/<institution id>", shows: "An institution: its items and people." },
   { address: "/chats", shows: "Every chat with you." },
@@ -105,7 +120,7 @@ export const ROUTES: readonly { address: string; shows: string }[] = [
   { address: "/settings", shows: "Settings: rows leading to AI and models, sync, AI costs and memory, and the appearance switch." },
   { address: "/settings/ai", shows: "The OpenRouter key, the assistant's model and the model that reads library details." },
   { address: "/settings/sync", shows: "Sync with the author's other devices." },
-  { address: "/settings/costs", shows: "What AI has cost." },
+  { address: "/settings/costs", shows: "What AI has cost; `?range=90d`, `1y` or `all` (the last 30 days without it)." },
   { address: "/sync", shows: "Leads to /settings/sync." },
   { address: "/costs", shows: "Leads to /settings/costs." },
 ];

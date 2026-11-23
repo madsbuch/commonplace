@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useQueryParam } from "../lib/address";
 import { listInstitutions, listPeople, PEOPLE_TABLES, type Counted } from "../lib/people";
 import { CountedList } from "./PersonPage";
-import { addFile, KIND_NAMES, LIBRARY_TABLES, listItems, problemWith, sizeText, type Kind, type LibraryItem } from "../lib/library";
+import { addFile, isKind, KIND_NAMES, LIBRARY_TABLES, listItems, problemWith, sizeText, type Kind, type LibraryItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 
 type Filter = "all" | Kind;
@@ -39,11 +40,14 @@ export default function LibraryPage() {
   const version = useTablesVersion(LIBRARY_TABLES);
   const navigate = useNavigate();
   const [items, setItems] = useState<LibraryItem[] | null>(null);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [params, setParams] = useSearchParams();
-  const tabParam = params.get("tab");
+  // Spec: APP-10
+  // The tab, the search and the kind are the address's (`?tab=…&q=…&kind=…`).
+  const [tabParam, setTab] = useQueryParam("tab");
   const tab: Tab = tabParam === "people" || tabParam === "institutions" ? tabParam : "items";
+  const [queryParam, setQuery] = useQueryParam("q");
+  const query = queryParam ?? "";
+  const [kindParam, setKind] = useQueryParam("kind");
+  const filter: Filter = isKind(kindParam) ? kindParam : "all";
   const [busy, setBusy] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -132,7 +136,7 @@ export default function LibraryPage() {
       ))}
       <div className="segmented library-tabs" role="tablist">
         {(["items", "people", "institutions"] as const).map((k) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setParams(k === "items" ? {} : { tab: k }, { replace: true })}>
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k === "items" ? null : k)}>
             {k === "items" ? "Papers and books" : k === "people" ? "People" : "Institutions"}
           </button>
         ))}
@@ -147,7 +151,7 @@ export default function LibraryPage() {
         {tab === "items" ? (
           <div className="segmented" role="tablist">
             {(["all", "paper", "book"] as const).map((f) => (
-              <button key={f} type="button" role="tab" aria-selected={filter === f} onClick={() => setFilter(f)}>
+              <button key={f} type="button" role="tab" aria-selected={filter === f} onClick={() => setKind(f === "all" ? null : f)}>
                 {f === "all" ? "All" : `${KIND_NAMES[f]}s`}
               </button>
             ))}

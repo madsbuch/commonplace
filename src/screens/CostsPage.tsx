@@ -15,6 +15,7 @@ import {
   type UsageGroup,
   type UsageRow,
 } from "../lib/aiCost";
+import { useQueryParam } from "../lib/address";
 import { loadUsageRows } from "../lib/aiUsage";
 import { useTablesVersion } from "../lib/live";
 import "./AiScreens.css";
@@ -53,7 +54,10 @@ export default function CostsPage() {
   const version = useTablesVersion(["ai_usage"]);
   const [rows, setRows] = useState<UsageRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<RangeKey>("30d");
+  // Spec: APP-10
+  const [rangeParam, setRangeParam] = useQueryParam("range");
+  const range: RangeKey = RANGES.find((r) => r.key === rangeParam)?.key ?? "30d";
+  const setRange = (k: RangeKey) => setRangeParam(k === "30d" ? null : k);
 
   useEffect(() => {
     let live = true;

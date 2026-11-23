@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { openPdf, renderTextLayer, type OpenPdf, type PdfDocument } from "../lib/pdf";
+import { replaceFragment } from "../lib/address";
 import { setPdfInView } from "../lib/currentView";
 
 /** How far outside the view a page starts rendering, so scrolling finds it drawn. */
@@ -127,6 +128,8 @@ export function PdfViewer(props: {
   onPage?: (page: number) => void;
   /** A page to go to; `seq` makes going to the same page twice a new request. */
   jump?: { page: number; seq: number } | null;
+  /** The page to open at (the address's); without one, the page last read here. */
+  initialPage?: number | null;
   /** Shown at the start of the toolbar (the contents button). */
   toolbarStart?: ReactNode;
 }) {
@@ -142,7 +145,7 @@ export function PdfViewer(props: {
   const stack = useRef<HTMLDivElement>(null);
   const anchor = useRef<Anchor | null>(null);
   const restore = useRef<number | null>(null);
-  const { load, itemId, onOpen, onPage, jump } = props;
+  const { load, itemId, onOpen, onPage, jump, initialPage } = props;
 
   // Spec: ATL-1
   // Tell the assistant which page of which PDF is in view.
@@ -174,7 +177,8 @@ export function PdfViewer(props: {
         }
         const first = (await opened.doc.getPage(1)).getViewport({ scale: 1 });
         if (!live) return;
-        restore.current = lastPage(itemId);
+        // Spec: LIB-20, LIB-22
+        restore.current = initialPage ?? lastPage(itemId);
         setSizes(Array.from({ length: opened.doc.numPages }, () => ({ width: first.width, height: first.height })));
         setPdf(opened);
       } catch (e) {
@@ -185,6 +189,8 @@ export function PdfViewer(props: {
       live = false;
       opened?.close();
     };
+    // The page to open at counts once, when the PDF opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, itemId]);
 
   const onSize = useCallback((n: number, s: PageSize) => {
@@ -284,9 +290,10 @@ export function PdfViewer(props: {
       const n = Number(hit?.closest(".pdf-page")?.getAttribute("data-page") ?? NaN);
       if (Number.isInteger(n)) {
         setCurrent(n);
-        // Spec: LIB-20
+        // Spec: LIB-20, LIB-22
         // Only what scrolling showed is remembered, so opening never overwrites it with page 1.
         rememberPage(itemId, n);
+        if (itemId) replaceFragment(n > 1 ? `page=${n}` : "");
       }
       const dy = s.scrollTop - lastTop.current;
       lastTop.current = s.scrollTop;

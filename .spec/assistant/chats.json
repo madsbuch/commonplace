@@ -59,6 +59,13 @@
     {
       "id": "CHAT-7",
       "text": "An id of a page, block, library item, person or institution in an assistant message shows as a chip with its current title, which opens it."
+    },
+    {
+      "id": "CHAT-8",
+      "text": "An app address in an assistant message is a link that opens it in the app, such as a PDF at a page.",
+      "related": [
+        "#APP-10"
+      ]
     }
   ],
   "values": [

@@ -6,6 +6,7 @@ import "@blocknote/mantine/style.css";
 import { schema, syntaxHighlighter, toEditorBlocks } from "../blocks";
 import { pageRevisions } from "../lib/book";
 import { momentsOf, pageAt, type DocBlock, type RevisionRow } from "../lib/bookModel";
+import { useQueryParam } from "../lib/address";
 import { useTablesVersion } from "../lib/live";
 import { pagePath } from "../lib/navigation";
 import { useColorScheme } from "../lib/theme";
@@ -30,7 +31,9 @@ export default function HistoryPage() {
   const { id = "" } = useParams();
   const version = useTablesVersion(["revisions"]);
   const [revisions, setRevisions] = useState<RevisionRow[] | null>(null);
-  const [at, setAt] = useState<string | null>(null);
+  // Spec: APP-10
+  // The moment shown is the address's (`?at=<time>`); without one, the latest.
+  const [at, setAt] = useQueryParam("at");
 
   useEffect(() => {
     let live = true;
@@ -43,7 +46,7 @@ export default function HistoryPage() {
   }, [id, version]);
 
   const moments = useMemo(() => (revisions ? momentsOf(revisions, id) : []), [revisions, id]);
-  const selected = at ?? moments[0] ?? null;
+  const selected = (at && moments.includes(at) ? at : null) ?? moments[0] ?? null;
   const shown = useMemo(() => (revisions && selected ? pageAt(id, revisions, selected) : null), [revisions, selected, id]);
 
   return (
@@ -57,7 +60,7 @@ export default function HistoryPage() {
         <ol className="moments">
           {moments.map((m, i) => (
             <li key={m}>
-              <button type="button" className={m === selected ? "active" : undefined} onClick={() => setAt(m)}>
+              <button type="button" className={m === selected ? "active" : undefined} onClick={() => setAt(i === 0 ? null : m)}>
                 {when(m)}
                 {i === 0 ? <span className="muted"> · now</span> : null}
               </button>

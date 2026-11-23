@@ -51,6 +51,17 @@
       "id": "APP-9",
       "text": "How a part of the app works is explained behind an info button beside it, not in the screen's text; the screen's text says how things stand.",
       "level": "should"
+    },
+    {
+      "id": "APP-10",
+      "text": "Every screen has an address, and the address also holds what the screen shows within it: where it's scrolled to, and what's chosen, searched or filtered there. Opening the address shows the same thing at the same place."
+    },
+    {
+      "id": "APP-11",
+      "text": "Keeping the address current while the author scrolls or chooses replaces it instead of adding a step, so going back leaves the screen.",
+      "related": [
+        "#APP-10"
+      ]
     }
   ],
   "values": [
@@ -144,5 +155,6 @@
       "alt": "Three nested arcs in cream forming a C, like the edges of a book's pages, with a terracotta ribbon, on deep ink blue",
       "caption": "The Commonplace logo."
     }
-  ]
+  ],
+  "stories": []
 }

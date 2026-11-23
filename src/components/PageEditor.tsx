@@ -16,10 +16,12 @@ import {
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
+import { useLocation } from "react-router-dom";
 import { fromEditorBlocks, schema, syntaxHighlighter, toEditorBlocks } from "../blocks";
 import { dbId, editorId } from "../blocks/ids";
 import { applySave, loadPage, moveBlockToPage, searchLinkTargets, type LoadedPage } from "../lib/book";
 import { planSave, type DocBlock, type Snapshot } from "../lib/bookModel";
+import { replaceFragment } from "../lib/address";
 import { registerEditor, setDraggedBlock } from "../lib/editorBridge";
 import { setCursorBlock } from "../lib/currentView";
 import { useTablesVersion } from "../lib/live";
@@ -190,17 +192,85 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
     };
   }, [pageId]);
 
-  // Scroll to the block named in the address (`#blk_…`), once it's there.
+  // Spec: PAGE-6, LNK-2
+  // Scroll the block the address names (`#blk_…`) to the top, once it's
+  // there, and again on each navigation (a link to another block of this
+  // page, Back). Scrolling itself writes the address past the router.
+  const location = useLocation();
   useEffect(() => {
-    const target = decodeURIComponent(window.location.hash.slice(1));
+    const target = decodeURIComponent(location.hash.slice(1));
     if (!target) return;
-    const el = document.querySelector(`[data-id="${editorId(target)}"]`);
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ block: "center" });
-      el.classList.add("block-flash");
-      setTimeout(() => el.classList.remove("block-flash"), 1600);
-    }
-  }, [editor]);
+    const find = () => document.querySelector(`.bn-editor [data-id="${editorId(target)}"]`);
+    const el = find();
+    if (!(el instanceof HTMLElement)) return;
+    // Found afresh each time: the editor may have redrawn the block meanwhile.
+    const align = () => find()?.scrollIntoView({ block: "start" });
+    align();
+    el.classList.add("block-flash");
+    const unflash = setTimeout(() => el.classList.remove("block-flash"), 1600);
+    // What's above it may still be laying out (code, maths, page blocks):
+    // keep it at the top for a moment, until the author scrolls themselves.
+    const ro = new ResizeObserver(align);
+    const root = document.querySelector(".main")?.firstElementChild;
+    if (root) ro.observe(root);
+    const stop = () => ro.disconnect();
+    const settle = setTimeout(stop, 2000);
+    const events = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    for (const e of events) window.addEventListener(e, stop, { once: true, passive: true });
+    return () => {
+      stop();
+      clearTimeout(settle);
+      clearTimeout(unflash);
+      el.classList.remove("block-flash");
+      for (const e of events) window.removeEventListener(e, stop);
+    };
+  }, [editor, location.key, location.hash]);
+
+  // Spec: PAGE-6, APP-10
+  // Where the page is scrolled to goes in the address: the innermost block at
+  // the top of the view, or nothing at the page's top.
+  useEffect(() => {
+    const main = document.querySelector(".main");
+    if (!(main instanceof HTMLElement)) return;
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!window.location.pathname.startsWith(`/page/${pageId}`)) return;
+        if (main.scrollTop < 40) {
+          replaceFragment("");
+          return;
+        }
+        const line = main.getBoundingClientRect().top + 8;
+        let best: HTMLElement | null = null;
+        for (const el of main.querySelectorAll<HTMLElement>(".bn-editor .bn-block-outer[data-id]")) {
+          const b = el.getBoundingClientRect();
+          if (b.bottom <= line) continue;
+          // Blocks come in document order, a block before those nested in it:
+          // the last one across the line is the innermost.
+          if (b.top <= line) {
+            best = el;
+            continue;
+          }
+          best ??= el;
+          break;
+        }
+        const id = best?.dataset["id"];
+        if (id) replaceFragment(dbId(id));
+      });
+    };
+    main.addEventListener("scroll", onScroll, { passive: true });
+    // Content above can grow or shrink without a scroll (a save, a sync, code
+    // being highlighted): the block at the top changes then too.
+    const ro = new ResizeObserver(onScroll);
+    if (main.firstElementChild) ro.observe(main.firstElementChild);
+    return () => {
+      main.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [pageId]);
 
   const slashItems = useCallback(
     async (query: string): Promise<DefaultReactSuggestionItem[]> => {
