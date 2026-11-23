@@ -40,6 +40,9 @@ before editing the spec).
   link to the part's with `related`. The product's own `SYN-` and `TRG-`
   requirements that Tandem took over are deprecated in its favour; `SYN-14`
   and `SYN-20` (revisions, chats) are the book's own.
+  `tests/tandem-values.test.ts` holds the sync constants (`PAIRING_TTL`,
+  snapshots' `DAILY` and `WEEKLY_UNTIL`) to Tandem's values as the book sets
+  them (an override in the import's `values` wins).
 - `tests/spec.test.ts` (part of `bun test`) checks the spec: schema, unique
   ids, references, histories, that every imported part is unchanged (git's
   tree id of its folder, as `tree` records), and that every `Spec:` citation
