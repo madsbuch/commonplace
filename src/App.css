@@ -808,6 +808,10 @@ button.danger {
   display: flex;
   gap: 4px;
 }
+.pdf-toolbar-start {
+  display: flex;
+  align-items: center;
+}
 .pdf-pages {
   flex: 1;
   overflow: auto;
@@ -841,6 +845,10 @@ button.danger {
     min-height: 52px;
     padding-left: 52px;
   }
+  /* The title has the room: back is an arrow. */
+  .library-item-bar .back-word {
+    display: none;
+  }
   .pdf-stack {
     padding: 8px;
     gap: 8px;
@@ -869,6 +877,20 @@ button.danger {
 }
 .muted-link {
   color: var(--muted);
+}
+/* Spec: PPL-8 */
+.authors-more {
+  margin-left: 6px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.authors-more:hover {
+  color: var(--fg);
 }
 .item-meta {
   margin: 0;
@@ -2252,6 +2274,11 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   max-width: 100%;
   height: auto;
 }
+/* LaTeXML sizes figures in its own inline styles; the screen's width wins. */
+.html-reader img {
+  max-width: 100% !important;
+  height: auto !important;
+}
 .html-reader figure {
   margin: 1.4em 0;
   text-align: center;
@@ -2307,6 +2334,7 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
 }
 .view-switch button {
   font-size: 13px;
+  padding: 3px 10px;
 }
 @media (max-width: 760px) {
   .html-reader {

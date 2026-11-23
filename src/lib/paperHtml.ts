@@ -38,9 +38,37 @@ function nameHeadings(root: ParentNode): void {
 }
 
 /** The paper in a page: its article (LaTeXML's `.ltx_document`), or the body. */
+// Spec: LIB-25, LIB-27
+/**
+ * What LaTeXML leaves that isn't the paper to read: macros it didn't know
+ * (`\affillogo`, shown as text), what comes before the title (logo rows of
+ * the authors' institutions), the empty affiliation notes in the author
+ * block (the item's own authors carry those), and figures that couldn't be
+ * kept. SVG figures, which LaTeXML embeds as objects, become images.
+ */
+export function tidyPaper(root: Element): void {
+  for (const o of root.querySelectorAll('object[type="image/svg+xml"][data]')) {
+    const img = root.ownerDocument.createElement("img");
+    img.setAttribute("src", o.getAttribute("data") ?? "");
+    for (const a of ["id", "class", "width", "height"]) {
+      const v = o.getAttribute(a);
+      if (v !== null) img.setAttribute(a, v);
+    }
+    img.setAttribute("alt", o.getAttribute("aria-label") ?? "");
+    o.replaceWith(img);
+  }
+  for (const e of root.querySelectorAll(".ltx_ERROR, .ltx_author_notes")) e.remove();
+  const title = root.querySelector(":scope > .ltx_title_document");
+  if (title) while (title.previousElementSibling) title.previousElementSibling.remove();
+  for (const img of root.querySelectorAll("img")) {
+    if (!img.getAttribute("src")) img.remove();
+  }
+}
+
 export function paperOf(raw: string): { root: Element; title: string | null } {
   const doc = new DOMParser().parseFromString(raw, "text/html");
   const root = doc.querySelector("article.ltx_document") ?? doc.body;
+  tidyPaper(root);
   for (const e of root.querySelectorAll(CHROME)) e.remove();
   tidyMath(root);
   nameHeadings(root);
@@ -64,7 +92,11 @@ function dataUrl(bytes: Uint8Array, type: string): Promise<string> {
 }
 
 // Spec: LIB-27
-/** Puts every figure inside the HTML, fetched from `base` (a few at a time); one that won't come keeps its text. */
+/**
+ * Puts every figure inside the HTML (a few at a time), each fetched from
+ * where the page that held it says, as a browser would: against `base`, the
+ * page's address. One that won't come is left out.
+ */
 export async function inlineImages(root: Element, base: string, get: (url: string) => Promise<{ bytes: Uint8Array; type: string }>): Promise<void> {
   const images = [...root.querySelectorAll("img")].filter((img) => !(img.getAttribute("src") ?? "data:").startsWith("data:"));
   const next = () => images.shift();
@@ -76,11 +108,19 @@ export async function inlineImages(root: Element, base: string, get: (url: strin
         const { bytes, type } = await get(new URL(src, base).toString());
         img.setAttribute("src", await dataUrl(bytes, type || "image/png"));
       } catch {
-        img.removeAttribute("src");
+        img.remove();
       }
     }
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
+}
+
+// Spec: LIB-25
+/** A stored HTML version as it's read: tidied (versions kept before the tidying improved too), and safe. */
+export function readablePaper(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  tidyPaper(doc.body);
+  return sanitizePaper(doc.body.innerHTML);
 }
 
 // Spec: LIB-24

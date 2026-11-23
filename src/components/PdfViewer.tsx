@@ -428,7 +428,7 @@ export function PdfViewer(props: {
   return (
     <div className="pdf-viewer">
       <div className="pdf-toolbar">
-        {props.toolbarStart}
+        {props.toolbarStart ? <div className="pdf-toolbar-start">{props.toolbarStart}</div> : null}
         {/* Spec: LIB-21 */}
         {goTo !== null ? (
           <form

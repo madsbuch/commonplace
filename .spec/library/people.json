@@ -49,6 +49,13 @@
     {
       "id": "PPL-7",
       "text": "The author can add and remove an item's authors and their institutions, choosing existing people and institutions or new ones."
+    },
+    {
+      "id": "PPL-8",
+      "text": "An item shows its authors as a line of names above what's read, each leading to what else the library has of theirs; the rest of a long list, and the authors' institutions, show when asked for.",
+      "related": [
+        "#PPL-3"
+      ]
     }
   ],
   "related": [

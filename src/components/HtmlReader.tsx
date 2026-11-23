@@ -3,15 +3,18 @@
 // safe again as it's shown, its sections handed up as contents, the section
 // at the top of the view kept in the address (LIB-26) and told to the
 // assistant (ATL-10). Links within the paper move within it; links out open
-// in the system browser.
+// in the system browser. On a phone, reading down puts what's around it away
+// (LIB-19), as the PDF viewer does.
 // ---------------------------------------------------------------------------
 
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { replaceFragment } from "../lib/address";
 import { setHtmlInView } from "../lib/currentView";
-import { sanitizePaper, sectionsOf } from "../lib/paperHtml";
+import { readablePaper, sectionsOf } from "../lib/paperHtml";
 import type { TocEntry } from "../lib/schemas";
+
+const isPhone = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
 
 function anchors(toc: readonly TocEntry[], out: string[] = []): string[] {
   for (const e of toc) {
@@ -21,7 +24,7 @@ function anchors(toc: readonly TocEntry[], out: string[] = []): string[] {
   return out;
 }
 
-// Spec: LIB-25, LIB-26, ATL-10
+// Spec: LIB-19, LIB-25, LIB-26, ATL-10
 export function HtmlReader(props: {
   itemId: string;
   html: string;
@@ -33,7 +36,7 @@ export function HtmlReader(props: {
   onSection: (anchor: string | null) => void;
 }) {
   const { itemId, initialAnchor, jump, onContents, onSection } = props;
-  const safe = useMemo(() => sanitizePaper(props.html), [props.html]);
+  const safe = useMemo(() => readablePaper(props.html), [props.html]);
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLElement>(null);
   const order = useRef<string[]>([]);
@@ -61,6 +64,22 @@ export function HtmlReader(props: {
 
   useEffect(() => () => setHtmlInView(null), []);
 
+  // Spec: LIB-19
+  // Hides or shows what's around the text, keeping the text where it is on screen.
+  const lastTop = useRef(0);
+  const settled = useRef(0);
+  const showChrome = (show: boolean) => {
+    const s = scroller.current;
+    const root = document.documentElement;
+    if (!s || root.classList.contains("pdf-reading") === !show) return;
+    const before = s.getBoundingClientRect().top;
+    root.classList.toggle("pdf-reading", !show);
+    s.scrollTop += s.getBoundingClientRect().top - before;
+    lastTop.current = s.scrollTop;
+    settled.current = Date.now();
+  };
+  useEffect(() => () => document.documentElement.classList.remove("pdf-reading"), []);
+
   // The section at the top of the view: in the address, the contents and the assistant's view.
   const frame = useRef(0);
   const onScroll = () => {
@@ -76,6 +95,13 @@ export function HtmlReader(props: {
         if (el && el.getBoundingClientRect().top <= line) at = a;
       }
       if (s.scrollTop < 20) at = null;
+      const dy = s.scrollTop - lastTop.current;
+      lastTop.current = s.scrollTop;
+      // The scroll that hiding causes isn't the reader's.
+      if (isPhone() && Date.now() - settled.current > 150) {
+        if (dy > 12 && s.scrollTop > 60) showChrome(false);
+        else if (dy < -12) showChrome(true);
+      }
       if (at === current.current) return;
       current.current = at;
       onSection(at);

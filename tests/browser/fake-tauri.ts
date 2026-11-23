@@ -118,22 +118,26 @@ let chatReplies: z.infer<typeof ReplySchema>[] = [];
 const ARXIV_FEED = `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"><entry>
 <id>http://arxiv.org/abs/1706.03762v7</id><published>2017-06-12T17:57:34Z</published>
 <title>Attention Is All You Need</title><summary>The dominant models.</summary>
-<author><name>Ashish Vaswani</name></author><author><name>Noam Shazeer</name></author></entry></feed>`;
+<author><name>Ashish Vaswani</name></author><author><name>Noam Shazeer</name></author><author><name>Niki Parmar</name></author>
+<author><name>Jakob Uszkoreit</name></author><author><name>Llion Jones</name></author></entry></feed>`;
 const ARXIV_UNKNOWN = `<feed><entry><id>http://arxiv.org/api/errors#unknown</id><title>Error</title></entry></feed>`;
 const filler = (what: string) => Array.from({ length: 14 }, (_, i) => `<p class="ltx_p">${what}, paragraph ${i + 1}: the encoder maps an input sequence to a sequence of continuous representations.</p>`).join("");
 const ARXIV_HTML = `<!DOCTYPE html><html><head><title>Attention Is All You Need</title><script>window.evil = 1</script><link rel="stylesheet" href="ltx.css"></head>
 <body><nav class="ltx_page_navbar">Contents navigation</nav><div class="ltx_page_main"><article class="ltx_document">
+<div class="ltx_para">1]<span class="ltx_ERROR undefined">\\affillogo</span><object type="image/svg+xml" data="1706.03762v7/brain.svg">Google Brain</object> 2]<span class="ltx_ERROR undefined">\\affillogo</span></div>
 <h1 class="ltx_title ltx_title_document">Attention Is All You Need</h1>
-<div class="ltx_authors">Ashish Vaswani, Noam Shazeer</div>
+<div class="ltx_authors">Ashish Vaswani<span class="ltx_author_notes">Affiliation: [</span>, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones</div>
 <section id="S1" class="ltx_section"><h2 class="ltx_title ltx_title_section"><span class="ltx_tag">1 </span>Introduction</h2>
 <p class="ltx_p">Recurrent models compute <math alttext="h_{t}" display="inline"><semantics><msub><mi>h</mi><mi>t</mi></msub><annotation encoding="application/x-tex">h_{t}</annotation></semantics></math> step by step.</p>
 ${filler("Introduction")}
-<figure class="ltx_figure"><img src="x1.png" alt="The Transformer"><figcaption>Figure 1: The Transformer.</figcaption></figure></section>
+<figure class="ltx_figure"><img src="1706.03762v7/x1.png" alt="The Transformer" style="width:598px;height:880px"><figcaption>Figure 1: The Transformer.</figcaption></figure>
+<figure class="ltx_figure"><object type="image/svg+xml" data="1706.03762v7/x2.svg" aria-label="Attention heads" width="300" height="200">Attention heads</object><figcaption>Figure 2: Attention heads <span class="ltx_ERROR undefined">\\heads</span>.</figcaption></figure></section>
 <section id="S2" class="ltx_section"><h2 class="ltx_title ltx_title_section"><span class="ltx_tag">2 </span>Model</h2>${filler("Model")}
 <section id="S2.SS1" class="ltx_subsection"><h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag">2.1 </span>Attention</h3>
 <p class="ltx_p" onclick="window.evil = 2">Scaled dot-product attention: <math display="block"><semantics><mi>A</mi><annotation encoding="application/x-tex">\\mathrm{softmax}(QK^{T})V</annotation></semantics></math></p>${filler("Attention")}</section></section>
 <section id="bib" class="ltx_bibliography"><h2 class="ltx_title">References</h2><p>[1] Bahdanau et al.</p>${filler("References")}</section>
 </article></div></body></html>`;
+const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="#88a"/></svg>`;
 // The smallest PNG: one transparent pixel.
 const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
 
@@ -142,8 +146,10 @@ function fakeArxiv(url: string): { status: number; type: string; bytes: Uint8Arr
   if (url.startsWith("https://export.arxiv.org/api/query")) return text(url.endsWith("1706.03762") ? ARXIV_FEED : ARXIV_UNKNOWN, "application/atom+xml");
   if (url === "https://arxiv.org/pdf/1706.03762")
     return { status: 200, type: "application/pdf", bytes: new Uint8Array(readFileSync(new URL("tests/browser/fixtures/with-contents.pdf", root))) };
-  if (url === "https://arxiv.org/html/1706.03762") return { ...text(ARXIV_HTML, "text/html"), url: "https://arxiv.org/html/1706.03762v7" };
+  // As arXiv serves it: at the address asked for, its figures named from there (`1706.03762v7/x1.png`).
+  if (url === "https://arxiv.org/html/1706.03762") return text(ARXIV_HTML, "text/html");
   if (url === "https://arxiv.org/html/1706.03762v7/x1.png") return { status: 200, type: "image/png", bytes: PNG };
+  if (url === "https://arxiv.org/html/1706.03762v7/x2.svg") return text(SVG, "image/svg+xml");
   if (/^https:\/\/(arxiv\.org|ar5iv\.labs\.arxiv\.org|export\.arxiv\.org)\//.test(url)) return { status: 404, type: "text/plain", bytes: new TextEncoder().encode("Not Found") };
   return null;
 }

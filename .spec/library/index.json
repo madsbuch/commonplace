@@ -176,7 +176,16 @@
     },
     {
       "id": "LIB-19",
-      "text": "On a phone, the viewer's controls and the app's buttons over it hide while scrolling down through a PDF, and come back on scrolling up or tapping the page."
+      "text": "On a phone, everything around what's read (the item's bar and authors, the viewer's controls, the app's buttons over it) steps aside while scrolling down through a PDF or text, and comes back on scrolling up, or on tapping a PDF's page.",
+      "history": [
+        {
+          "version": 1,
+          "text": "On a phone, the viewer's controls and the app's buttons over it hide while scrolling down through a PDF, and come back on scrolling up or tapping the page.",
+          "reason": "Read as text, a long author list and the bars took the phone's screen from the paper; text reads with the same room as a PDF.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "LIB-20",

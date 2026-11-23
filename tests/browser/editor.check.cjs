@@ -713,7 +713,18 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await fetch(`${FAKE}/fake-model`, {
       method: "POST",
       body: JSON.stringify({
-        answer: { title: "Something else", authors: [{ name: "A. Vaswani", institutions: ["Google Brain"] }, { name: "N. Shazeer", institutions: ["Google Brain"] }], year: 1999, kind: "book" },
+        answer: {
+          title: "Something else",
+          authors: [
+            { name: "A. Vaswani", institutions: ["Google Brain"] },
+            { name: "N. Shazeer", institutions: ["Google Brain"] },
+            { name: "N. Parmar", institutions: ["Google Research"] },
+            { name: "J. Uszkoreit", institutions: ["Google Research"] },
+            { name: "L. Jones", institutions: ["Google Research"] },
+          ],
+          year: 1999,
+          kind: "book",
+        },
       }),
     });
     await page.goto(APP + "/library");
@@ -725,10 +736,11 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const arx = (await q("SELECT i.id, i.title, i.year, i.kind, i.arxiv_id, length(f.data) AS pdf, h.html FROM library_items i LEFT JOIN library_files f ON f.item_id = i.id LEFT JOIN library_html h ON h.item_id = i.id WHERE i.arxiv_id IS NOT NULL"))[0];
     check("a paper comes from arXiv by its number, with arXiv's title and year", arx?.title === "Attention Is All You Need" && arx?.year === 2017 && arx?.kind === "paper" && arx?.arxiv_id === "1706.03762", JSON.stringify({ ...arx, html: undefined }));
     check("with its PDF and its HTML version", arx?.pdf > 1000 && typeof arx?.html === "string" && arx.html.includes("ltx_section"));
-    check("the HTML keeps its figures inside it", arx?.html.includes('src="data:image/png;base64,'));
+    check("the HTML keeps its figures inside it, named from the page's address as a browser reads them", arx?.html.includes('src="data:image/png;base64,') && arx?.html.includes('src="data:image/svg+xml;base64,'));
+    check("without LaTeX's leftovers: unknown commands, the logos before the title, author notes", !arx?.html.includes("affillogo") && !arx?.html.includes("ltx_ERROR") && !arx?.html.includes("Affiliation: [") && !arx?.html.includes("brain.svg"));
     check("and carries nothing that runs", !arx?.html.includes("<script") && !arx?.html.includes("onclick") && !arx?.html.includes("ltx_page_navbar"));
     const arxAuthors = await q(`SELECT p.name, i.name AS inst FROM authorships s JOIN people p ON p.id = s.person_id LEFT JOIN affiliations a ON a.authorship_id = s.id LEFT JOIN institutions i ON i.id = a.institution_id WHERE s.item_id = '${arx?.id}' ORDER BY s.position`);
-    check("arXiv's authors stand, with the institutions the model read", arxAuthors.map((a) => `${a.name}/${a.inst}`).join(", ") === "Ashish Vaswani/Google Brain, Noam Shazeer/Google Brain", JSON.stringify(arxAuthors));
+    check("arXiv's authors stand, with the institutions the model read", arxAuthors.map((a) => `${a.name}/${a.inst}`).join(", ") === "Ashish Vaswani/Google Brain, Noam Shazeer/Google Brain, Niki Parmar/Google Research, Jakob Uszkoreit/Google Research, Llion Jones/Google Research", JSON.stringify(arxAuthors));
 
     // Spec: LIB-25, LIB-26
     check("on a computer it opens as its PDF, with a way to read it as text", (await page.locator(".pdf-page canvas").count()) >= 1 && (await page.getByRole("tab", { name: "Text" }).count()) === 1);
@@ -736,7 +748,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1200);
     check("read as text, the address says so", /[?&]view=text/.test(page.url()), page.url());
     const reader = page.locator(".html-reader");
-    check("the text shows, its maths as maths and its figure", (await reader.innerText()).includes("1 Introduction") && (await reader.locator("math").count()) >= 2 && (await reader.locator('img[src^="data:"]').count()) === 1);
+    check("the text shows, its maths as maths and its figure", (await reader.innerText()).includes("1 Introduction") && (await reader.locator("math").count()) >= 2 && (await reader.locator('img[src^="data:"]').count()) === 2);
     check("and LaTeX's source doesn't show as text", !(await reader.innerText()).includes("h_{t}"));
     if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
     const tocText = await page.locator(".toc").innerText();
@@ -784,6 +796,38 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.goto(`${APP}/library/${arx?.id}`);
     await page.waitForTimeout(1500);
     check("on a phone it opens as text", await page.locator(".html-reader").isVisible());
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "phone-text.png") });
+    // Spec: LIB-25
+    const titleWidth = (await page.locator(".library-item-title").boundingBox())?.width ?? 0;
+    check("with room for its title in the bar", titleWidth > 150, String(titleWidth));
+    const figure = await page.locator('.html-reader img[alt="The Transformer"]').boundingBox();
+    check("and its figures fit the screen", figure !== null && figure.width <= 390 && figure.height < 600, JSON.stringify(figure));
+    // Spec: PPL-8
+    const authorsLine = page.locator(".item-head .item-authors");
+    check(
+      "its authors are a line of names, the rest of a long list on asking",
+      (await authorsLine.locator("a").count()) === 3 && (await authorsLine.innerText()).includes("and 2 more") && !(await authorsLine.innerText()).includes("Google"),
+      await authorsLine.innerText(),
+    );
+    await authorsLine.getByRole("button", { name: "and 2 more" }).click();
+    check("and all of them, with their institutions, when asked", (await authorsLine.innerText()).includes("Llion Jones") && (await authorsLine.innerText()).includes("Google Research"), await authorsLine.innerText());
+    await authorsLine.getByRole("button", { name: "Less" }).click();
+    await authorsLine.locator("a").first().click();
+    await page.waitForURL(/\/library\/people\/person_/, { timeout: 5000 });
+    check("each name leads to what else the library has of theirs", (await page.locator(".screen").innerText()).includes("Attention Is All You Need"));
+    // Spec: LIB-19
+    await page.goto(`${APP}/library/${arx?.id}`);
+    await page.waitForTimeout(1500);
+    const scrollText = async (by) => {
+      await page.locator(".html-pages").evaluate((s, d) => s.scrollBy(0, d), by);
+      await page.waitForTimeout(400);
+    };
+    await scrollText(300);
+    await scrollText(300);
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "phone-text-reading.png") });
+    check("reading down as text, what's around it steps aside", (await page.evaluate(() => document.documentElement.classList.contains("pdf-reading"))) && !(await page.locator(".library-item-bar").isVisible()) && !(await page.locator(".item-head").isVisible()));
+    await scrollText(-200);
+    check("and comes back on scrolling up", !(await page.evaluate(() => document.documentElement.classList.contains("pdf-reading"))) && (await page.locator(".library-item-bar").isVisible()));
     await page.setViewportSize({ width: 1200, height: 800 });
 
     // Spec: AUD-2, AUD-3, AUD-5, AUD-6, AUD-7

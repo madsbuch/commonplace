@@ -7,7 +7,8 @@
 
 import { fetch } from "@tauri-apps/plugin-http";
 import { parseArxivFeed, parseArxivId, type ArxivListing } from "./arxivModel";
-import { addFile, findByArxiv } from "./library";
+import { addFile, findByArxiv, getItem, saveHtml } from "./library";
+import { notifyTablesChanged } from "./live";
 
 const LISTING = "https://export.arxiv.org/api/query?id_list=";
 const PDF = "https://arxiv.org/pdf/";
@@ -41,9 +42,10 @@ export async function arxivHtml(id: string): Promise<{ html: string; sourceUrl: 
     // A page about there being no HTML version isn't one.
     if (!raw.includes("ltx_document")) continue;
     const { root } = paperOf(raw);
-    // Figures sit beside the page: under its address as a folder.
-    const base = page.url.endsWith("/") ? page.url : `${page.url}/`;
-    await inlineImages(root, base, (url) => get(url));
+    // Figures are named from the page's address, as a browser reads them
+    // (arXiv's: `2611.21885v2/fig.png` beside `/html/2611.21885`).
+    const base = new DOMParser().parseFromString(raw, "text/html").querySelector("base[href]")?.getAttribute("href");
+    await inlineImages(root, base ? new URL(base, page.url).toString() : page.url, (url) => get(url));
     return { html: sanitizePaper(root.outerHTML), sourceUrl: page.url };
   }
   return null;
@@ -74,4 +76,16 @@ export async function importArxiv(input: string, onStep: (step: string) => void 
     known: { title: listing.title, authors: listing.authors, year: listing.year },
     ...(html ? { html } : {}),
   });
+}
+
+// Spec: LIB-24, LIB-27
+/** Fetches an arXiv item's HTML version again (figures and all); false when arXiv has none. */
+export async function refetchArxivHtml(itemId: string): Promise<boolean> {
+  const item = await getItem(itemId);
+  if (!item?.arxivId) return false;
+  const html = await arxivHtml(item.arxivId);
+  if (!html) return false;
+  await saveHtml(itemId, html.html, html.sourceUrl);
+  notifyTablesChanged(["library_html"]);
+  return true;
 }

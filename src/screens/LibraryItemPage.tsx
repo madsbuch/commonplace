@@ -7,6 +7,7 @@ import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
 import { MoreMenu } from "../components/MoreMenu";
 import { RecordDialog } from "../components/RecordDialog";
+import { refetchArxivHtml } from "../lib/arxiv";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
@@ -240,25 +241,36 @@ export default function LibraryItemPage() {
   }
   if (item === null) return null;
 
+  // Spec: LIB-25
+  // Beside the viewer's own controls, so the bar keeps room for the title.
+  const viewSwitch =
+    htmlHere && hasPdf ? (
+      <div className="segmented view-switch" role="tablist" aria-label="Read as">
+        <button type="button" role="tab" aria-selected={view === "text"} onClick={() => setView("text")}>
+          Text
+        </button>
+        <button type="button" role="tab" aria-selected={view === "pdf"} onClick={() => setView("pdf")}>
+          PDF
+        </button>
+      </div>
+    ) : null;
+  const contentsToggle =
+    toc.length > 0 ? (
+      <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
+        Contents
+      </button>
+    ) : null;
+
   return (
     <div className="library-item">
       <div className="library-item-bar">
-        <Link to="/library">← Library</Link>
+        <Link to="/library" aria-label="Library">
+          ←<span className="back-word"> Library</span>
+        </Link>
         <span className="library-item-title" title={item.title}>
           {item.title}
         </span>
         <div className="page-actions">
-          {/* Spec: LIB-25 */}
-          {htmlHere && hasPdf ? (
-            <div className="segmented view-switch" role="tablist" aria-label="Read as">
-              <button type="button" role="tab" aria-selected={view === "text"} onClick={() => setView("text")}>
-                Text
-              </button>
-              <button type="button" role="tab" aria-selected={view === "pdf"} onClick={() => setView("pdf")}>
-                PDF
-              </button>
-            </div>
-          ) : null}
           <button type="button" aria-pressed={showDetails} onClick={() => setShowDetails((s) => !s)}>
             Details
           </button>
@@ -268,6 +280,8 @@ export default function LibraryItemPage() {
             actions={[
               // Spec: AUD-2
               { label: "Record aloud…", onClick: () => setRecording(true) },
+              // Spec: LIB-27
+              ...(item.arxivId ? [{ label: "Fetch the text again from arXiv", onClick: () => void refetchArxivHtml(item.id) }] : []),
               {
                 label: "Remove from the library",
                 confirm: "Really remove it?",
@@ -300,11 +314,10 @@ export default function LibraryItemPage() {
           <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
             {showContents && toc.length > 0 ? contentsPanel : null}
             <div className="html-view">
-              {toc.length > 0 ? (
+              {contentsToggle || viewSwitch ? (
                 <div className="pdf-toolbar">
-                  <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
-                    Contents
-                  </button>
+                  {contentsToggle}
+                  {viewSwitch}
                 </div>
               ) : null}
               <HtmlReader
@@ -334,10 +347,11 @@ export default function LibraryItemPage() {
             onPage={setPage}
             jump={jump?.itemId === id ? jump : null}
             toolbarStart={
-              toc.length > 0 ? (
-                <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
-                  Contents
-                </button>
+              contentsToggle || viewSwitch ? (
+                <>
+                  {contentsToggle}
+                  {viewSwitch}
+                </>
               ) : null
             }
           />

@@ -243,24 +243,34 @@ read and show verdicts.
 - An item can also hold an HTML version (`library_html`, synced, one per
   item; LIB-24): from arXiv or an HTML file added like a PDF. It's stored
   self-contained and already sanitized: `src/lib/paperHtml.ts` cuts the paper
-  out of the page (LaTeXML's `article.ltx_document`, or the body), drops
-  scripts and chrome, moves each formula's TeX annotation into its `alttext`
+  out of the page (LaTeXML's `article.ltx_document`, or the body), tidies
+  LaTeX's leftovers (`tidyPaper`: `.ltx_ERROR` commands, author notes,
+  whatever comes before the title, such as affiliation logos; SVG figures in
+  `<object>`s become `<img>`s), drops scripts and chrome, moves each
+  formula's TeX annotation into its `alttext`
   and unwraps `<semantics>` (DOMPurify would otherwise show the TeX as text),
   inlines figures as `data:` URLs, and sanitizes with DOMPurify (HTML, MathML,
-  SVG). It's sanitized again where it's shown (`HtmlReader.tsx`). Its sections
+  SVG); a figure that can't be fetched is dropped. Where it's shown
+  (`HtmlReader.tsx`) it goes through `readablePaper`: tidied and sanitized
+  again, so versions stored before the tidying improved read as well. Its sections
   (`section[id]` with a heading, else headings) are the contents, as
   `TocEntry`s with an `anchor`. An item opens as text on a phone and as its
   PDF on a computer unless `?view=text|pdf` says; read as text, the fragment
-  is the section at the top of the view. The assistant reads it a section at
+  is the section at the top of the view. The Text|PDF switch sits in the
+  viewer's own bar, beside Contents, so the item's bar keeps room for the
+  title; on a phone, reading down as text steps everything around it aside,
+  as the PDF viewer does (`pdf-reading`). The assistant reads it a section at
   a time (`read_section`, maths as `$LaTeX$`) and gets the section in view.
 - Adding from arXiv (`src/lib/arxiv.ts`, pure parsing in `arxivModel.ts`):
   an identifier in any form, arXiv's Atom listing (its title, authors and
   year stand over what the model reads; the model adds institutions only
   when it read the same number of authors), `arxiv.org/pdf/<id>`, and the
   HTML version from `arxiv.org/html/<id>` or else `ar5iv.labs.arxiv.org`
-  (figures relative to the page's address as a folder). Items carry
-  `arxiv_id`; adding one already there opens it. The fake Tauri layer answers
-  as arXiv for `1706.03762`.
+  (figures named from the page's address, or its `<base>`, as a browser
+  reads them: arXiv's `2611.21885v2/x1.png` beside `/html/2611.21885`).
+  Items carry `arxiv_id`; adding one already there opens it, and its ⋯ menu
+  fetches the HTML version again (`refetchArxivHtml`). The fake Tauri layer
+  answers as arXiv for `1706.03762`, its page shaped like arXiv's own.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -270,7 +280,9 @@ read and show verdicts.
   concurrently elsewhere still land; readers resolve chains, and a cycle
   from merges on two devices resolves to its smallest id everywhere.
   `library_items.authors` is a display line kept in step with the
-  authorships (lists and search read it).
+  authorships (lists and search read it). Above what's read, an item shows
+  the first three names, each a link to the person (PPL-8); "and N more"
+  opens the whole list with institutions (`AuthorsEditor`, not editing).
 
 ## Look and feel
 

@@ -15,8 +15,12 @@ import {
 import type { Named } from "../lib/peopleModel";
 import { NamePicker } from "./NamePicker";
 
+/** Names shown before "and N more". */
+const SHORT_LIST = 3;
+
 /** An item's authors as links, with where they were; editable when `editing`. */
 export function AuthorsEditor(props: { itemId: string; editing: boolean }) {
+  const [open, setOpen] = useState(false);
   const version = useTablesVersion(PEOPLE_TABLES);
   const [authors, setAuthors] = useState<ItemAuthor[]>([]);
   const [people, setPeople] = useState<Named[]>([]);
@@ -38,13 +42,18 @@ export function AuthorsEditor(props: { itemId: string; editing: boolean }) {
 
   if (!props.editing) {
     if (authors.length === 0) return null;
+    // Spec: PPL-8
+    // A line of names; the rest of a long list, and the institutions, when asked for.
+    const shown = open ? authors : authors.slice(0, SHORT_LIST);
+    const more = authors.length - shown.length;
+    const institutions = authors.some((a) => a.institutions.length > 0);
     return (
-      <p className="item-authors">
-        {authors.map((a, i) => (
+      <p className={open ? "item-authors open" : "item-authors"}>
+        {shown.map((a, i) => (
           <span key={a.authorshipId}>
             {i > 0 ? ", " : null}
             <Link to={`/library/people/${a.personId}`}>{a.name}</Link>
-            {a.institutions.length > 0 ? (
+            {open && a.institutions.length > 0 ? (
               <span className="muted">
                 {" ("}
                 {a.institutions.map((inst, j) => (
@@ -60,6 +69,11 @@ export function AuthorsEditor(props: { itemId: string; editing: boolean }) {
             ) : null}
           </span>
         ))}
+        {more > 0 || institutions || open ? (
+          <button type="button" className="authors-more" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            {open ? "Less" : more > 0 ? `and ${more} more` : "Institutions"}
+          </button>
+        ) : null}
       </p>
     );
   }
