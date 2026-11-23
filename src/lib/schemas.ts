@@ -249,3 +249,84 @@ export function parseToc(raw: string | null): TocEntry[] | null {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Lean (src-tauri/src/lean/): verdicts as stored (strict) and as the
+// computer's Lean service hands them back.
+// ---------------------------------------------------------------------------
+
+// Spec: LEAN-3
+export const LeanMessageSchema = z.object({
+  severity: z.enum(["error", "warning", "information", "hint"]),
+  line: z.number().int().nonnegative(),
+  column: z.number().int().nonnegative(),
+  endLine: z.number().int().nonnegative(),
+  endColumn: z.number().int().nonnegative(),
+  text: z.string(),
+});
+export type LeanMessage = z.infer<typeof LeanMessageSchema>;
+
+export const LeanDepSchema = z.object({ name: z.string(), hash: z.string() });
+
+export const LeanStatusValueSchema = z.enum(["verified", "sorry", "errors"]);
+
+// Spec: LEAN-5
+export const LeanVerdictSchema = z.object({
+  status: LeanStatusValueSchema,
+  messages: z.array(LeanMessageSchema),
+  sourceHash: z.string(),
+  deps: z.array(LeanDepSchema),
+  leanVersion: z.string(),
+  device: z.string(),
+  checkedAt: z.string(),
+});
+export type LeanVerdict = z.infer<typeof LeanVerdictSchema>;
+
+/** A `lean_checks` row as a verdict; null when it can't be read. */
+export function parseLeanCheckRow(row: Record<string, unknown>): LeanVerdict | null {
+  const r = z
+    .object({
+      status: z.string(),
+      messages: z.string(),
+      source_hash: z.string(),
+      deps: z.string(),
+      lean_version: z.string(),
+      device: z.string(),
+      checked_at: z.string(),
+    })
+    .safeParse(row);
+  if (!r.success) return null;
+  try {
+    const v = LeanVerdictSchema.safeParse({
+      status: r.data.status,
+      messages: parseJson(r.data.messages),
+      sourceHash: r.data.source_hash,
+      deps: parseJson(r.data.deps),
+      leanVersion: r.data.lean_version,
+      device: r.data.device,
+      checkedAt: r.data.checked_at,
+    });
+    return v.success ? v.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export const LeanServiceStatusSchema = z.object({
+  lake: z.string().nullable(),
+  ready: z.boolean(),
+  toolchain: z.string().nullable(),
+  settingUp: z.boolean(),
+  workspace: z.string(),
+});
+export type LeanServiceStatus = z.infer<typeof LeanServiceStatusSchema>;
+
+// Spec: LEAN-4
+export const LeanGoalsSchema = z.object({ goals: z.array(z.string()), term: z.string().nullable() }).nullable();
+export type LeanGoals = z.infer<typeof LeanGoalsSchema>;
+
+export const LeanSetupEventSchema = z.object({
+  line: z.string().optional(),
+  done: z.boolean().optional(),
+  error: z.string().nullable().optional(),
+});

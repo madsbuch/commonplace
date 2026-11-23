@@ -8,6 +8,7 @@ const PagePage = lazy(() => import("./screens/PagePage"));
 const HistoryPage = lazy(() => import("./screens/HistoryPage"));
 const SettingsPage = lazy(() => import("./screens/SettingsPage"));
 const AiSettingsPage = lazy(() => import("./screens/AiSettingsPage"));
+const LeanSettingsPage = lazy(() => import("./screens/LeanSettingsPage"));
 const SyncPage = lazy(() => import("./screens/SyncPage"));
 const CostsPage = lazy(() => import("./screens/CostsPage"));
 const LibraryPage = lazy(() => import("./screens/LibraryPage"));
@@ -30,8 +31,8 @@ function screen(node: ReactNode) {
  * - `/library`, `/library/:id`: the papers and books, and one of them
  * - `/library/people/:id`, `/library/institutions/:id`: a person, an institution
  * - `/chats`, `/chats/:id`, `/memory`: the assistant's chats, one chat, its memory
- * - `/settings`, and nested in it `/settings/ai`, `/settings/sync` and
- *   `/settings/costs`
+ * - `/settings`, and nested in it `/settings/ai`, `/settings/lean`,
+ *   `/settings/sync` and `/settings/costs`
  *   (`/sync` and `/costs` lead there)
  */
 export const router = createBrowserRouter([
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
       { path: "/settings", element: screen(<SettingsPage />) },
       // Spec: APP-8
       { path: "/settings/ai", element: screen(<AiSettingsPage />) },
+      { path: "/settings/lean", element: screen(<LeanSettingsPage />) },
       { path: "/settings/sync", element: screen(<SyncPage />) },
       { path: "/settings/costs", element: screen(<CostsPage />) },
       { path: "/sync", element: <Navigate to="/settings/sync" replace /> },

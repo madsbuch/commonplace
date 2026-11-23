@@ -307,6 +307,25 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
             void flush().then(() => go(pagePath(dbId(inserted.id))));
           },
         },
+        // Spec: LEAN-1
+        {
+          title: "Lean",
+          subtext: "Lean 4, verified on your computers",
+          aliases: ["lean", "lean4", "proof", "theorem"],
+          group: "Book",
+          onItemClick: () => {
+            const at = editor.getTextCursorPosition().block;
+            const empty = at.type === "paragraph" && Array.isArray(at.content) && at.content.length === 0;
+            const block = { type: "lean" as const, props: { name: "", source: "" } };
+            const [inserted] = empty ? editor.replaceBlocks([at], [block]).insertedBlocks : editor.insertBlocks([block], at, "after");
+            if (!inserted) return;
+            // Into its source, ready to type.
+            setTimeout(() => {
+              const el = document.querySelector(`.bn-editor [data-id="${inserted.id}"] .lean-input`);
+              if (el instanceof HTMLTextAreaElement) el.focus();
+            }, 0);
+          },
+        },
         {
           title: "Inline maths",
           subtext: "LaTeX in the text (or type $…$)",

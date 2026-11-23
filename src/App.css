@@ -12,6 +12,10 @@
   /* Spec: APP-6 — font.book and font.ui, bundled (src/main.tsx). */
   --font-book: "Literata Variable", "Iowan Old Style", Georgia, serif;
   --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --lean-ok: #1a7f37;
+  --lean-sorry: #9a6700;
+  --lean-error: #b42318;
   --sidebar-width: 264px;
   --theme-ms: 480ms; /* theme.transition */
   color-scheme: light;
@@ -33,6 +37,9 @@
   }
 }
 :root[data-theme="dark"] {
+  --lean-ok: #3fb950;
+  --lean-sorry: #d29922;
+  --lean-error: #f85149;
   --bg: #15171c;
   --fg: #e9e6df;
   --muted: #9a9ea8;
@@ -1913,4 +1920,227 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   color: #111;
   font: inherit;
   font-weight: 600;
+}
+
+/* Spec: LEAN-1, LEAN-3, LEAN-4, LEAN-5 — a Lean block */
+.lean-block {
+  width: 100%;
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sidebar) 55%, var(--bg));
+  font-family: var(--font-ui);
+}
+.lean-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.lean-badge {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+}
+.lean-name {
+  flex: 1;
+  min-width: 9em;
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+.lean-name input {
+  flex: 1;
+  min-width: 4em;
+  padding: 2px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--fg);
+}
+.lean-name.invalid input {
+  color: var(--lean-error);
+  text-decoration: wavy underline var(--lean-error);
+}
+.lean-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.lean-status.verified {
+  color: var(--lean-ok);
+}
+.lean-status.sorry {
+  color: var(--lean-sorry);
+}
+.lean-status.errors,
+.lean-status.problem {
+  color: var(--lean-error);
+}
+.lean-status.checking {
+  animation: lean-pulse 1.2s ease-in-out infinite;
+}
+@keyframes lean-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.lean-status-by {
+  color: var(--muted);
+}
+.lean-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* The source: a transparent textarea over the highlighted text, in one grid
+   cell, laid out alike to the pixel. */
+.lean-code {
+  display: grid;
+}
+.lean-highlight,
+.lean-input {
+  grid-area: 1 / 1;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: normal;
+  font-variant-ligatures: none;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.lean-highlight {
+  pointer-events: none;
+  color: var(--fg);
+  background: transparent;
+}
+.lean-input {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--fg);
+}
+.lean-input::selection {
+  color: transparent;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.lean-input::placeholder {
+  color: var(--muted);
+}
+.lean-mark {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+}
+.lean-mark.error {
+  text-decoration-color: var(--lean-error);
+}
+.lean-mark.warning {
+  text-decoration-color: var(--lean-sorry);
+}
+.lean-messages {
+  list-style: none;
+  margin: 0;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.lean-message {
+  display: flex;
+  gap: 8px;
+}
+.lean-message-line {
+  min-width: 2ch;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.lean-message pre {
+  flex: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.lean-message.error pre {
+  color: var(--lean-error);
+}
+.lean-message.warning pre {
+  color: var(--lean-sorry);
+}
+.lean-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.lean-goals pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.lean-goals pre + pre {
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+.lean-term {
+  color: var(--muted);
+}
+/* Settings → Lean */
+.lean-setting-line {
+  margin: 0;
+}
+.lean-command {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--sidebar);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  user-select: all;
+}
+.lean-log {
+  max-height: 320px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--sidebar);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
 }

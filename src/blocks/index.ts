@@ -16,6 +16,7 @@ import { code, codeBlockSpec } from "./code";
 
 export { syntaxHighlighter } from "./code";
 import { heading, HEADING_LEVELS } from "./heading";
+import { lean, leanBlockSpec } from "./lean";
 import { list } from "./list";
 import { page, pageBlockSpec } from "./page";
 import { paragraph } from "./paragraph";
@@ -25,7 +26,7 @@ import { pageLinkInlineSpec } from "./inline/pageLink";
 import { dbId, editorId } from "./ids";
 import type { BlockType } from "./types";
 
-export const BLOCK_TYPES: readonly BlockType[] = [paragraph, heading, list, code, page];
+export const BLOCK_TYPES: readonly BlockType[] = [paragraph, heading, list, code, lean, page];
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
@@ -35,6 +36,7 @@ export const schema = BlockNoteSchema.create({
     numberedListItem: defaultBlockSpecs.numberedListItem,
     codeBlock: codeBlockSpec,
     page: pageBlockSpec(),
+    lean: leanBlockSpec(),
     unknown: unknownBlockSpec(),
   },
   inlineContentSpecs: {

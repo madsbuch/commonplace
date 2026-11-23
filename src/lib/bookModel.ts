@@ -459,6 +459,12 @@ export function toMarkdown(blocks: readonly DocBlock[], pageTitle: (id: string) 
       case "code":
         lines.push(`${indent}\`\`\`${str(b.props["language"])}\n${text}\n${indent}\`\`\``);
         break;
+      // Spec: LEAN-1
+      case "lean": {
+        const name = str(b.props["name"]);
+        lines.push(`${indent}\`\`\`lean\n${name ? `-- Book.${name}\n` : ""}${str(b.content)}\n${indent}\`\`\``);
+        break;
+      }
       case PAGE_TYPE:
         lines.push(`${indent}[[${pageTitle(b.id)}]]`);
         break;

@@ -19,7 +19,7 @@ before editing the spec).
   idea; don't bring one back without asking.
 - What isn't decided stays out of the spec. Ask instead of guessing.
 - Requirement id prefixes: `BOOK-` (book), `PAGE-` (pages), `BLK-` (blocks),
-  `PAR-`/`HEAD-`/`LIST-`/`CODE-` (block types), `LNK-` (links), `LIB-` (library), `PPL-` (people and institutions), `AST-`
+  `PAR-`/`HEAD-`/`LIST-`/`CODE-`/`LEAN-` (block types), `LNK-` (links), `LIB-` (library), `PPL-` (people and institutions), `AST-`
   (assistant), `CHAT-` (chats), `ATL-` (assistant tools), `MEM-` (memory), `AI-` (models and costs), `APP-` (app), `STO-` (storage),
   `SYN-` (sync), `ENG-` (engineering), `DEV-` (development builds), `TRG-`
   (sync triggers), `ID-` (row ids). Stories use `US-`. Requirements keep their
@@ -155,6 +155,47 @@ The book syncs peer to peer over the local network, as Tally does
   engine), Lean included.
 - `tsconfig.json` leaves `exactOptionalPropertyTypes` off: BlockNote's types
   don't hold under it.
+
+## Lean blocks
+
+A Lean block (`src/blocks/lean.tsx`, `src/components/LeanBlock.tsx`) is a
+Lean 4 module: its name in the props (`Peano` is the module `Book.Peano`),
+its source as the row's content (a JSON string). Blocks import each other
+by name, from any page. Only computers run Lean (LEAN-7); phones write,
+read and show verdicts.
+
+- `src/lib/leanModel.ts` is pure (names, imports, the hash a verdict holds
+  for, abbreviations); `src-tauri/src/lean/model.rs` computes the same names,
+  imports and hashes, and both tests pin the same hash. A verdict holds for
+  SHA-256 of `name\nsource` and for the hashes of every block it imports,
+  transitively (`deps`); either changing makes it "not verified".
+- Verdicts are rows of `lean_checks` (synced, keyed by the block's id: two
+  computers verifying one block write one row), written by Rust.
+- `src-tauri/src/lean/` is `#[cfg(desktop)]`; the commands (`lean_status`,
+  `lean_set_up`, `lean_check`, `lean_goal`) are one-line errors on phones.
+  The workspace is `<app data>/lean`: a Lake project requiring Mathlib
+  (`master`, pinned by `lake update`; its toolchain copied in), set up from
+  Settings → Lean with `lake +leanprover-community/mathlib4:lean-toolchain
+  update`, `lake exe cache get`, `lake build`, each line sent as a
+  `lean-setup` event. elan's `lake` is looked for in `~/.elan/bin` first (a
+  Mac app doesn't get the shell's PATH). Named blocks are written to
+  `Book/<Name>.lean` (only what changed; files of gone names removed), others
+  are checked from `Scratch/<id>.lean`.
+- Checking talks to one `lake serve` (`lsp.rs`, a JSON-RPC client generic over
+  its streams; its tests use a stand-in server): open or change the file,
+  `textDocument/waitForDiagnostics`, then the latest diagnostics for that
+  version. A file whose imports changed is closed and opened again, so Lean
+  rebuilds them. Goals: `$/lean/plainGoal`, then `$/lean/plainTermGoal`.
+- On a computer the block is checked 0.9 s after typing pauses, as it is in
+  the editor, whenever its verdict doesn't hold; every 30 s the service
+  checks blocks another device changed (their `sync_rows.origin`) whose
+  verdict doesn't hold (LEAN-6), and says so with a `lean-checked` event.
+- The editor is a transparent textarea over Shiki's Lean highlighting in one
+  grid cell (same metrics, so they line up), with errors and warnings
+  underlined. Backslash abbreviations (`\to` → →) are replaced with
+  `execCommand("insertText")`, so undo takes them back.
+- `tests/browser/fake-tauri.ts` fakes the Lean commands (`sorry`, `#eval`,
+  `type_mismatch` in a line), so the browser checks cover the block.
 
 ## The library
 

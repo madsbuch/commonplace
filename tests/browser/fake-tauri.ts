@@ -9,6 +9,7 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { parseJson } from "../../src/lib/schemas";
+import { hashInput, importsOf, isModuleName } from "../../src/lib/leanModel";
 
 const PORT = Number(process.env["FAKE_TAURI_PORT"] ?? 1430);
 const root = new URL("../../", import.meta.url);
@@ -25,6 +26,56 @@ export function openBookDb(path: string): Database {
     db.query("INSERT INTO _fake_migrations (name) VALUES (?)").run(name);
   }
   return db;
+}
+
+const sha256 = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex");
+
+/**
+ * Lean, as a computer's Lean service would answer (src-tauri/src/lean/): a
+ * line with `sorry` warns, a line with `#eval` prints, a line with
+ * `type_mismatch` is an error; imports are followed through the book's
+ * named Lean blocks; the verdict is saved like the real one.
+ */
+function fakeLeanCheck(db: Database, blockId: string, name: string, source: string) {
+  const messages = source.split("\n").flatMap((l, line) => {
+    const at = (word: string) => Math.max(0, l.indexOf(word));
+    if (l.includes("type_mismatch")) return [{ severity: "error", line, column: at("type_mismatch"), endLine: line, endColumn: at("type_mismatch") + 13, text: "type mismatch" }];
+    if (l.includes("sorry")) return [{ severity: "warning", line, column: at("sorry"), endLine: line, endColumn: at("sorry") + 5, text: "declaration uses 'sorry'" }];
+    if (l.includes("#eval")) return [{ severity: "information", line, column: at("#eval"), endLine: line, endColumn: at("#eval") + 5, text: "2" }];
+    return [];
+  });
+  const status = messages.some((m) => m.severity === "error") ? "errors" : messages.some((m) => m.severity === "warning") ? "sorry" : "verified";
+  const rows = z
+    .array(z.object({ id: z.string(), name: z.string().nullable(), source: z.string().nullable() }))
+    .parse(db.query("SELECT id, json_extract(props, '$.name') AS name, json_extract(content, '$') AS source FROM blocks WHERE type = 'lean' AND deleted_at IS NULL ORDER BY id").all());
+  const byName = new Map<string, string>();
+  for (const r of rows) if (r.id !== blockId && r.name && isModuleName(r.name) && !byName.has(r.name)) byName.set(r.name, r.source ?? "");
+  if (isModuleName(name)) byName.set(name, source);
+  const seen = new Set<string>();
+  const queue = importsOf(source);
+  for (let n = queue.pop(); n !== undefined; n = queue.pop()) {
+    if (seen.has(n)) continue;
+    seen.add(n);
+    queue.push(...importsOf(byName.get(n) ?? ""));
+  }
+  const deps = [...seen].sort().flatMap((n) => {
+    const s = byName.get(n);
+    return s === undefined ? [] : [{ name: n, hash: sha256(hashInput(n, s)) }];
+  });
+  const verdict = {
+    blockId,
+    status,
+    messages,
+    sourceHash: sha256(hashInput(name, source)),
+    deps,
+    leanVersion: "leanprover/lean4:v4.99.0",
+    device: "This computer",
+    checkedAt: new Date().toISOString(),
+  };
+  db.query(
+    "INSERT OR REPLACE INTO lean_checks (block_id, source_hash, deps, status, messages, lean_version, device, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  ).run(blockId, verdict.sourceHash, JSON.stringify(deps), status, JSON.stringify(messages), verdict.leanVersion, verdict.device, verdict.checkedAt);
+  return verdict;
 }
 
 /** sqlx's `$1` placeholders, as bun:sqlite's `?1`. */
@@ -203,6 +254,15 @@ if (import.meta.main) {
         if (cmd.startsWith("plugin:http|")) return Response.json({ ok: httpCommand(cmd, args) }, { headers: cors });
         // Sync, enough for the pairing screen: a device that holds a book, a
         // code as long as a real one, and joins recorded for the checks.
+        if (cmd === "lean_status") {
+          return Response.json({ ok: { lake: "/home/fake/.elan/bin/lake", ready: true, toolchain: "leanprover/lean4:v4.99.0", settingUp: false, workspace: "/fake/lean" } }, { headers: cors });
+        }
+        if (cmd === "lean_check") {
+          return Response.json({ ok: fakeLeanCheck(db, String(args["blockId"]), String(args["name"]), String(args["source"])) }, { headers: cors });
+        }
+        if (cmd === "lean_goal") {
+          return Response.json({ ok: { goals: ["n : ℕ\n⊢ n + 0 = n"], term: null } }, { headers: cors });
+        }
         if (cmd === "sync_status") {
           const pages = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM blocks").get());
           return Response.json({ ok: fakeSyncStatus(pages.n) }, { headers: cors });

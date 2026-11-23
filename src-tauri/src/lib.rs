@@ -1,6 +1,9 @@
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool, Migration, MigrationKind};
 
+// Spec: LEAN-7
+#[cfg(desktop)]
+mod lean;
 mod library;
 mod sync;
 mod type_id;
@@ -60,12 +63,18 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0005_library_toc.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "lean_checks",
+            sql: include_str!("../migrations/0006_lean_checks.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
 /// The app's own connection pool, once the frontend has loaded the database
 /// (which runs the migrations).
-async fn db_pool(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
+pub(crate) async fn db_pool(app: &tauri::AppHandle) -> Result<sqlx::SqlitePool, String> {
     let instances = app.state::<DbInstances>();
     let instances = instances.0.read().await;
     match instances.get(DB_URL) {
@@ -94,6 +103,78 @@ async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<Str
 }
 
 // ---------------------------------------------------------------------------
+// Lean (src/lean/): computers check Lean blocks; phones only show verdicts
+// ---------------------------------------------------------------------------
+
+// Spec: LEAN-7
+#[cfg(mobile)]
+const LEAN_ELSEWHERE: &str = "Lean runs on your computers.";
+
+#[cfg(desktop)]
+fn lean_service(app: &tauri::AppHandle) -> std::sync::Arc<lean::service::LeanService> {
+    app.state::<std::sync::Arc<lean::service::LeanService>>().inner().clone()
+}
+
+/// Whether Lean is installed and the workspace set up, on this computer.
+#[tauri::command]
+fn lean_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(desktop)]
+    return serde_json::to_value(lean_service(&app).status(&app)?).map_err(|e| e.to_string());
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err(LEAN_ELSEWHERE.into())
+    }
+}
+
+// Spec: LEAN-8
+/// Sets up Lean and Mathlib here, telling the screens how it goes (`lean-setup`).
+#[tauri::command]
+fn lean_set_up(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    return lean_service(&app).set_up(app.clone());
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        Err(LEAN_ELSEWHERE.into())
+    }
+}
+
+// Spec: LEAN-3, LEAN-5
+/// Checks a Lean block as it is in the editor, and saves the verdict.
+#[tauri::command]
+async fn lean_check(app: tauri::AppHandle, block_id: String, name: String, source: String) -> Result<serde_json::Value, String> {
+    #[cfg(desktop)]
+    return serde_json::to_value(lean_service(&app).check(&app, &block_id, &name, &source).await?).map_err(|e| e.to_string());
+    #[cfg(mobile)]
+    {
+        let _ = (app, block_id, name, source);
+        Err(LEAN_ELSEWHERE.into())
+    }
+}
+
+// Spec: LEAN-4
+/// The proof state at a position in a Lean block.
+#[tauri::command]
+async fn lean_goal(
+    app: tauri::AppHandle,
+    block_id: String,
+    name: String,
+    source: String,
+    line: u32,
+    character: u32,
+) -> Result<serde_json::Value, String> {
+    #[cfg(desktop)]
+    return serde_json::to_value(lean_service(&app).goal(&app, &block_id, &name, &source, line, character).await?)
+        .map_err(|e| e.to_string());
+    #[cfg(mobile)]
+    {
+        let _ = (app, block_id, name, source, line, character);
+        Err(LEAN_ELSEWHERE.into())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sync (src/sync/): the Sync page's commands
 // ---------------------------------------------------------------------------
 
@@ -104,6 +185,10 @@ type SyncState<'a> = tauri::State<'a, std::sync::Arc<sync::service::SyncService>
 async fn sync_start(app: tauri::AppHandle, svc: SyncState<'_>) -> Result<(), String> {
     let pool = db_pool(&app).await?;
     svc.start(app.clone(), pool).await?;
+    // Spec: LEAN-6
+    // Computers verify Lean blocks changed on other devices.
+    #[cfg(desktop)]
+    lean_service(&app).start_background(app.clone());
     // Spec: SYN-17
     // Android also syncs with the app closed, every half hour on Wi-Fi.
     use tauri_plugin_sync_background::SyncBackgroundExt;
@@ -204,6 +289,9 @@ pub fn run() {
     // Scanning the pairing QR code.
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    // Spec: LEAN-7
+    #[cfg(desktop)]
+    let builder = builder.manage(std::sync::Arc::new(lean::service::LeanService::default()));
 
     builder
         .setup(|app| {
@@ -237,6 +325,10 @@ pub fn run() {
             sync_remove_device,
             library_save_file,
             library_read_file,
+            lean_status,
+            lean_set_up,
+            lean_check,
+            lean_goal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

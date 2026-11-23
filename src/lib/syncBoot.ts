@@ -9,6 +9,7 @@
 
 import { getDb, onDatabaseOpen } from "./db";
 import { notifyTablesChanged } from "./live";
+import { followLeanChecks } from "./lean";
 import { checkInstance, onSyncChanged, startSync } from "./sync";
 
 onDatabaseOpen(async () => {
@@ -21,6 +22,8 @@ onDatabaseOpen(async () => {
 });
 
 onSyncChanged(() => notifyTablesChanged("all"));
+// Spec: LEAN-6
+followLeanChecks();
 
 // Open the database now, so sync starts even before a screen reads anything.
 getDb().catch((e: unknown) => console.warn("The database didn't open", e));

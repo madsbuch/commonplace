@@ -643,6 +643,64 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(2500);
     check("an address in an answer opens in the app, at the page", (await page.locator(".pdf-toolbar").innerText()).includes("4 / 6"));
 
+    // Spec: LEAN-1, LEAN-2, LEAN-3, LEAN-4, LEAN-5, LEAN-9
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    await page.locator(".tree-new").click();
+    await page.waitForTimeout(600);
+    await page.locator(".page-title").fill("Proofs");
+    await page.waitForTimeout(600);
+    await page.locator(".bn-editor").click();
+    await page.keyboard.type("/lean");
+    await page.waitForTimeout(500);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    check("/lean makes a Lean block, ready to type in", (await page.locator(".lean-block").count()) === 1 && (await page.evaluate(() => document.activeElement?.classList.contains("lean-input"))));
+    await page.keyboard.type("theorem t (n : \\N) : n + 0 = n := by\n  sorry");
+    const leanSource = () => page.locator(".lean-input").inputValue();
+    check("a backslash abbreviation turns into its symbol", (await leanSource()).startsWith("theorem t (n : ℕ) :"), await leanSource());
+    await page.getByLabel("Module name").fill("Peano");
+    await page.waitForTimeout(2500);
+    check("a computer verifies it, and says it holds by sorry", (await page.locator(".lean-status").innerText()).includes("Verified with sorry"), await page.locator(".lean-status").innerText());
+    check("the sorry is underlined, and Lean's message shown", (await page.locator(".lean-mark.warning").count()) >= 1 && (await page.locator(".lean-message").innerText()).includes("sorry"));
+    const leanRow = async (id) => (await q(`SELECT c.status, c.source_hash, c.deps FROM lean_checks c JOIN blocks b ON b.id = c.block_id WHERE json_extract(b.props, '$.name') = '${id}'`))[0];
+    const peanoRow = await leanRow("Peano");
+    const expectHash = require("node:crypto").createHash("sha256").update(`Peano\n${await leanSource()}`).digest("hex");
+    check("the verdict is kept with the source it holds for", peanoRow?.status === "sorry" && peanoRow?.source_hash === expectHash, JSON.stringify(peanoRow));
+    await page.locator(".lean-input").fill("theorem t (n : ℕ) : n + 0 = n := by\n  simp");
+    await page.waitForTimeout(2500);
+    check("changed and checked again, it's verified", (await page.locator(".lean-status").innerText()).includes("Verified") && !(await page.locator(".lean-status").innerText()).includes("sorry"));
+    await page.locator(".lean-input").click();
+    await page.keyboard.press("End");
+    await page.waitForTimeout(800);
+    check("the proof state at the cursor shows with the block", (await page.locator(".lean-goals").innerText()).includes("⊢ n + 0 = n"));
+    // A block importing it: what it imports is part of its verdict.
+    await page.locator(".bn-editor .bn-block-outer").last().click({ position: { x: 5, y: 5 } }).catch(() => undefined);
+    await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+    await page.locator(".bn-editor").click({ position: { x: 60, y: 2 } });
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("/lean");
+    await page.waitForTimeout(500);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    await page.keyboard.type("import Book.Peano\n#eval 1 + 1");
+    await page.locator(".lean-block").last().getByLabel("Module name").fill("UsesPeano");
+    await page.waitForTimeout(2500);
+    const uses = await leanRow("UsesPeano");
+    const peanoHash = (await leanRow("Peano"))?.source_hash;
+    check("a block's verdict holds for the blocks it imports as they were", JSON.parse(uses?.deps ?? "[]")[0]?.hash === peanoHash && uses?.status === "verified", JSON.stringify(uses));
+    check("and what #eval printed shows under it", (await page.locator(".lean-block").last().locator(".lean-message.information").innerText()).includes("2"));
+    const md = (await q(`SELECT type FROM blocks WHERE type = 'lean' AND deleted_at IS NULL`)).length;
+    check("Lean blocks are stored as blocks of their own", md === 2, String(md));
+    await page.goto(APP + "/settings");
+    await page.waitForTimeout(800);
+    check("Settings says whether this computer verifies Lean", (await page.locator(".settings-row", { hasText: "Lean" }).innerText()).includes("Ready · Lean v4.99.0"));
+    await page.locator(".settings-row", { hasText: "Lean" }).click();
+    await page.getByRole("heading", { name: "Lean" }).waitFor({ timeout: 5000 });
+    check("and Settings → Lean says how it stands", (await page.locator(".ai-screen").innerText()).includes("Ready: Lean v4.99.0, with Mathlib."));
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

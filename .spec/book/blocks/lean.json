@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
+  "title": "Lean",
+  "summary": "A block of Lean 4 that the author's computers verify, with Mathlib.",
+  "order": 5,
+  "description": "Proofs in the book are checked, not just shown. A Lean block is a Lean module of its own; blocks import each other by name, from any page. Only the author's computers run Lean: a phone writes and reads Lean blocks and shows what a computer found.",
+  "stories": [
+    {
+      "id": "US-18",
+      "as": "an author writing about type theory",
+      "want": "the proofs in my book checked by Lean",
+      "soThat": "what the book claims is known to hold",
+      "requirements": [
+        "#LEAN-1",
+        "#LEAN-2",
+        "#LEAN-3",
+        "#LEAN-4",
+        "#LEAN-5",
+        "#LEAN-8"
+      ]
+    },
+    {
+      "id": "US-19",
+      "as": "an author with an idea on the go",
+      "want": "to write a proof on my phone and have my computer verify it",
+      "soThat": "I can work on proofs anywhere and still know they hold",
+      "requirements": [
+        "#LEAN-5",
+        "#LEAN-6",
+        "#LEAN-7",
+        "#LEAN-9"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "LEAN-1",
+      "text": "A Lean block holds Lean 4 source, which every device can write and read, highlighted as Lean.",
+      "related": [
+        "#BOOK-9"
+      ]
+    },
+    {
+      "id": "LEAN-2",
+      "text": "A Lean block is a module with a name the author gives it, under `lean.module-root`; a Lean block on any page uses another by importing it, `import Book.<name>`."
+    },
+    {
+      "id": "LEAN-3",
+      "text": "A computer verifies a Lean block: whether it checks, its errors and warnings with their lines, and what commands such as `#eval` and `#check` print."
+    },
+    {
+      "id": "LEAN-4",
+      "text": "While the cursor is in a Lean block on a computer, the proof state at the cursor shows with the block."
+    },
+    {
+      "id": "LEAN-5",
+      "text": "A block's verdict is kept with the source it was reached for, and syncs: every device shows whether that source checked, with or without `sorry`, on which computer and when. A block whose source, or the source of a block it imports, changed since shows as not verified."
+    },
+    {
+      "id": "LEAN-6",
+      "text": "A computer verifies Lean blocks that changed on another device without the author opening them."
+    },
+    {
+      "id": "LEAN-7",
+      "text": "Phones never run Lean, and the app for phones carries none of it."
+    },
+    {
+      "id": "LEAN-8",
+      "text": "Lean blocks can import Mathlib, from a Lean workspace each computer keeps and sets up from Settings."
+    },
+    {
+      "id": "LEAN-9",
+      "text": "Typing a backslash abbreviation in a Lean block, such as `\\to` or `\\forall`, turns it into its symbol when the next character is typed, as in Lean's own editors.",
+      "level": "should"
+    }
+  ],
+  "values": [
+    {
+      "id": "lean.module-root",
+      "type": "text",
+      "value": "Book",
+      "description": "The module every Lean block's module is under: a block named `Peano` is `Book.Peano`."
+    }
+  ]
+}

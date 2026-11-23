@@ -43,6 +43,13 @@
       "when": 1795416568453,
       "tag": "0005_library_toc",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795423074215,
+      "tag": "0006_lean_checks",
+      "breakpoints": true
     }
   ]
 }

@@ -356,3 +356,27 @@ export const assistantMemory = sqliteTable("assistant_memory", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+// Spec: LEAN-5, ID-2
+/**
+ * What a computer found when it verified a Lean block: one row per block,
+ * keyed by the block's id, so two computers verifying the same block write
+ * the same row. It holds for the source it was reached for (`source_hash`,
+ * and `deps`, the hashes of every block it imports): a block changed since
+ * shows as not verified. Written by Rust (src-tauri/src/lean/).
+ */
+export const leanChecks = sqliteTable("lean_checks", {
+  blockId: text("block_id").primaryKey(),
+  /** SHA-256 (hex) of the block's name, a newline, and its source. */
+  sourceHash: text("source_hash").notNull(),
+  /** JSON: `{ name, hash }` for each block it imports, directly or not. */
+  deps: text("deps").notNull(),
+  /** "verified" | "sorry" | "errors". */
+  status: text("status").notNull(),
+  /** JSON: Lean's messages, `{ severity, line, column, endLine, endColumn, text }`. */
+  messages: text("messages").notNull(),
+  leanVersion: text("lean_version").notNull(),
+  /** The name of the computer that verified it. */
+  device: text("device").notNull(),
+  checkedAt: text("checked_at").notNull(),
+});

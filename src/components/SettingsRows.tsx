@@ -6,7 +6,8 @@ import { loadUsageRows } from "../lib/aiUsage";
 import { useTablesVersion } from "../lib/live";
 import { listMemory } from "../lib/memory";
 import { copyLine, copyState, getSyncStatus, onSyncStatus } from "../lib/sync";
-import { ChatIcon, CostIcon, KeyIcon, SyncIcon } from "./Icons";
+import { ChatIcon, CostIcon, KeyIcon, LeanIcon, SyncIcon } from "./Icons";
+import { leanStatus, leanVersion, runsLean } from "../lib/lean";
 import { ThemeSwitch } from "./ThemeSwitch";
 
 function Row(props: { to: string; icon: React.JSX.Element; title: string; line: string | null }) {
@@ -31,6 +32,7 @@ export function SettingsRows() {
   const [spend, setSpend] = useState<string | null>(null);
   const [memory, setMemory] = useState<string | null>(null);
   const [ai, setAi] = useState<string | null>(null);
+  const [lean, setLean] = useState<string | null>(null);
   const version = useTablesVersion(["ai_usage", "assistant_memory", "settings"]);
 
   useEffect(() => {
@@ -65,6 +67,16 @@ export function SettingsRows() {
         if (live) setAi(key ? `Key set · ${name}` : "No OpenRouter key yet");
       })
       .catch(() => undefined);
+    // Spec: LEAN-7, LEAN-8
+    if (!runsLean()) setLean("Verified on your computers");
+    else
+      void leanStatus()
+        .then((s) => {
+          if (live) setLean(s.settingUp ? "Setting up…" : s.ready ? `Ready · Lean ${leanVersion(s.toolchain)}` : s.lake ? "Not set up on this computer" : "Lean isn't installed here");
+        })
+        .catch(() => {
+          if (live) setLean("Not available here");
+        });
     void listMemory()
       .then((m) => {
         if (live) setMemory(m.length === 0 ? "Nothing remembered yet" : `${m.length} thing${m.length === 1 ? "" : "s"} remembered`);
@@ -78,6 +90,7 @@ export function SettingsRows() {
   return (
     <section className="settings-rows">
       <Row to="/settings/ai" icon={<KeyIcon />} title="AI and models" line={ai} />
+      <Row to="/settings/lean" icon={<LeanIcon />} title="Lean" line={lean} />
       <Row to="/settings/sync" icon={<SyncIcon />} title="Sync" line={sync} />
       <Row to="/settings/costs" icon={<CostIcon />} title="AI costs" line={spend} />
       <Row to="/memory" icon={<ChatIcon />} title="The assistant's memory" line={memory} />
