@@ -45,9 +45,11 @@ export interface CurrentView {
   cursorBlockId: string | null;
   /** On a library item: its PDF as open in the viewer, and the page in view. */
   pdf: { itemId: string; page: number; doc: PdfDocument } | null;
+  /** On a library item read as text: the section at the top of the view (LIB-26). */
+  html: { itemId: string; anchor: string | null } | null;
 }
 
-let view: CurrentView = { path: "/", address: "/", kind: "home", id: null, cursorBlockId: null, pdf: null };
+let view: CurrentView = { path: "/", address: "/", kind: "home", id: null, cursorBlockId: null, pdf: null, html: null };
 let selected: Selected | null = null;
 
 /** The screen an address shows. */
@@ -74,7 +76,7 @@ export function setPath(path: string, address = path): void {
   const next = viewOfPath(path);
   const same = next.kind === view.kind && next.id === view.id;
   if (!same) selected = null;
-  view = { path, address, ...next, cursorBlockId: same ? view.cursorBlockId : null, pdf: same ? view.pdf : null };
+  view = { path, address, ...next, cursorBlockId: same ? view.cursorBlockId : null, pdf: same ? view.pdf : null, html: same ? view.html : null };
 }
 
 /** Called when a screen writes where it's scrolled to into the address (lib/address.ts). */
@@ -85,6 +87,12 @@ export function setAddress(address: string): void {
 /** Called by the page editor when the cursor moves to another block. */
 export function setCursorBlock(id: string | null): void {
   view = { ...view, cursorBlockId: id };
+}
+
+// Spec: ATL-10
+/** Called by the text reader as sections come into view (null when it closes). */
+export function setHtmlInView(html: CurrentView["html"]): void {
+  view = { ...view, html };
 }
 
 /** Called by the PDF viewer as pages come into view (null when it closes). */
@@ -113,7 +121,11 @@ export const ROUTES: readonly { address: string; shows: string }[] = [
     address: "/library",
     shows: "The papers and books; `?tab=people` or `?tab=institutions` lists those instead, `?q=<words>` searches, `?kind=paper` or `?kind=book` filters.",
   },
-  { address: "/library/<item id>", shows: "One paper or book: its details and its PDF in a viewer. `#page=<n>` is the PDF page in view, and opens the PDF there." },
+  {
+    address: "/library/<item id>",
+    shows:
+      "One paper or book: its details, and its PDF in a viewer (`#page=<n>`, the page in view) or, with `?view=text`, its HTML version as text (`#<section id>`, the section in view).",
+  },
   { address: "/library/people/<person id>", shows: "A person: what they wrote, where they were, who they wrote with." },
   { address: "/library/institutions/<institution id>", shows: "An institution: its items and people." },
   { address: "/chats", shows: "Every chat with you." },

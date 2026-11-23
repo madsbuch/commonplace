@@ -6,7 +6,7 @@
 
 import { loadBlock, loadPage, loadPageTree, pageMarkdown, pageOfBlock, plainText, searchLinkTargets, type LinkTarget } from "./book";
 import { flattenTree, parseContent, parseProps, titleOf } from "./bookModel";
-import { getItem, listItems, readFile, type LibraryItem } from "./library";
+import { getItem, listItems, readFile, readHtml, type LibraryItem } from "./library";
 import type { PdfDocument } from "./pdf";
 import { institutionView, itemAuthors, personView, type ItemAuthor } from "./people";
 
@@ -57,4 +57,43 @@ export async function itemPdfText(itemId: string, from: number, to: number): Pro
   } finally {
     pdf.close();
   }
+}
+
+// Spec: ATL-10
+/** An item's HTML version as a document to read from, or null when it has none. */
+async function htmlRoot(itemId: string): Promise<Element | null> {
+  const html = await readHtml(itemId);
+  if (html === null) return null;
+  const { sanitizePaper } = await import("./paperHtml");
+  const doc = new DOMParser().parseFromString(sanitizePaper(html), "text/html");
+  return doc.body;
+}
+
+// Spec: ATL-10
+/** An item's HTML sections, in reading order, with their depth: what can be read a section at a time. */
+export async function htmlSections(itemId: string): Promise<{ id: string; title: string; depth: number }[] | null> {
+  const root = await htmlRoot(itemId);
+  if (!root) return null;
+  const { sectionsOf } = await import("./paperHtml");
+  const out: { id: string; title: string; depth: number }[] = [];
+  const walk = (entries: ReturnType<typeof sectionsOf>, depth: number) => {
+    for (const e of entries) {
+      if (e.anchor) out.push({ id: e.anchor, title: e.title, depth });
+      walk(e.children, depth + 1);
+    }
+  };
+  walk(sectionsOf(root), 0);
+  return out;
+}
+
+// Spec: ATL-10
+/** One section of an item's HTML version as text, maths as LaTeX; the start of the paper for `null`. */
+export async function htmlSectionText(itemId: string, sectionId: string | null): Promise<{ title: string; text: string } | null> {
+  const root = await htmlRoot(itemId);
+  if (!root) return null;
+  const { textOf } = await import("./paperHtml");
+  const el = sectionId === null ? root : root.querySelector(`[id="${CSS.escape(sectionId)}"]`);
+  if (!el) return null;
+  const heading = el.querySelector("h1, h2, h3, h4, h5, h6");
+  return { title: (heading?.textContent ?? "").replace(/\s+/g, " ").trim(), text: textOf(el) };
 }

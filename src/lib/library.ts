@@ -1,7 +1,8 @@
 // ---------------------------------------------------------------------------
-// The library: papers and books, each a PDF with a few details. The details
-// live in `library_items`; the PDF's bytes in `library_files`, kept apart so
-// listing the library never reads megabytes. Both sync like the rest of the
+// The library: papers and books, each a PDF, an HTML version or both, with a
+// few details. The details live in `library_items`; the PDF's bytes in
+// `library_files` and the HTML in `library_html`, kept apart so listing the
+// library never reads megabytes. Both sync like the rest of the
 // database (LIB-7). The bytes go through Rust commands (src-tauri/src/
 // library.rs) as base64: the SQL plugin can only pass JSON values, and raw
 // IPC bodies don't reach Rust on Android.
@@ -33,7 +34,7 @@ export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 /** A PDF this long or longer is guessed to be a book when added (the author can change it). */
 const BOOK_PAGES = 120;
 
-export const LIBRARY_TABLES = ["library_items", "library_files"] as const;
+export const LIBRARY_TABLES = ["library_items", "library_files", "library_html"] as const;
 
 const ItemSchema = z
   .object({
@@ -46,6 +47,7 @@ const ItemSchema = z
     file_size: z.number(),
     pages: z.number().nullable(),
     toc: z.string().nullable(),
+    arxiv_id: z.string().nullable(),
     added_at: z.string(),
     updated_at: z.string(),
   })
@@ -60,12 +62,13 @@ const ItemSchema = z
     pages: r.pages,
     /** The table of contents; null until it's been taken from the PDF, `[]` when the PDF has none. */
     toc: parseToc(r.toc),
+    arxivId: r.arxiv_id,
     addedAt: r.added_at,
     updatedAt: r.updated_at,
   }));
 export type LibraryItem = z.output<typeof ItemSchema>;
 
-const COLUMNS = "id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at";
+const COLUMNS = "id, kind, title, authors, year, filename, file_size, pages, toc, arxiv_id, added_at, updated_at";
 
 // Spec: LIB-1
 /** Every item, newest first. */
@@ -86,23 +89,93 @@ function isPdf(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
+function isHtml(file: File): boolean {
+  return file.type === "text/html" || /\.html?$/i.test(file.name);
+}
+
 /** Why `file` can't be added, or null. */
 export function problemWith(file: File): string | null {
-  if (!isPdf(file)) return `${file.name} isn't a PDF.`;
+  if (!isPdf(file) && !isHtml(file)) return `${file.name} is neither a PDF nor an HTML file.`;
   if (file.size > MAX_FILE_BYTES) return `${file.name} is larger than ${MAX_FILE_MB} MB.`;
   return null;
 }
 
 /** "Some Paper.pdf" → "Some Paper". */
 function fromFilename(name: string): string {
-  return name.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim() || "Untitled";
+  return name.replace(/\.(pdf|html?)$/i, "").replace(/[_]+/g, " ").trim() || "Untitled";
 }
 
-// Spec: LIB-2, LIB-4
-/** Adds a PDF to the library, with the details it carries. Returns the new item's id. */
-export async function addFile(file: File): Promise<string> {
+/** Details known before the model reads anything (arXiv's listing). */
+export interface KnownDetails {
+  title: string;
+  authors: string[];
+  year: number | null;
+}
+
+/** What comes with a PDF from elsewhere (arXiv). */
+export interface Extra {
+  known?: KnownDetails;
+  arxivId?: string;
+  html?: { html: string; sourceUrl: string | null };
+}
+
+// Spec: LIB-24
+export async function saveHtml(itemId: string, html: string, sourceUrl: string | null): Promise<void> {
+  await execute(
+    `INSERT INTO library_html (item_id, html, source_url, fetched_at) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (item_id) DO UPDATE SET html = excluded.html, source_url = excluded.source_url, fetched_at = excluded.fetched_at`,
+    [itemId, html, sourceUrl, nowIso()],
+  );
+}
+
+/** Whether this device has the item's HTML version. */
+export async function hasHtml(id: string): Promise<boolean> {
+  return (await select(`SELECT 1 AS one FROM library_html WHERE item_id = $1`, [id])).length > 0;
+}
+
+/** An item's HTML version, as stored (made safe again where it's shown). */
+export async function readHtml(id: string): Promise<string | null> {
+  const [row] = await select(`SELECT html FROM library_html WHERE item_id = $1`, [id]);
+  const html = row?.["html"];
+  return typeof html === "string" ? html : null;
+}
+
+// Spec: LIB-23
+/** The item that came from arXiv as `arxivId`, if the library has it. */
+export async function findByArxiv(arxivId: string): Promise<string | null> {
+  const [row] = await select(`SELECT id FROM library_items WHERE arxiv_id = $1`, [arxivId]);
+  const id = row?.["id"];
+  return typeof id === "string" ? id : null;
+}
+
+// Spec: LIB-24
+/** Adds an HTML file as an item of its own; its details are read from its text. */
+async function addHtmlFile(file: File): Promise<string> {
+  const { paperOf, sanitizePaper, sectionsOf, textOf } = await import("./paperHtml");
+  const { root, title } = paperOf(await file.text());
+  const html = sanitizePaper(root.outerHTML);
+  const id = newId("library_items");
+  const at = nowIso();
+  await saveHtml(id, html, null);
+  await execute(
+    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at)
+     VALUES ($1, 'paper', $2, '', NULL, $3, $4, NULL, $5, $6, $6)`,
+    [id, title ?? fromFilename(file.name), file.name, file.size, JSON.stringify(sectionsOf(root)), at],
+  );
+  notifyTablesChanged(LIBRARY_TABLES);
+  void import("./libraryDetails").then(({ readDetails }) => readDetails(id, { text: textOf(root) }));
+  return id;
+}
+
+// Spec: LIB-2, LIB-4, LIB-23
+/**
+ * Adds a PDF (or an HTML file) to the library, with the details it carries,
+ * and what came with it from elsewhere. Returns the new item's id.
+ */
+export async function addFile(file: File, extra: Extra = {}): Promise<string> {
   const problem = problemWith(file);
   if (problem) throw new Error(problem);
+  if (isHtml(file)) return addHtmlFile(file);
   const bytes = new Uint8Array(await file.arrayBuffer());
   // pdf.js loads when first needed, and takes over the buffer it's given: hand it a copy.
   const { openPdf, pdfDetails, pdfOutline } = await import("./pdf");
@@ -114,27 +187,31 @@ export async function addFile(file: File): Promise<string> {
 
   const id = newId("library_items");
   const at = nowIso();
-  // The file first: a device that syncs the item before the file shows it as on its way.
+  const known = extra.known;
+  // The files first: a device that syncs the item before them shows them as on their way.
   await invoke("library_save_file", { itemId: id, mediaType: "application/pdf", data: await base64Of(file) });
+  if (extra.html) await saveHtml(id, extra.html.html, extra.html.sourceUrl);
   await execute(
-    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, toc, added_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $9, $9)`,
+    `INSERT INTO library_items (id, kind, title, authors, year, filename, file_size, pages, toc, arxiv_id, added_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $9, $9)`,
     [
       id,
-      details.pages >= BOOK_PAGES ? "book" : "paper",
-      details.title ?? fromFilename(file.name),
-      details.authors ?? "",
-      details.year,
+      known ? "paper" : details.pages >= BOOK_PAGES ? "book" : "paper",
+      known?.title ?? details.title ?? fromFilename(file.name),
+      known ? known.authors.join(", ") : (details.authors ?? ""),
+      known ? known.year : details.year,
       file.name,
       file.size,
       details.pages,
       at,
       JSON.stringify(toc),
+      extra.arxivId ?? null,
     ],
   );
   notifyTablesChanged(LIBRARY_TABLES);
   // The model reads the rest in the background; the item is there meanwhile.
-  void import("./libraryDetails").then(({ readDetails }) => readDetails(id, { bytes, metadataAuthors: details.authors }));
+  const metadataAuthors = known ? known.authors.join(", ") : details.authors;
+  void import("./libraryDetails").then(({ readDetails }) => readDetails(id, { bytes, metadataAuthors, ...(known ? { known } : {}) }));
   return id;
 }
 
@@ -166,6 +243,7 @@ export async function saveToc(id: string, toc: readonly TocEntry[]): Promise<voi
 export async function removeItem(id: string): Promise<void> {
   await removeItemAuthors(id);
   await execute(`DELETE FROM library_files WHERE item_id = $1`, [id]);
+  await execute(`DELETE FROM library_html WHERE item_id = $1`, [id]);
   await execute(`DELETE FROM library_items WHERE id = $1`, [id]);
 }
 

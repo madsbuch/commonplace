@@ -69,6 +69,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0006_lean_checks.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "library_html",
+            sql: include_str!("../migrations/0007_library_html.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

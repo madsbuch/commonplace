@@ -8,7 +8,7 @@
 import { useSyncExternalStore } from "react";
 import { getSetting, setSetting } from "./db";
 import { getApiKey } from "./aiSettings";
-import { getItem, isKind, LIBRARY_TABLES, readFile, updateItem } from "./library";
+import { getItem, isKind, LIBRARY_TABLES, readFile, updateItem, type KnownDetails } from "./library";
 import { notifyTablesChanged } from "./live";
 import { chatJson, errorMessage } from "./openrouter";
 import { DETAILS_FORMAT, detailsMessages, parseDetails } from "./libraryDetailsModel";
@@ -113,7 +113,10 @@ async function fallBack(itemId: string, metadataAuthors: string | null): Promise
  * Where no model can be asked, the PDF's own author line is used instead.
  * Returns whether the model's details were applied.
  */
-export async function readDetails(itemId: string, opts: { bytes?: Uint8Array; metadataAuthors?: string | null } = {}): Promise<boolean> {
+export async function readDetails(
+  itemId: string,
+  opts: { bytes?: Uint8Array; text?: string; metadataAuthors?: string | null; known?: KnownDetails } = {},
+): Promise<boolean> {
   const metadataAuthors = opts.metadataAuthors ?? null;
   const key = await getApiKey();
   if (!key) {
@@ -124,23 +127,37 @@ export async function readDetails(itemId: string, opts: { bytes?: Uint8Array; me
   }
   setStatus(itemId, { state: "reading" });
   try {
-    const bytes = opts.bytes ?? (await readFile(itemId));
-    const pdf = await openPdf(bytes.slice());
     let pages: { text: string } | { images: string[] };
-    try {
-      pages = await firstPages(pdf);
-    } finally {
-      pdf.close();
+    if (opts.text !== undefined) {
+      // Spec: LIB-24
+      // An HTML version: its text, as far as the first pages of a PDF would go.
+      pages = { text: opts.text.slice(0, MAX_TEXT) };
+    } else {
+      const bytes = opts.bytes ?? (await readFile(itemId));
+      const pdf = await openPdf(bytes.slice());
+      try {
+        pages = await firstPages(pdf);
+      } finally {
+        pdf.close();
+      }
     }
-    const raw = await chatJson(key, await getDetailsModel(), detailsMessages(pages), DETAILS_FORMAT, { feature: "library_details" });
+    const raw = await chatJson(key, await getDetailsModel(), detailsMessages(pages, opts.known), DETAILS_FORMAT, { feature: "library_details" });
     const details = parseDetails(raw);
     if (!(await getItem(itemId))) return false;
+    // Spec: LIB-23
+    // What arXiv says stands over what the model read.
+    const known = opts.known;
     await updateItem(itemId, {
-      ...(details.title.trim() ? { title: details.title.trim() } : {}),
-      year: details.year,
-      ...(isKind(details.kind) ? { kind: details.kind } : {}),
+      ...(known ? { title: known.title, year: known.year } : details.title.trim() ? { title: details.title.trim(), year: details.year } : { year: details.year }),
+      ...(isKind(details.kind) && !known ? { kind: details.kind } : {}),
     });
-    const authors = details.authors.filter((a) => a.name.trim() !== "");
+    // arXiv's authors stand; the model gives their institutions when it read the same authors.
+    const authors = known
+      ? known.authors.map((name, i) => ({
+          name,
+          institutions: (details.authors.length === known.authors.length ? details.authors[i]?.institutions : undefined) ?? [],
+        }))
+      : details.authors.filter((a) => a.name.trim() !== "");
     if (authors.length > 0) await setItemAuthors(itemId, authors);
     else await fallBack(itemId, metadataAuthors);
     setStatus(itemId, null);

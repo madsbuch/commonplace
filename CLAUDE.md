@@ -240,6 +240,27 @@ read and show verdicts.
   their PDF opens; `[]` means the PDF has none. The viewer shows it beside the
   pages (`src/components/Contents.tsx`, a sheet on phones), and the assistant
   gets it with an item's details.
+- An item can also hold an HTML version (`library_html`, synced, one per
+  item; LIB-24): from arXiv or an HTML file added like a PDF. It's stored
+  self-contained and already sanitized: `src/lib/paperHtml.ts` cuts the paper
+  out of the page (LaTeXML's `article.ltx_document`, or the body), drops
+  scripts and chrome, moves each formula's TeX annotation into its `alttext`
+  and unwraps `<semantics>` (DOMPurify would otherwise show the TeX as text),
+  inlines figures as `data:` URLs, and sanitizes with DOMPurify (HTML, MathML,
+  SVG). It's sanitized again where it's shown (`HtmlReader.tsx`). Its sections
+  (`section[id]` with a heading, else headings) are the contents, as
+  `TocEntry`s with an `anchor`. An item opens as text on a phone and as its
+  PDF on a computer unless `?view=text|pdf` says; read as text, the fragment
+  is the section at the top of the view. The assistant reads it a section at
+  a time (`read_section`, maths as `$LaTeX$`) and gets the section in view.
+- Adding from arXiv (`src/lib/arxiv.ts`, pure parsing in `arxivModel.ts`):
+  an identifier in any form, arXiv's Atom listing (its title, authors and
+  year stand over what the model reads; the model adds institutions only
+  when it read the same number of authors), `arxiv.org/pdf/<id>`, and the
+  HTML version from `arxiv.org/html/<id>` or else `ar5iv.labs.arxiv.org`
+  (figures relative to the page's address as a folder). Items carry
+  `arxiv_id`; adding one already there opens it. The fake Tauri layer answers
+  as arXiv for `1706.03762`.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -300,7 +321,8 @@ read and show verdicts.
 
 Every model call goes through `src/lib/openrouter.ts`: OpenRouter's chat
 completions, streamed, with the author's own key, through the HTTP plugin
-(`https://openrouter.ai/*` is the only host the `http` capability allows).
+(`https://openrouter.ai/*`; the `http` capability's only other hosts are
+arXiv's, for fetching papers, where nothing but an identifier goes).
 Book content leaves the device only that way.
 
 - The key and the assistant's model are synced `settings`

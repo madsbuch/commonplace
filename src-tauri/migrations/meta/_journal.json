@@ -50,6 +50,13 @@
       "when": 1795423074215,
       "tag": "0006_lean_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795426323100,
+      "tag": "0007_library_html",
+      "breakpoints": true
     }
   ]
 }

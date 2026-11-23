@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { pageOfFragment } from "../lib/address";
+import { pageOfFragment, useQueryParam } from "../lib/address";
 import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
+import { HtmlReader } from "../components/HtmlReader";
 import { MoreMenu } from "../components/MoreMenu";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
 import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
-import { getItem, hasFile, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, removeItem, saveToc, updateItem, type LibraryItem } from "../lib/library";
+import { getItem, hasFile, hasHtml, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, readHtml, removeItem, saveToc, updateItem, type LibraryItem } from "../lib/library";
+import type { TocEntry } from "../lib/schemas";
 import { useTablesVersion } from "../lib/live";
 
 /** The details form: saved when a field is left. */
@@ -124,6 +126,7 @@ export default function LibraryItemPage() {
   const version = useTablesVersion(LIBRARY_TABLES);
   const [item, setItem] = useState<LibraryItem | null | "missing">(null);
   const [fileHere, setFileHere] = useState<boolean | null>(null);
+  const [htmlHere, setHtmlHere] = useState<boolean | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showContents, setShowContents] = useState(contentsWanted);
   const [page, setPage] = useState(1);
@@ -134,25 +137,51 @@ export default function LibraryItemPage() {
   // another page of it, Back) goes there. Scrolling writes the address past
   // the router, so the router's changes are always navigations.
   const location = useLocation();
-  const [start, setStart] = useState(() => ({ id, key: location.key, page: pageOfFragment(location.hash) }));
-  if (start.id !== id) setStart({ id, key: location.key, page: pageOfFragment(location.hash) });
+  const anchorOf = (hash: string) => (hash.length > 1 && pageOfFragment(hash) === null ? decodeURIComponent(hash.slice(1)) : null);
+  const [start, setStart] = useState(() => ({ id, key: location.key, page: pageOfFragment(location.hash), anchor: anchorOf(location.hash) }));
+  if (start.id !== id) setStart({ id, key: location.key, page: pageOfFragment(location.hash), anchor: anchorOf(location.hash) });
+  const [htmlJump, setHtmlJump] = useState<{ itemId: string; anchor: string; seq: number } | null>(null);
   useEffect(() => {
     if (location.key === start.key) return;
     const p = pageOfFragment(location.hash);
     if (p !== null) setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
+    const a = anchorOf(location.hash);
+    if (a !== null) setHtmlJump((j) => ({ itemId: id, anchor: a, seq: (j?.seq ?? 0) + 1 }));
   }, [location.key, location.hash, start.key, id]);
 
   useEffect(() => {
     let live = true;
-    void Promise.all([getItem(id), hasFile(id)]).then(([i, f]) => {
+    void Promise.all([getItem(id), hasFile(id), hasHtml(id)]).then(([i, f, h]) => {
       if (!live) return;
       setItem(i ?? "missing");
       setFileHere(f);
+      setHtmlHere(h);
     });
     return () => {
       live = false;
     };
   }, [id, version]);
+
+  // Spec: LIB-25, LIB-26
+  // Text or PDF: the address says; otherwise a phone reads text, a computer the PDF.
+  const [viewParam, setView] = useQueryParam("view");
+  const phone = window.matchMedia("(max-width: 760px)").matches;
+  const hasPdf = fileHere === true || (item !== null && item !== "missing" && item.pages !== null);
+  const view: "text" | "pdf" =
+    htmlHere && (viewParam === "text" || (viewParam !== "pdf" && (phone || !hasPdf))) ? "text" : hasPdf || !htmlHere ? "pdf" : "text";
+  const [html, setHtml] = useState<{ id: string; html: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (view === "text" && htmlHere)
+      void readHtml(id).then((h) => {
+        if (live && h !== null) setHtml({ id, html: h });
+      });
+    return () => {
+      live = false;
+    };
+  }, [id, view, htmlHere, version]);
+  const [htmlToc, setHtmlToc] = useState<TocEntry[]>([]);
+  const [section, setSection] = useState<string | null>(null);
 
   const load = useCallback(() => readFile(id), [id]);
 
@@ -165,12 +194,39 @@ export default function LibraryItemPage() {
     },
     [id, needsToc],
   );
-  const toc = item !== null && item !== "missing" ? (item.toc ?? []) : [];
+  const toc = view === "text" ? htmlToc : item !== null && item !== "missing" ? (item.toc ?? []) : [];
   const toggleContents = () =>
     setShowContents((s) => {
       rememberContents(!s);
       return !s;
     });
+
+  // Spec: LIB-15, LIB-25
+  const contentsPanel = (
+    <aside className="toc-panel" aria-label="Contents">
+      <div className="toc-head">
+        <strong>Contents</strong>
+        <button type="button" className="assistant-ghost" aria-label="Close the contents" onClick={toggleContents}>
+          ×
+        </button>
+      </div>
+      <Contents
+        toc={toc}
+        {...(view === "text" ? { anchor: section } : { page })}
+        onPick={(entry) => {
+          if (view === "text" && entry.anchor) {
+            const anchor = entry.anchor;
+            setHtmlJump((j) => ({ itemId: id, anchor, seq: (j?.seq ?? 0) + 1 }));
+          } else if (entry.page !== null) {
+            const p = entry.page;
+            setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
+          }
+          // On a phone the contents cover the page: get out of the way.
+          if (window.matchMedia("(max-width: 760px)").matches) setShowContents(false);
+        }}
+      />
+    </aside>
+  );
 
   if (item === "missing") {
     return (
@@ -190,6 +246,17 @@ export default function LibraryItemPage() {
           {item.title}
         </span>
         <div className="page-actions">
+          {/* Spec: LIB-25 */}
+          {htmlHere && hasPdf ? (
+            <div className="segmented view-switch" role="tablist" aria-label="Read as">
+              <button type="button" role="tab" aria-selected={view === "text"} onClick={() => setView("text")}>
+                Text
+              </button>
+              <button type="button" role="tab" aria-selected={view === "pdf"} onClick={() => setView("pdf")}>
+                PDF
+              </button>
+            </div>
+          ) : null}
           <button type="button" aria-pressed={showDetails} onClick={() => setShowDetails((s) => !s)}>
             Details
           </button>
@@ -224,30 +291,36 @@ export default function LibraryItemPage() {
           </div>
         </>
       ) : null}
-      {fileHere === false ? (
+      {view === "text" ? (
+        html?.id === id ? (
+          <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
+            {showContents && toc.length > 0 ? contentsPanel : null}
+            <div className="html-view">
+              {toc.length > 0 ? (
+                <div className="pdf-toolbar">
+                  <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
+                    Contents
+                  </button>
+                </div>
+              ) : null}
+              <HtmlReader
+                key={id}
+                itemId={id}
+                html={html.html}
+                initialAnchor={start.id === id ? start.anchor : null}
+                jump={htmlJump?.itemId === id ? htmlJump : null}
+                onContents={setHtmlToc}
+                onSection={setSection}
+              />
+            </div>
+          </div>
+        ) : null
+      ) : fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (
         <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
           {/* Spec: LIB-15 */}
-          {showContents && toc.length > 0 ? (
-            <aside className="toc-panel" aria-label="Contents">
-              <div className="toc-head">
-                <strong>Contents</strong>
-                <button type="button" className="assistant-ghost" aria-label="Close the contents" onClick={toggleContents}>
-                  ×
-                </button>
-              </div>
-              <Contents
-                toc={toc}
-                page={page}
-                onPick={(p) => {
-                  setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
-                  // On a phone the contents cover the page: get out of the way.
-                  if (window.matchMedia("(max-width: 760px)").matches) setShowContents(false);
-                }}
-              />
-            </aside>
-          ) : null}
+          {showContents && toc.length > 0 ? contentsPanel : null}
           <PdfViewer
             key={id}
             load={load}

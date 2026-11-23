@@ -708,6 +708,84 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("heading", { name: "Lean" }).waitFor({ timeout: 5000 });
     check("and Settings → Lean says how it stands", (await page.locator(".ai-screen").innerText()).includes("Ready: Lean v4.99.0, with Mathlib."));
 
+    // Spec: LIB-23, LIB-24, LIB-27
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await fetch(`${FAKE}/fake-model`, {
+      method: "POST",
+      body: JSON.stringify({
+        answer: { title: "Something else", authors: [{ name: "A. Vaswani", institutions: ["Google Brain"] }, { name: "N. Shazeer", institutions: ["Google Brain"] }], year: 1999, kind: "book" },
+      }),
+    });
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(800);
+    await page.getByLabel("arXiv number or address").fill("arXiv:1706.03762v5");
+    await page.getByRole("button", { name: "Add from arXiv" }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(2500);
+    const arx = (await q("SELECT i.id, i.title, i.year, i.kind, i.arxiv_id, length(f.data) AS pdf, h.html FROM library_items i LEFT JOIN library_files f ON f.item_id = i.id LEFT JOIN library_html h ON h.item_id = i.id WHERE i.arxiv_id IS NOT NULL"))[0];
+    check("a paper comes from arXiv by its number, with arXiv's title and year", arx?.title === "Attention Is All You Need" && arx?.year === 2017 && arx?.kind === "paper" && arx?.arxiv_id === "1706.03762", JSON.stringify({ ...arx, html: undefined }));
+    check("with its PDF and its HTML version", arx?.pdf > 1000 && typeof arx?.html === "string" && arx.html.includes("ltx_section"));
+    check("the HTML keeps its figures inside it", arx?.html.includes('src="data:image/png;base64,'));
+    check("and carries nothing that runs", !arx?.html.includes("<script") && !arx?.html.includes("onclick") && !arx?.html.includes("ltx_page_navbar"));
+    const arxAuthors = await q(`SELECT p.name, i.name AS inst FROM authorships s JOIN people p ON p.id = s.person_id LEFT JOIN affiliations a ON a.authorship_id = s.id LEFT JOIN institutions i ON i.id = a.institution_id WHERE s.item_id = '${arx?.id}' ORDER BY s.position`);
+    check("arXiv's authors stand, with the institutions the model read", arxAuthors.map((a) => `${a.name}/${a.inst}`).join(", ") === "Ashish Vaswani/Google Brain, Noam Shazeer/Google Brain", JSON.stringify(arxAuthors));
+
+    // Spec: LIB-25, LIB-26
+    check("on a computer it opens as its PDF, with a way to read it as text", (await page.locator(".pdf-page canvas").count()) >= 1 && (await page.getByRole("tab", { name: "Text" }).count()) === 1);
+    await page.getByRole("tab", { name: "Text" }).click();
+    await page.waitForTimeout(1200);
+    check("read as text, the address says so", /[?&]view=text/.test(page.url()), page.url());
+    const reader = page.locator(".html-reader");
+    check("the text shows, its maths as maths and its figure", (await reader.innerText()).includes("1 Introduction") && (await reader.locator("math").count()) >= 2 && (await reader.locator('img[src^="data:"]').count()) === 1);
+    check("and LaTeX's source doesn't show as text", !(await reader.innerText()).includes("h_{t}"));
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    const tocText = await page.locator(".toc").innerText();
+    check("its sections are its contents", ["1 Introduction", "2 Model", "2.1 Attention", "References"].every((s) => tocText.includes(s)), tocText);
+    await page.locator(".toc-entry", { hasText: "2.1 Attention" }).click();
+    await page.waitForTimeout(900);
+    check("choosing a section goes there, and the address holds it", page.url().endsWith("#S2.SS1") && (await page.locator(".toc-entry.active").innerText()).includes("2.1"), page.url());
+    await page.reload();
+    await page.waitForTimeout(1800);
+    const at = await page.evaluate(() => {
+      const s = document.querySelector(".html-pages");
+      const el = document.getElementById("S2.SS1");
+      return s && el ? Math.round(el.getBoundingClientRect().top - s.getBoundingClientRect().top) : null;
+    });
+    check("and opening the address opens the text at that section", at !== null && Math.abs(at) < 30, String(at));
+
+    // Spec: ATL-10
+    const before2 = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
+    await chat([{ tools: [{ name: "look_at_screen" }, { name: "read_section", arguments: { item_id: arx?.id, section_id: "S2.SS1" } }] }, { text: "It's about attention." }]);
+    if (await page.getByRole("button", { name: "Open the assistant" }).isVisible()) await page.getByRole("button", { name: "Open the assistant" }).click();
+    await page.locator(".assistant").getByRole("button", { name: "New", exact: true }).click();
+    await page.locator(".assistant textarea").fill("What is this section about?");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(2500);
+    const toolMsgs = JSON.stringify(((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(before2)[1]?.messages ?? []).filter((m) => m.role === "tool"));
+    check("the assistant sees the section in view, and reads a section with its maths as LaTeX", toolMsgs.includes("section_in_view") && toolMsgs.includes("S2.SS1") && toolMsgs.includes("softmax}(QK^{T})V"), toolMsgs.slice(0, 300));
+    await page.getByRole("button", { name: "Close the assistant" }).click();
+
+    // Spec: LIB-23
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or address").fill("https://arxiv.org/abs/1706.03762");
+    await page.getByRole("button", { name: "Add from arXiv" }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    check("adding it again opens the one already there", page.url().includes(arx?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE arxiv_id = '1706.03762'"))[0].n === 1);
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or address").fill("2101.99999");
+    await page.getByRole("button", { name: "Add from arXiv" }).click();
+    await page.waitForTimeout(1500);
+    check("an unknown number says so", (await page.locator(".library-problem").innerText()).includes("arXiv doesn't know 2101.99999"));
+
+    // Spec: LIB-25
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(`${APP}/library/${arx?.id}`);
+    await page.waitForTimeout(1500);
+    check("on a phone it opens as text", await page.locator(".html-reader").isVisible());
+    await page.setViewportSize({ width: 1200, height: 800 });
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

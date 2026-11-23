@@ -22,11 +22,14 @@ export function currentEntry(entries: readonly TocEntry[], page: number): number
   return found;
 }
 
-// Spec: LIB-15
-/** A PDF's table of contents: the entry being read marked, an entry chosen goes to its page. */
-export function Contents(props: { toc: readonly TocEntry[]; page: number; onPick: (page: number) => void }) {
+// Spec: LIB-15, LIB-25
+/**
+ * A table of contents: the entry being read marked (by the PDF page in view,
+ * or the HTML section), an entry chosen goes to its page or section.
+ */
+export function Contents(props: { toc: readonly TocEntry[]; page?: number; anchor?: string | null; onPick: (entry: TocEntry) => void }) {
   const flat = useMemo(() => flatten(props.toc), [props.toc]);
-  const active = currentEntry(props.toc, props.page);
+  const active = props.anchor !== undefined ? (flat.find((f) => f.entry.anchor === props.anchor)?.index ?? null) : currentEntry(props.toc, props.page ?? 1);
   const list = useRef<HTMLOListElement>(null);
   useEffect(() => {
     const el = list.current?.querySelector(".toc-entry.active");
@@ -40,10 +43,8 @@ export function Contents(props: { toc: readonly TocEntry[]; page: number; onPick
             type="button"
             className={f.index === active ? "toc-entry active" : "toc-entry"}
             style={{ paddingLeft: 10 + f.depth * 14 }}
-            disabled={f.entry.page === null}
-            onClick={() => {
-              if (f.entry.page !== null) props.onPick(f.entry.page);
-            }}
+            disabled={f.entry.page === null && !f.entry.anchor}
+            onClick={() => props.onPick(f.entry)}
           >
             <span className="toc-title">{f.entry.title}</span>
             {f.entry.page !== null ? <span className="toc-page">{f.entry.page}</span> : null}

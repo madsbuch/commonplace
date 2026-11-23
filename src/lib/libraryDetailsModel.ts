@@ -61,8 +61,16 @@ export function parseDetails(raw: unknown): ReadDetails {
   return DetailsSchema.parse(raw);
 }
 
-export function detailsMessages(pages: { text: string } | { images: string[] }): RichMessage[] {
-  const intro = "The first pages of a PDF in my library. Give its details.";
+export function detailsMessages(
+  pages: { text: string } | { images: string[] },
+  known?: { title: string; authors: readonly string[]; year: number | null },
+): RichMessage[] {
+  // Spec: LIB-23
+  // What arXiv's listing says stands; the pages give the institutions.
+  const facts = known
+    ? `\n\narXiv lists this paper as: title "${known.title}"; authors ${known.authors.join("; ")}${known.year ? `; year ${known.year}` : ""}. Give exactly these title, authors (in this order) and year, and find each author's institutions in the pages.`
+    : "";
+  const intro = `The first pages of a paper or book in my library. Give its details.${facts}`;
   const content: string | ContentPart[] =
     "text" in pages
       ? `${intro}\n\n${pages.text}`

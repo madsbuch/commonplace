@@ -5,6 +5,8 @@ import { listInstitutions, listPeople, PEOPLE_TABLES, type Counted } from "../li
 import { CountedList } from "./PersonPage";
 import { addFile, isKind, KIND_NAMES, LIBRARY_TABLES, listItems, problemWith, sizeText, type Kind, type LibraryItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
+import { importArxiv } from "../lib/arxiv";
+import { parseArxivId } from "../lib/arxivModel";
 
 type Filter = "all" | Kind;
 type Tab = "items" | "people" | "institutions";
@@ -70,6 +72,20 @@ export default function LibraryPage() {
     );
   }, [items, query, filter]);
 
+  const [arxivInput, setArxivInput] = useState("");
+  const fromArxiv = async () => {
+    setProblems([]);
+    try {
+      const id = await importArxiv(arxivInput, setBusy);
+      setArxivInput("");
+      void navigate(`/library/${id}`);
+    } catch (e) {
+      setProblems([e instanceof Error ? e.message : String(e)]);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const add = async (files: File[]) => {
     const issues: string[] = [];
     let last: string | null = null;
@@ -113,12 +129,12 @@ export default function LibraryPage() {
       <div className="library-head">
         <h1>Library</h1>
         <button type="button" className="button-primary" disabled={busy !== null} onClick={() => input.current?.click()}>
-          Add PDF
+          Add PDF or HTML
         </button>
         <input
           ref={input}
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,text/html,.html,.htm"
           multiple
           hidden
           onChange={(e) => {
@@ -128,6 +144,28 @@ export default function LibraryPage() {
           }}
         />
       </div>
+      {/* Spec: LIB-23 */}
+      <form
+        className="arxiv-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void fromArxiv();
+        }}
+      >
+        <input
+          value={arxivInput}
+          onChange={(e) => setArxivInput(e.target.value)}
+          placeholder="arXiv number or address, e.g. 1706.03762"
+          aria-label="arXiv number or address"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          disabled={busy !== null}
+        />
+        <button type="submit" disabled={busy !== null || parseArxivId(arxivInput) === null}>
+          Add from arXiv
+        </button>
+      </form>
       {busy ? <p className="muted">{busy}</p> : null}
       {problems.map((p) => (
         <p key={p} className="library-problem">

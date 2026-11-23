@@ -231,11 +231,13 @@ export function parseToolCallDeltas(chunk: unknown): z.infer<typeof ToolCallDelt
 export interface TocEntry {
   title: string;
   page: number | null;
+  /** In an HTML version: the id of the section it heads (LIB-25). */
+  anchor?: string;
   children: TocEntry[];
 }
 
 const TocEntrySchema: z.ZodType<TocEntry> = z.lazy(() =>
-  z.object({ title: z.string(), page: z.number().int().positive().nullable(), children: z.array(TocEntrySchema) }),
+  z.object({ title: z.string(), page: z.number().int().positive().nullable(), anchor: z.string().optional(), children: z.array(TocEntrySchema) }),
 );
 
 // Spec: LIB-14

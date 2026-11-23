@@ -113,6 +113,41 @@ const ReplySchema = z.union([
 ]);
 let chatReplies: z.infer<typeof ReplySchema>[] = [];
 
+// Spec: LIB-23
+/** arXiv, as its listing, PDF, HTML version and figures answer for 1706.03762 (and only it). */
+const ARXIV_FEED = `<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"><entry>
+<id>http://arxiv.org/abs/1706.03762v7</id><published>2017-06-12T17:57:34Z</published>
+<title>Attention Is All You Need</title><summary>The dominant models.</summary>
+<author><name>Ashish Vaswani</name></author><author><name>Noam Shazeer</name></author></entry></feed>`;
+const ARXIV_UNKNOWN = `<feed><entry><id>http://arxiv.org/api/errors#unknown</id><title>Error</title></entry></feed>`;
+const filler = (what: string) => Array.from({ length: 14 }, (_, i) => `<p class="ltx_p">${what}, paragraph ${i + 1}: the encoder maps an input sequence to a sequence of continuous representations.</p>`).join("");
+const ARXIV_HTML = `<!DOCTYPE html><html><head><title>Attention Is All You Need</title><script>window.evil = 1</script><link rel="stylesheet" href="ltx.css"></head>
+<body><nav class="ltx_page_navbar">Contents navigation</nav><div class="ltx_page_main"><article class="ltx_document">
+<h1 class="ltx_title ltx_title_document">Attention Is All You Need</h1>
+<div class="ltx_authors">Ashish Vaswani, Noam Shazeer</div>
+<section id="S1" class="ltx_section"><h2 class="ltx_title ltx_title_section"><span class="ltx_tag">1 </span>Introduction</h2>
+<p class="ltx_p">Recurrent models compute <math alttext="h_{t}" display="inline"><semantics><msub><mi>h</mi><mi>t</mi></msub><annotation encoding="application/x-tex">h_{t}</annotation></semantics></math> step by step.</p>
+${filler("Introduction")}
+<figure class="ltx_figure"><img src="x1.png" alt="The Transformer"><figcaption>Figure 1: The Transformer.</figcaption></figure></section>
+<section id="S2" class="ltx_section"><h2 class="ltx_title ltx_title_section"><span class="ltx_tag">2 </span>Model</h2>${filler("Model")}
+<section id="S2.SS1" class="ltx_subsection"><h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag">2.1 </span>Attention</h3>
+<p class="ltx_p" onclick="window.evil = 2">Scaled dot-product attention: <math display="block"><semantics><mi>A</mi><annotation encoding="application/x-tex">\\mathrm{softmax}(QK^{T})V</annotation></semantics></math></p>${filler("Attention")}</section></section>
+<section id="bib" class="ltx_bibliography"><h2 class="ltx_title">References</h2><p>[1] Bahdanau et al.</p>${filler("References")}</section>
+</article></div></body></html>`;
+// The smallest PNG: one transparent pixel.
+const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
+
+function fakeArxiv(url: string): { status: number; type: string; bytes: Uint8Array; url?: string } | null {
+  const text = (s: string, type: string) => ({ status: 200, type, bytes: new TextEncoder().encode(s) });
+  if (url.startsWith("https://export.arxiv.org/api/query")) return text(url.endsWith("1706.03762") ? ARXIV_FEED : ARXIV_UNKNOWN, "application/atom+xml");
+  if (url === "https://arxiv.org/pdf/1706.03762")
+    return { status: 200, type: "application/pdf", bytes: new Uint8Array(readFileSync(new URL("tests/browser/fixtures/with-contents.pdf", root))) };
+  if (url === "https://arxiv.org/html/1706.03762") return { ...text(ARXIV_HTML, "text/html"), url: "https://arxiv.org/html/1706.03762v7" };
+  if (url === "https://arxiv.org/html/1706.03762v7/x1.png") return { status: 200, type: "image/png", bytes: PNG };
+  if (/^https:\/\/(arxiv\.org|ar5iv\.labs\.arxiv\.org|export\.arxiv\.org)\//.test(url)) return { status: 404, type: "text/plain", bytes: new TextEncoder().encode("Not Found") };
+  return null;
+}
+
 /** One streamed round as server-sent events, the way OpenRouter sends it. */
 function sse(reply: z.infer<typeof ReplySchema>): string {
   const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
@@ -144,6 +179,12 @@ function httpCommand(cmd: string, args: Record<string, unknown>): unknown {
   if (cmd === "plugin:http|fetch_send") {
     const rid = z.number().parse(args["rid"]);
     const req = requests.get(rid);
+    const arxiv = fakeArxiv(req?.url ?? "");
+    if (arxiv) {
+      const out = nextRid++;
+      responses.set(out, { bytes: arxiv.bytes, sent: false });
+      return { status: arxiv.status, statusText: arxiv.status === 200 ? "OK" : "Not Found", url: arxiv.url ?? req?.url ?? "", headers: [["content-type", arxiv.type]], rid: out };
+    }
     let body: unknown = { data: [] };
     if (req?.url.endsWith("/chat/completions") && req.body.includes('"stream":true')) {
       chatRequests.push(parseJson(req.body));

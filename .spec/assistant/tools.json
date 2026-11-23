@@ -62,6 +62,13 @@
         "#LIB-14",
         "#ATL-3"
       ]
+    },
+    {
+      "id": "ATL-10",
+      "text": "The assistant can read an item's HTML version a section at a time, and sees the section in view when the author reads it as text.",
+      "related": [
+        "#LIB-24"
+      ]
     }
   ],
   "values": [

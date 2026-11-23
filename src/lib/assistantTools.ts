@@ -9,6 +9,8 @@ import { currentSelection, currentView, ROUTES } from "./currentView";
 import { captureScreen } from "./screenshot";
 import {
   getItem,
+  htmlSections,
+  htmlSectionText,
   institutionView,
   itemAuthors,
   itemPdfText,
@@ -77,6 +79,12 @@ export const TOOLS: ToolDef[] = [
     ),
   },
   {
+    name: "read_section",
+    description:
+      "One section of a paper's HTML version (when read_library_item lists text_sections), as text with maths in LaTeX. Better than read_pdf_pages for papers that have one.",
+    parameters: obj({ item_id: str("The item's id (lib_…)."), section_id: str("A section's id, from text_sections.") }, ["item_id", "section_id"]),
+  },
+  {
     name: "read_person",
     description: "A person in the library: every item they wrote, the institutions they were listed with, and who they wrote with.",
     parameters: obj({ person_id: str("The person's id (person_…).") }, ["person_id"]),
@@ -116,6 +124,7 @@ const TOOL_LABELS: Record<string, string> = {
   search_library: "the library",
   read_library_item: "the library",
   read_pdf_pages: "a PDF",
+  read_section: "a paper",
   read_person: "people",
   read_institution: "institutions",
   remember: "memory",
@@ -159,6 +168,9 @@ async function itemDetails(id: string) {
     pages: item.pages,
     authors: authors.map((a) => ({ person_id: a.personId, name: a.name, institutions: a.institutions.map((i) => ({ institution_id: i.id, name: i.name })) })),
     contents: item.toc === null ? "not read yet" : item.toc.length === 0 ? "the PDF has none" : contentsLines(item.toc).join("\n"),
+    ...(item.arxivId ? { arxiv_id: item.arxivId } : {}),
+    // Spec: ATL-10
+    text_sections: (await htmlSections(id)) ?? "none: it has no HTML version",
   };
 }
 
@@ -191,6 +203,16 @@ async function lookAtScreen(): Promise<Record<string, unknown>> {
   if (v.kind === "library-item" && v.id) {
     const details = await itemDetails(v.id);
     const inView = v.pdf && v.pdf.itemId === v.id ? v.pdf : null;
+    // Spec: ATL-10
+    const reading = v.html && v.html.itemId === v.id ? v.html : null;
+    if (reading) {
+      return {
+        ...screen,
+        library_item: details,
+        read_as: "text (its HTML version)",
+        section_in_view: { section_id: reading.anchor, ...((await htmlSectionText(v.id, reading.anchor)) ?? {}) },
+      };
+    }
     return {
       ...screen,
       library_item: details,
@@ -257,6 +279,11 @@ async function runReadTool(name: string, args: Record<string, unknown>): Promise
         const to = Math.min(num(args["to_page"], from), from + PDF_PAGES_PER_READ - 1);
         const r = await itemPdfText(id, from, to);
         return out({ item_id: id, pages_in_pdf: r.pages, pages: r.text });
+      }
+      // Spec: ATL-10
+      case "read_section": {
+        const s = await htmlSectionText(text(args["item_id"]), text(args["section_id"]) || null);
+        return s ? out(s) : "No such section: read_library_item lists an item's text_sections.";
       }
       case "read_person":
         return out((await personView(text(args["person_id"]))) ?? "No such person in the library.");

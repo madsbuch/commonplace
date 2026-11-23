@@ -254,6 +254,9 @@ export const libraryItems = sqliteTable(
     // Spec: LIB-14
     /** The PDF's outline as JSON (`TocEntry[]`, lib/library.ts); null until taken. */
     toc: text("toc"),
+    // Spec: LIB-23
+    /** Its arXiv identifier (`1706.03762`), when it came from arXiv. */
+    arxivId: text("arxiv_id"),
     addedAt: text("added_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -265,6 +268,20 @@ export const libraryItems = sqliteTable(
  * A library item's PDF, byte for byte. Kept apart from `library_items` so
  * listing the library never reads megabytes. Synced like everything else.
  */
+// Spec: LIB-24, LIB-27
+/**
+ * An item's HTML version (from arXiv, or an HTML file the author added):
+ * one per item, its figures inlined, so it reads the same offline. Kept
+ * apart from the item, like its PDF, so listing never reads it.
+ */
+export const libraryHtml = sqliteTable("library_html", {
+  itemId: text("item_id").primaryKey(),
+  html: text("html").notNull(),
+  /** Where it came from (an arXiv address), or null for a file. */
+  sourceUrl: text("source_url"),
+  fetchedAt: text("fetched_at").notNull(),
+});
+
 export const libraryFiles = sqliteTable("library_files", {
   /** The item's id: one file per item. */
   itemId: text("item_id").primaryKey(),

@@ -2178,3 +2178,139 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
 .memory-entry:focus-within .memory-forget {
   display: inline-block;
 }
+
+/* Spec: LIB-23 — adding from arXiv */
+.arxiv-form {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.arxiv-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+}
+.arxiv-form button {
+  white-space: nowrap;
+}
+
+/* Spec: LIB-25 — a paper read as text */
+.html-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.html-pages {
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.html-reader {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 20px 20px 80px;
+  font-family: var(--font-book);
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--fg);
+  overflow-wrap: break-word;
+}
+.html-reader h1,
+.html-reader h2,
+.html-reader h3,
+.html-reader h4 {
+  font-family: var(--font-book);
+  line-height: 1.3;
+  margin: 1.6em 0 0.5em;
+}
+.html-reader h1 {
+  font-size: 1.6em;
+}
+.html-reader h2 {
+  font-size: 1.3em;
+}
+.html-reader h3 {
+  font-size: 1.12em;
+}
+.html-reader section[id],
+.html-reader h1[id],
+.html-reader h2[id],
+.html-reader h3[id],
+.html-reader h4[id] {
+  scroll-margin-top: 8px;
+}
+.html-reader img,
+.html-reader svg {
+  max-width: 100%;
+  height: auto;
+}
+.html-reader figure {
+  margin: 1.4em 0;
+  text-align: center;
+}
+.html-reader figcaption {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--muted);
+  text-align: left;
+  margin-top: 6px;
+}
+/* Wide things scroll on their own, never the page. */
+.html-reader table,
+.html-reader .ltx_equation,
+.html-reader .ltx_equationgroup,
+.html-reader math[display="block"],
+.html-reader pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.html-reader table {
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.html-reader td,
+.html-reader th {
+  padding: 3px 8px;
+}
+.html-reader math {
+  font-size: 1.05em;
+}
+.html-reader a {
+  color: var(--accent);
+}
+.html-reader .ltx_authors,
+.html-reader .ltx_dates {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--muted);
+}
+.html-reader .ltx_abstract {
+  margin: 1.2em 0;
+  padding: 0 1em;
+  border-left: 3px solid var(--line);
+}
+.html-reader .ltx_bibliography {
+  font-size: 14px;
+}
+.html-reader .ltx_tag_equation {
+  float: right;
+  color: var(--muted);
+}
+.view-switch button {
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .html-reader {
+    padding: 14px 14px 80px;
+    font-size: 16.5px;
+  }
+}

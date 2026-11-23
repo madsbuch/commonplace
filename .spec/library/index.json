@@ -49,6 +49,27 @@
         "#LIB-20",
         "#LIB-22"
       ]
+    },
+    {
+      "id": "US-20",
+      "as": "an author following new papers on arXiv",
+      "want": "to add a paper by its arXiv number",
+      "soThat": "I don't download and upload files by hand",
+      "requirements": [
+        "#LIB-23"
+      ]
+    },
+    {
+      "id": "US-21",
+      "as": "an author reading papers on my phone",
+      "want": "papers as text that fits the screen",
+      "soThat": "reading on the phone is as easy as on a computer",
+      "requirements": [
+        "#LIB-24",
+        "#LIB-25",
+        "#LIB-26",
+        "#LIB-27"
+      ]
     }
   ],
   "requirements": [
@@ -183,6 +204,32 @@
       "related": [
         "#APP-10"
       ]
+    },
+    {
+      "id": "LIB-23",
+      "text": "The author can add a paper from arXiv by its identifier, such as `1706.03762`, or its address. Its title, authors and year come from arXiv's listing, and its PDF and, where arXiv has one, its HTML version come with it.",
+      "related": [
+        "#LIB-24"
+      ]
+    },
+    {
+      "id": "LIB-24",
+      "text": "An item can hold an HTML version, from arXiv or from an HTML file the author adds; like a PDF, it syncs."
+    },
+    {
+      "id": "LIB-25",
+      "text": "An item with an HTML version can be read as text that fits the screen, with its sections as its contents and its maths shown as maths. On a phone it opens as text, on a computer as its PDF where it has one; the author can switch."
+    },
+    {
+      "id": "LIB-26",
+      "text": "Read as text, an item's address holds that it's read as text and the section at the top of the view.",
+      "related": [
+        "#APP-10"
+      ]
+    },
+    {
+      "id": "LIB-27",
+      "text": "An HTML version keeps its figures, so it reads the same offline."
     }
   ],
   "values": [
