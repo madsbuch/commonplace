@@ -502,7 +502,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const back = await page.getByRole("link", { name: "← Settings" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
     check("a nested page leads back, and the old address leads to it", back);
 
-    // Spec: SYN-9, SYN-21, SYN-22
+    // Spec: tandem.SYN-9, tandem.SYN-21, tandem.SYN-22
     await page.goto(APP + "/settings/sync");
     await page.getByRole("button", { name: "Show pairing code" }).click();
     const qrImg = page.getByRole("img", { name: "Pairing code" });
@@ -521,7 +521,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       return window.jsQR(data.data, 300, 300)?.data ?? null;
     });
     check("the pairing QR code reads back as the code", decoded?.startsWith("mybook-pair:1:") && decoded.length > 300, String(decoded).slice(0, 40));
-    // Spec: SYN-5, SYN-25
+    // Spec: tandem.SYN-5, tandem.SYN-25
     await page.waitForTimeout(500);
     const announcedWithCode = (await (await fetch(`${FAKE}/fake-lan`)).json()).slice(-1)[0];
     check("the device showing a code announces it nearby, by its tag", announcedWithCode?.pair === "pairfaketag" && announcedWithCode?.book === "bookfaketag" && announcedWithCode?.port === 47832, JSON.stringify(announcedWithCode));
@@ -542,7 +542,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const joins = await (await fetch(`${FAKE}/fake-joins`)).json();
     check("and then joins, replacing what it held", joins.length === 1 && joins[0].replace === true && joins[0].code === decoded, JSON.stringify(joins).slice(0, 80));
 
-    // Spec: SYN-23, SYN-24
+    // Spec: tandem.SYN-23, tandem.SYN-24
     await page.locator(".sync-check").getByRole("button", { name: "Check the connection" }).click();
     await page.locator(".sync-check-verdict").waitFor({ timeout: 5000 });
     const checked = await page.locator(".sync-check").innerText();

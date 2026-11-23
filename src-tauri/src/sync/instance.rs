@@ -17,7 +17,7 @@
 //!
 //! The book still recognises it by its key (see `session::check_peer`).
 
-// Spec: SYN-16
+// Spec: tandem.SYN-16
 use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
 

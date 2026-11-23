@@ -213,7 +213,7 @@ impl SyncService {
             }
         });
 
-        // Spec: SYN-18
+        // Spec: tandem.SYN-18
         // A desktop device keeps daily snapshots.
         if cfg!(not(any(target_os = "android", target_os = "ios"))) {
             if let Ok(dir) = app.path().app_data_dir() {
@@ -249,7 +249,7 @@ impl SyncService {
         });
     }
 
-    // Spec: SYN-23, DIAG-1
+    // Spec: tandem.SYN-23, DIAG-1
     /// Checks the connection, and notes what it found in the diagnostics.
     pub async fn check(&self, app: &AppHandle) -> Result<super::check::Report, String> {
         let pool = self.pool()?;
@@ -272,7 +272,7 @@ impl SyncService {
         Ok(report)
     }
 
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     /// What this device announces nearby: its sync port, its id, the book's
     /// tag and, while a code is on screen, the code's tag.
     pub async fn announcing(&self) -> Result<Option<Announce>, String> {
@@ -297,7 +297,7 @@ impl SyncService {
         }))
     }
 
-    // Spec: SYN-5
+    // Spec: tandem.SYN-5
     /// A device found nearby: kept with every address it announced, and,
     /// when it's one of the book's, synced with now.
     pub async fn found_nearby(&self, peer: Announced) -> Result<(), String> {
@@ -417,7 +417,7 @@ impl SyncService {
             None
         };
         self.set_activity(app, |a| a.syncing = true);
-        // Spec: SYN-25
+        // Spec: tandem.SYN-25
         // The device showing the code announces the code's tag nearby: wait a
         // moment to find it there, with every address it has.
         let found = self.showing(&session::pair_tag(&offer.token), Duration::from_secs(3)).await;
@@ -496,7 +496,7 @@ pub async fn sync_round(pool: &SqlitePool, nearby: &[(String, Vec<SocketAddr>)])
         // Where discovery says it is, then where it was last reached: an
         // answer to a probe isn't proof of anything (anyone on the network
         // can send one), so a failed attempt there doesn't end the search.
-        // Spec: SYN-5
+        // Spec: tandem.SYN-5
         // Every address it announced nearby (mDNS: IPv6 and IPv4), then
         // where the search found it, then where it was last reached; all
         // tried at once, the first to answer wins.

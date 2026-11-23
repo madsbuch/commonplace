@@ -43,8 +43,8 @@ const BATCH_ROWS: i64 = 500;
 const BATCH_BYTES: usize = 4 * 1024 * 1024;
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
 /// How long a QR code works.
-// Spec: SYN-9
-/// `sync.pairing-lifetime` in the spec.
+// Spec: tandem.SYN-9
+/// `tandem.pairing-lifetime` in the spec.
 pub const PAIRING_TTL: Duration = Duration::from_secs(10 * 60);
 /// The TCP port tried first; any free one if it's taken.
 pub const PREFERRED_PORT: u16 = 47832;
@@ -82,7 +82,7 @@ pub fn build_kind() -> &'static str {
     }
 }
 
-// Spec: SYN-19
+// Spec: tandem.SYN-19
 /// Whether two builds may sync: a development build never touches the real
 /// app's data, whatever database it was given — unfinished code's mistakes
 /// would otherwise reach every device.
@@ -212,7 +212,7 @@ async fn last_epoch_of(pool: &SqlitePool, peer: &str) -> Result<Option<String>> 
         .flatten())
 }
 
-// Spec: SYN-8
+// Spec: tandem.SYN-8
 /// Before anything else is read from an incoming connection: whether the key
 /// it proved belongs to a device of this book (and isn't revoked). A
 /// stranger is turned away before it can send anything of size.
@@ -234,7 +234,7 @@ fn older_version(older: &str, newer: &str) -> String {
     format!("{older} has an older version of Commonplace than {newer}: update {older} and they'll sync again")
 }
 
-// Spec: SYN-8, SYN-19
+// Spec: tandem.SYN-8, tandem.SYN-19
 /// Whether `theirs` may sync with this device: the same book, the same
 /// schema, a key the book lists and hasn't revoked — or, while joining (the
 /// device list is still empty here), the key the QR code named.
@@ -287,7 +287,7 @@ async fn check_peer(pool: &SqlitePool, me: &Hello, theirs: &Hello, proven_key: &
     }
 }
 
-// Spec: SYN-16
+// Spec: tandem.SYN-16
 /// After the hellos, each side says what it knows of the other's history. A
 /// device that's been pulled from further than it has ever recorded, or seen
 /// in an epoch it never had, is an older copy of itself: it takes a new id
@@ -556,7 +556,7 @@ fn try_busy(device: &str) -> Option<Busy> {
     b.insert(device.to_string()).then(|| Busy(device.to_string()))
 }
 
-// Spec: SYN-1, SYN-4
+// Spec: tandem.SYN-1, tandem.SYN-4
 /// Syncs with the device at `addr`. `Ok(None)` when a sync is already running
 /// here (it'll come round again).
 pub async fn sync_with(pool: &SqlitePool, addrs: &[SocketAddr]) -> Result<Option<Outcome>> {
@@ -564,7 +564,7 @@ pub async fn sync_with(pool: &SqlitePool, addrs: &[SocketAddr]) -> Result<Option
     let Some(_guard) = try_busy(&me.device_id) else {
         return Ok(None);
     };
-    // Spec: SYN-5, SYN-24
+    // Spec: tandem.SYN-5, tandem.SYN-24
     // Every address the device is known at, at once (as Murmur does): the first to answer wins.
     let (stream, addr) = super::check::connect_any(&super::check::candidates(addrs)).await.map_err(|tried| tried.join("; "))?;
     let mut ch = Channel::initiate(stream, PURPOSE_SYNC, &me.secret, None).await?;
@@ -586,7 +586,7 @@ pub async fn sync_with(pool: &SqlitePool, addrs: &[SocketAddr]) -> Result<Option
 // Pairing
 // ---------------------------------------------------------------------------
 
-// Spec: SYN-9
+// Spec: tandem.SYN-9
 /// What the QR code carries.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PairingOffer {
@@ -625,7 +625,7 @@ pub struct PendingPairing {
 
 pub type PairingSlot = Arc<Mutex<Option<PendingPairing>>>;
 
-// Spec: SYN-25
+// Spec: tandem.SYN-25
 /// The tag a device advertises (mDNS) while it shows a code, so the device
 /// that scans it finds it on the network: derived from the code's secret,
 /// which it doesn't give away.
@@ -702,7 +702,7 @@ pub async fn join(pool: &SqlitePool, offer: &PairingOffer, found: &[SocketAddr],
     // nothing here.
     let (secret, public) = wire::generate_keypair();
     let new_id = super::new_uuid();
-    // Spec: SYN-25, SYN-24
+    // Spec: tandem.SYN-25, tandem.SYN-24
     // Where the host was found showing this code (mDNS, every address it
     // has), and the addresses the code holds: all at once, the first to
     // answer wins; each one's failure says what it means.
@@ -832,7 +832,7 @@ where
     F: Fn(Result<Outcome>) + Send + Sync + 'static,
 {
     let listener = if bind_ip == "0.0.0.0" {
-        // Spec: SYN-5
+        // Spec: tandem.SYN-5
         // IPv6 and IPv4 on one socket, as Murmur listens: a device may be
         // reachable over one and not the other.
         match dual_stack(PREFERRED_PORT).or_else(|_| dual_stack(0)) {
@@ -887,11 +887,11 @@ pub fn local_addrs(port: u16) -> Vec<String> {
         .into_iter()
         .filter(|i| !i.is_loopback())
         .filter_map(|i| match i.addr {
-            // Spec: SYN-23
+            // Spec: tandem.SYN-23
             // A lone address (/32) is a VPN's or a gateway's, not a local network another device is on.
             if_addrs::IfAddr::V4(v4) if v4.netmask == std::net::Ipv4Addr::BROADCAST => None,
             if_addrs::IfAddr::V4(v4) if v4.ip.is_private() || v4.ip.is_link_local() => Some(format!("{}:{port}", v4.ip)),
-            // Spec: SYN-5
+            // Spec: tandem.SYN-5
             // IPv6 too: unique-local and global ones as they are, link-local
             // ones without a scope (the scanning device tries each of its own).
             if_addrs::IfAddr::V6(v6) if v6.prefixlen < 128 && (v6.ip.is_unique_local() || v6.ip.is_unicast_link_local() || (v6.ip.segments()[0] & 0xe000) == 0x2000) => {
@@ -908,7 +908,7 @@ pub fn local_addrs(port: u16) -> Vec<String> {
     v4.into_iter().chain(v6.into_iter().take(3)).collect()
 }
 
-// Spec: SYN-6
+// Spec: tandem.SYN-6
 /// A short tag for the book, for discovery: devices of other books on the
 /// same network ignore each other without learning the book's id.
 pub fn book_tag(book_id: &str) -> String {

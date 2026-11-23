@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Finding the book's devices nearby, as Murmur does (SYN-5): the LAN plugin
+// Finding the book's devices nearby, as Murmur does (tandem.SYN-5): the LAN plugin
 // (src-tauri/plugins/lan: Android's NsdManager, mDNS on computers)
 // announces this device (`_commonplace._tcp`: its sync port, its id, the
 // book's tag, and while a code is on screen the code's tag) and finds the
@@ -67,7 +67,7 @@ function listenOnce(): Promise<void> {
   return listening;
 }
 
-// Spec: SYN-5
+// Spec: tandem.SYN-5
 /** Announces this device as it is now (again only if that changed); `force` announces afresh. */
 export function announceNearby(force = false): Promise<void> {
   chain = chain

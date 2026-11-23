@@ -107,7 +107,7 @@ pub struct TableInfo {
     pub cascades: Vec<(String, String, String)>,
 }
 
-// Spec: SYN-10
+// Spec: tandem.SYN-10
 /// The synced tables, read from the database itself: a table is synced when
 /// it carries the sync insert trigger (see scripts/sync-triggers.ts).
 pub async fn synced_tables(conn: &mut SqliteConnection) -> Result<BTreeMap<String, TableInfo>> {
@@ -258,6 +258,7 @@ fn data_size(data: &Option<Vec<(String, Value)>>) -> usize {
 // Export
 // ---------------------------------------------------------------------------
 
+// Spec: tandem.SYN-2
 /// The changes recorded after `since`, for `peer`: at most `max_rows`, and
 /// stopping once about `max_bytes` of row data is in (always at least one).
 /// Versions that came from `peer` itself, unchanged since, aren't sent back.
@@ -604,7 +605,7 @@ async fn unique_clash(conn: &mut SqliteConnection, t: &TableInfo, pk: &str, data
     Ok(None)
 }
 
-// Spec: SYN-13
+// Spec: tandem.SYN-13
 /// Writes `data` as row `pk`, settling a clash on a unique column by keeping
 /// the lower id. False when the incoming row lost and wasn't written.
 async fn write_settling_clashes(
@@ -630,7 +631,7 @@ async fn write_settling_clashes(
     Ok(true)
 }
 
-// Spec: SYN-11, SYN-12
+// Spec: tandem.SYN-11, tandem.SYN-12
 // Spec: SYN-20
 /// The deterministic id of the chat split off from `pk` at `hlc`/`origin`:
 /// a UUIDv8 from the SHA-256 of what identifies the split, spelled as a

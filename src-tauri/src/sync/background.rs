@@ -3,7 +3,7 @@
 //! opens the database itself — there's no app around to borrow a connection
 //! from — and syncs with whichever devices of the book answer.
 
-// Spec: SYN-17
+// Spec: tandem.SYN-17
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::time::Duration;
 

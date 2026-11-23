@@ -34,7 +34,7 @@
       "id": "BOOK-11",
       "text": "Each block is its own database row.",
       "related": [
-        "#SYN-11"
+        "#tandem.SYN-11"
       ]
     },
     {
@@ -46,7 +46,7 @@
       "text": "Adding a block type needs no change to how blocks are stored or synced.",
       "related": [
         "#BOOK-11",
-        "#SYN-10"
+        "#tandem.SYN-10"
       ]
     },
     {
