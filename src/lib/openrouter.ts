@@ -21,7 +21,7 @@ const BASE = "https://openrouter.ai/api/v1";
 
 /** Headers OpenRouter uses for app attribution. */
 const APP_HEADERS = {
-  "HTTP-Referer": "https://github.com/madsbuch/my-book",
+  "HTTP-Referer": "https://github.com/madsbuch/commonplace",
   "X-Title": "Commonplace",
 };
 

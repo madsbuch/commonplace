@@ -88,7 +88,7 @@ pub async fn speak(client: &reqwest::Client, key: &str, model: &str, voice: &str
         .post(SPEECH_URL)
         .bearer_auth(key)
         .header("Content-Type", "application/json")
-        .header("HTTP-Referer", "https://github.com/madsbuch/my-book")
+        .header("HTTP-Referer", "https://github.com/madsbuch/commonplace")
         .header("X-Title", "Commonplace")
         .body(body.to_string())
         .send()
