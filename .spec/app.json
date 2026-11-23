@@ -36,7 +36,16 @@
     },
     {
       "id": "APP-8",
-      "text": "Settings is a page of rows, each opening a page nested in it, `/settings/sync` and `/settings/costs` among them; each row says in a line how that part stands, and each nested page leads back to Settings."
+      "text": "Settings holds only rows: each opens a page nested in it (`/settings/ai` for the OpenRouter key and the models, `/settings/sync`, `/settings/costs`) or another screen, and says in a line how that part stands; a setting that is a single switch sits in its row. Each nested page leads back to Settings.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Settings is a page of rows, each opening a page nested in it, `/settings/sync` and `/settings/costs` among them; each row says in a line how that part stands, and each nested page leads back to Settings.",
+          "reason": "The OpenRouter key and the models still sat on Settings itself, under its rows; the author wants Settings to be rows leading into sub-pages and nothing more.",
+          "date": "2026-11-23"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "APP-9",

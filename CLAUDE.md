@@ -157,12 +157,23 @@ The book syncs peer to peer over the local network, as Tally does
   bundled worker; its fonts, character maps, colour profiles and wasm decoders
   are served from `/pdfjs/` by a plugin in `vite.config.ts`. The CSP allows
   `'wasm-unsafe-eval'` for those decoders.
+- The viewer (`src/components/PdfViewer.tsx`) measures only page 1 on open
+  (the rest take its size until drawn), draws pages near the view, and zooms
+  by pinch, double tap, Ctrl/⌘ + wheel or its buttons, keeping the point
+  under the fingers still. Pinch and taps are non-passive touch listeners
+  (as in pdf.js; `.pdf-pages` has `touch-action: pan-x pan-y`, so one finger
+  scrolls natively): a pinch scales the stack with a CSS transform and
+  redraws when the fingers lift. On a phone, reading down puts the controls
+  away (`pdf-reading` on `<html>`, a page pill shows instead); scrolling up or
+  a tap brings them back; scrolls a zoom causes don't count. The page last
+  read is kept per device (localStorage `pdf-page:<id>`), written only from
+  scrolling so opening can't overwrite it. The page count goes to a page.
 - Details are read by a model when an item is added (`src/lib/libraryDetails.ts`,
   in the background after the upload): the first three pages' text, or JPEGs
   of them for a scan, go to OpenRouter with a strict JSON schema
   (`chatJson` in `src/lib/openrouter.ts`); the prompt, schema and answer
   parsing are in `src/lib/libraryDetailsModel.ts`. The default model is
-  `anthropic/claude-haiku-5.5`, changeable in Settings (synced). Without a
+  `anthropic/claude-haiku-5.5`, changeable in Settings → AI and models (synced). Without a
   key, or when the call fails, the PDF's own metadata stands (XMP first,
   then the info dictionary; a PDF of 120 pages or more starts as a book).
   Logged in the ledger as `library_details`.
@@ -204,6 +215,12 @@ The book syncs peer to peer over the local network, as Tally does
 - Fonts are bundled (`@fontsource-variable/literata` for the book,
   `@fontsource-variable/inter` for the interface), imported in `main.tsx`.
 - `Ctrl+K` / `⌘K` opens the page search (`src/components/QuickOpen.tsx`).
+- Settings (`/settings`) holds only rows (`src/components/SettingsRows.tsx`),
+  each with a line on how its part stands, opening a page nested in it:
+  `/settings/ai` (the OpenRouter key and models), `/settings/sync`,
+  `/settings/costs`, and the memory; the theme switch sits in its row. A new
+  setting goes on a nested page (or a new row and page), never on Settings
+  itself (APP-8). A new route also goes in `ROUTES` (`src/lib/currentView.ts`).
 - Explanations of how something works go behind an ⓘ
   (`src/components/InfoButton.tsx`, a sheet on phones), never as grey text on
   the screen; the screen's text says how things stand (APP-9). The ⓘ can

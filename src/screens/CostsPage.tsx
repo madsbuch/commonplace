@@ -95,7 +95,7 @@ export default function CostsPage() {
         <InfoButton title="AI costs">
           <p>What the assistant and the library have cost, from what OpenRouter reported for each answer, on all your devices.</p>
           <p>
-            <Link to="/settings">Model and key</Link>
+            <Link to="/settings/ai">Models and key</Link>
           </p>
         </InfoButton>
       </div>

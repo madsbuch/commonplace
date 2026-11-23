@@ -82,7 +82,7 @@ function DetailsInfo(props: { itemId: string }) {
       ) : null}
       {status?.state === "no-key" ? (
         <p>
-          These came from the PDF itself, as there's no OpenRouter key yet. <Link to="/settings">Add one in Settings</Link>, then
+          These came from the PDF itself, as there's no OpenRouter key yet. <Link to="/settings/ai">Add one in Settings</Link>, then
           choose Read details again under Details.
         </p>
       ) : null}
@@ -179,15 +179,6 @@ export default function LibraryItemPage() {
           <button type="button" aria-pressed={showDetails} onClick={() => setShowDetails((s) => !s)}>
             Details
           </button>
-          {confirm ? (
-            <button type="button" className="danger" onClick={() => void removeItem(id).then(() => navigate("/library", { replace: true }))}>
-              Really remove?
-            </button>
-          ) : (
-            <button type="button" onClick={() => setConfirm(true)}>
-              Remove
-            </button>
-          )}
         </div>
       </div>
       <div className="item-head">
@@ -204,6 +195,16 @@ export default function LibraryItemPage() {
             <button type="button" onClick={() => void readDetails(item.id)}>
               Read details again
             </button>
+            {/* Spec: LIB-8 */}
+            {confirm ? (
+              <button type="button" className="danger" onClick={() => void removeItem(id).then(() => navigate("/library", { replace: true }))}>
+                Really remove from the library?
+              </button>
+            ) : (
+              <button type="button" className="details-remove" onClick={() => setConfirm(true)}>
+                Remove from the library
+              </button>
+            )}
           </div>
         </>
       ) : null}

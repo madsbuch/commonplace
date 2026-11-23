@@ -181,7 +181,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("its authors and their institutions are linked records", people1.length === 1 && people1[0].name === "A. M. Turing" && people1[0].inst === "University of Cambridge", JSON.stringify(people1));
     check("reading details is in the usage ledger", (await q("SELECT count(*) AS n FROM ai_usage WHERE feature = 'library_details'"))[0].n === 1);
     check("the PDF is drawn in the viewer", (await page.locator(".pdf-page canvas").count()) >= 1);
-    check("the viewer counts its pages", (await page.locator(".pdf-toolbar").innerText()).includes("of 3"));
+    check("the viewer counts its pages", (await page.locator(".pdf-toolbar").innerText()).includes("1 / 3"));
     const first = page.url();
 
     // Spec: PPL-2, PPL-3, PPL-4
@@ -256,13 +256,91 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("the contents show beside the PDF", (await page.locator(".toc-entry").count()) === 6);
     await page.locator(".toc-entry", { hasText: "Chapter 2: Decidability" }).click();
     await page.waitForTimeout(800);
-    check("choosing an entry goes to its page", (await page.locator(".pdf-toolbar").innerText()).includes("Page 4 of 6"));
+    check("choosing an entry goes to its page", (await page.locator(".pdf-toolbar").innerText()).includes("4 / 6"));
     check("and marks it as the one being read", (await page.locator(".toc-entry.active").innerText()).includes("Chapter 2"));
     await q(`UPDATE library_items SET toc = NULL WHERE id = '${tocItem.id}'`);
     await page.reload();
     await page.waitForTimeout(2500);
     const again = (await q(`SELECT toc FROM library_items WHERE id = '${tocItem.id}'`))[0]?.toc;
     check("an item without contents gets them when its PDF is opened", JSON.parse(again ?? "[]").length === 3, again);
+
+    // Spec: LIB-20, LIB-21
+    check("a PDF opens again at the page last read on this device", (await page.locator(".pdf-toolbar").innerText()).includes("4 / 6"));
+    await page.locator(".pdf-page-count").click();
+    await page.getByLabel("Go to page").fill("5");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(800);
+    check("the author can go to a page by its number", (await page.locator(".pdf-toolbar").innerText()).includes("5 / 6"));
+
+    // Spec: LIB-18
+    const zoomLabel = () => page.locator(".pdf-zoom-fit").textContent();
+    const box = await page.locator(".pdf-pages").boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, -200);
+    await page.keyboard.up("Control");
+    await page.waitForTimeout(400);
+    check("Ctrl + wheel zooms in", /^\d+% · Fit$/.test(await zoomLabel()) && !(await zoomLabel()).startsWith("100%"), await zoomLabel());
+    await page.locator(".pdf-zoom-fit").click();
+    await page.waitForTimeout(300);
+    check("and the zoom button fits the width again", (await zoomLabel()) === "100%");
+
+    // On a phone
+    // Spec: LIB-18, LIB-19
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.waitForTimeout(600);
+    /** Touches on the PDF, as a finger would make them: [[x, y], …] per step, relative to its middle. */
+    const touch = (steps) =>
+      page.evaluate(async (steps) => {
+        const el = document.querySelector(".pdf-pages");
+        const r = el.getBoundingClientRect();
+        const at = (i, [x, y]) => new Touch({ identifier: i, target: el, clientX: r.left + r.width / 2 + x, clientY: r.top + r.height / 2 + y });
+        let before = [];
+        for (const [type, points] of steps) {
+          const touches = points.map((p, i) => at(i, p));
+          const changed = type === "touchend" ? before : touches;
+          el.dispatchEvent(new TouchEvent(type, { touches, targetTouches: touches, changedTouches: changed, bubbles: true, cancelable: true }));
+          before = touches;
+          await new Promise((res) => setTimeout(res, 30));
+        }
+      }, steps);
+    const tapOnce = [["touchstart", [[0, 0]]], ["touchend", []]];
+    await touch([...tapOnce, ...tapOnce]);
+    await page.waitForTimeout(500);
+    check("a double tap zooms in", (await zoomLabel()) === "200% · Fit", await zoomLabel());
+    await touch([...tapOnce, ...tapOnce]);
+    await page.waitForTimeout(500);
+    check("and another fits the width again", (await zoomLabel()) === "100%", await zoomLabel());
+    await touch([
+      ["touchstart", [[-40, 0], [40, 0]]],
+      ["touchmove", [[-60, 0], [60, 0]]],
+      ["touchmove", [[-80, 0], [80, 0]]],
+      ["touchend", []],
+    ]);
+    await page.waitForTimeout(500);
+    check("two fingers spread zoom in", (await zoomLabel()) === "200% · Fit", await zoomLabel());
+    await page.locator(".pdf-zoom-fit").click();
+    await page.waitForTimeout(300);
+    const reading = () => page.evaluate(() => document.documentElement.classList.contains("pdf-reading"));
+    await page.locator(".pdf-pages").evaluate((el) => el.scrollTo(0, 0));
+    await page.waitForTimeout(300);
+    await page.locator(".pdf-pages").evaluate((el) => el.scrollBy(0, 300));
+    await page.waitForTimeout(300);
+    await page.locator(".pdf-pages").evaluate((el) => el.scrollBy(0, 300));
+    await page.waitForTimeout(300);
+    check("reading down on a phone puts the controls away", (await reading()) && !(await page.locator(".pdf-toolbar").isVisible()));
+    check("and a small pill says the page", await page.locator(".pdf-pill").isVisible());
+    await page.locator(".pdf-pages").evaluate((el) => el.scrollBy(0, -100));
+    await page.waitForTimeout(300);
+    check("scrolling back up brings them back", !(await reading()) && (await page.locator(".pdf-toolbar").isVisible()));
+    await touch(tapOnce);
+    await page.waitForTimeout(600);
+    check("a tap puts them away", await reading());
+    await touch(tapOnce);
+    await page.waitForTimeout(600);
+    check("and another brings them back", !(await reading()));
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.waitForTimeout(300);
 
     // Spec: LIB-5, LIB-8
     await page.goto(APP + "/library/" + second);
@@ -271,8 +349,8 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.locator(".library-details select").selectOption("book");
     await page.waitForTimeout(500);
     check("the author can change an item's details", (await q(`SELECT kind FROM library_items WHERE id = '${second}'`))[0]?.kind === "book");
-    await page.getByRole("button", { name: "Remove", exact: true }).click();
-    await page.getByRole("button", { name: "Really remove?" }).click();
+    await page.getByRole("button", { name: "Remove from the library" }).click();
+    await page.getByRole("button", { name: "Really remove from the library?" }).click();
     await page.waitForURL(/\/library$/);
     const left = await q(`SELECT (SELECT count(*) FROM library_items WHERE id = '${second}') AS items, (SELECT count(*) FROM library_files WHERE item_id = '${second}') AS files, (SELECT count(*) FROM authorships WHERE item_id = '${second}') AS ships`);
     check("removing an item removes its PDF and its authorships", left[0].items === 0 && left[0].files === 0 && left[0].ships === 0, JSON.stringify(left));
@@ -395,8 +473,17 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.goto(APP + "/settings");
     await page.waitForTimeout(800);
     const settingsRows = await page.locator(".settings-row-title").allInnerTexts();
-    check("Settings leads to the pages nested in it", ["Sync", "AI costs"].every((r) => settingsRows.includes(r)), settingsRows.join(", "));
+    check("Settings leads to the pages nested in it", ["AI and models", "Sync", "AI costs"].every((r) => settingsRows.includes(r)), settingsRows.join(", "));
     check("each row says how that part stands", (await page.locator(".settings-row", { hasText: "AI costs" }).innerText()).includes("this month"));
+    check("and holds nothing but rows", (await page.locator(".ai-screen .ai-section, .ai-screen input").count()) === 0);
+    check("the AI row says the key is set", (await page.locator(".settings-row", { hasText: "AI and models" }).innerText()).includes("Key set"));
+    await page.locator(".settings-row", { hasText: "AI and models" }).click();
+    await page.waitForURL(/\/settings\/ai$/);
+    await page.getByRole("heading", { name: "AI and models" }).waitFor({ timeout: 5000 });
+    const aiText = await page.locator(".ai-screen").innerText();
+    check("the key and the models are a page of their own", ["OpenRouter", "Assistant model", "Library details model"].every((h) => aiText.includes(h)), aiText.slice(0, 200));
+    await page.getByRole("link", { name: "← Settings" }).click();
+    await page.waitForURL(/\/settings$/);
     await page.locator(".settings-row", { hasText: "AI costs" }).click();
     await page.waitForURL(/\/settings\/costs$/);
     await page.getByRole("link", { name: "← Settings" }).click();

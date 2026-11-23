@@ -86,7 +86,7 @@ export function ChatView() {
           {s.status === "elsewhere" ? <div className="assistant-thinking">Another device is answering this. Its answer arrives with sync.</div> : null}
           {s.status === "no-key" ? (
             <div className="assistant-error">
-              The assistant uses your own OpenRouter key. <Link to="/settings">Add it in Settings</Link>, then retry.{" "}
+              The assistant uses your own OpenRouter key. <Link to="/settings/ai">Add it in Settings</Link>, then retry.{" "}
               <button type="button" className="assistant-ghost" onClick={() => void retry()}>
                 Retry
               </button>

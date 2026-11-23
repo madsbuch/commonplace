@@ -38,6 +38,12 @@ export const CostIcon = () => (
     <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
   </Icon>
 );
+export const KeyIcon = () => (
+  <Icon>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2 2" />
+  </Icon>
+);
 export const SettingsIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="3" />

@@ -749,12 +749,21 @@ button.danger {
 .pdf-pages {
   flex: 1;
   overflow: auto;
-  padding: 16px;
   background: var(--sidebar);
+  /* Scrolling is the browser's; a pinch is ours (it zooms the pages, not the app). */
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+}
+/* Wider than the view when zoomed in: then it scrolls sideways from its left edge. */
+.pdf-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  padding: 16px;
+  width: max-content;
+  min-width: 100%;
+  will-change: transform;
 }
 .pdf-page {
   background: #fff;
@@ -769,8 +778,9 @@ button.danger {
   .library-item-bar {
     padding-left: 56px;
   }
-  .pdf-pages {
+  .pdf-stack {
     padding: 8px;
+    gap: 8px;
   }
 }
 
@@ -1691,5 +1701,71 @@ a.settings-row:hover {
     border-radius: 16px 16px 0 0;
     box-shadow: var(--shadow);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Spec: LIB-18, LIB-19, LIB-21 — reading a PDF */
+.pdf-page-count {
+  border-color: transparent;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  margin-right: auto;
+}
+.pdf-goto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  font-size: 13px;
+}
+.pdf-goto input {
+  width: 4.5em;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.pdf-pill {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(20 22 28 / 0.72);
+  color: #fff;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  animation: fade-in 160ms ease;
+}
+@media (max-width: 760px) {
+  /* Pinch instead of buttons on a phone; the % button fits the width again. */
+  .pdf-zoom-step,
+  .pdf-zoom-fit.at-fit {
+    display: none;
+  }
+  .pdf-toolbar {
+    padding: 6px 10px;
+  }
+  /* Reading: everything around the PDF steps aside (lib: PdfViewer). */
+  .pdf-reading .library-item-bar,
+  .pdf-reading .item-head,
+  .pdf-reading .library-details,
+  .pdf-reading .details-actions,
+  .pdf-reading .pdf-toolbar {
+    display: none;
+  }
+  .sidebar-toggle,
+  .dock-toggle {
+    transition: opacity 160ms ease;
+  }
+  .pdf-reading .sidebar-toggle,
+  .pdf-reading .dock-toggle {
+    opacity: 0;
+    pointer-events: none;
   }
 }

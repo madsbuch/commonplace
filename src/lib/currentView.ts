@@ -17,6 +17,7 @@ export type ViewKind =
   | "chat"
   | "memory"
   | "settings"
+  | "ai-settings"
   | "sync"
   | "costs"
   | "other";
@@ -60,6 +61,7 @@ export function viewOfPath(path: string): Pick<CurrentView, "kind" | "id"> {
   if (a === "library") return { kind: "library", id: null };
   if (a === "chats" && b) return { kind: "chat", id: b };
   if (a === "chats") return { kind: "chats", id: null };
+  if (a === "settings" && b === "ai") return { kind: "ai-settings", id: null };
   if (a === "settings" && (b === "sync" || b === "costs")) return { kind: b, id: null };
   if (a === "memory" || a === "settings" || a === "sync" || a === "costs") return { kind: a, id: null };
   return { kind: "other", id: null };
@@ -100,7 +102,8 @@ export const ROUTES: readonly { address: string; shows: string }[] = [
   { address: "/chats", shows: "Every chat with you." },
   { address: "/chats/<chat id>", shows: "One chat, on its own." },
   { address: "/memory", shows: "Your memory." },
-  { address: "/settings", shows: "Settings: rows leading to sync, AI costs, memory and appearance; the OpenRouter key; models." },
+  { address: "/settings", shows: "Settings: rows leading to AI and models, sync, AI costs and memory, and the appearance switch." },
+  { address: "/settings/ai", shows: "The OpenRouter key, the assistant's model and the model that reads library details." },
   { address: "/settings/sync", shows: "Sync with the author's other devices." },
   { address: "/settings/costs", shows: "What AI has cost." },
   { address: "/sync", shows: "Leads to /settings/sync." },

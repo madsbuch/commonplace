@@ -36,6 +36,18 @@
         "#LIB-14",
         "#LIB-15"
       ]
+    },
+    {
+      "id": "US-17",
+      "as": "an author reading a paper on my phone",
+      "want": "the page to fill the screen and zoom like any reader app",
+      "soThat": "reading on the phone is as easy as on paper",
+      "requirements": [
+        "#LIB-17",
+        "#LIB-18",
+        "#LIB-19",
+        "#LIB-20"
+      ]
     }
   ],
   "requirements": [
@@ -131,6 +143,26 @@
     {
       "id": "LIB-16",
       "text": "An item added before tables of contents were taken gets one the first time its PDF is opened."
+    },
+    {
+      "id": "LIB-17",
+      "text": "A PDF shows its first page without waiting for its other pages to be measured."
+    },
+    {
+      "id": "LIB-18",
+      "text": "Pages zoom with a pinch, keeping the point between the fingers in place, and a double tap switches between fitting the width and `pdf.double-tap-zoom` times that; on a computer, Ctrl or ⌘ with the scroll wheel zooms."
+    },
+    {
+      "id": "LIB-19",
+      "text": "On a phone, the viewer's controls and the app's buttons over it hide while scrolling down through a PDF, and come back on scrolling up or tapping the page."
+    },
+    {
+      "id": "LIB-20",
+      "text": "The viewer reopens an item at the page last read on that device."
+    },
+    {
+      "id": "LIB-21",
+      "text": "The author can go to a page of a PDF by its number."
     }
   ],
   "values": [
@@ -162,6 +194,13 @@
       "value": 3,
       "unit": "pages",
       "description": "How many of a PDF's first pages the model reads for its details."
+    },
+    {
+      "id": "pdf.double-tap-zoom",
+      "type": "number",
+      "value": 2,
+      "unit": "times",
+      "description": "How far a double tap zooms a PDF page in."
     }
   ]
 }
