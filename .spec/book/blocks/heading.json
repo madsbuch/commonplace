@@ -7,6 +7,13 @@
     {
       "id": "HEAD-1",
       "text": "A heading block has a level from 1 to `heading.levels`."
+    },
+    {
+      "id": "HEAD-2",
+      "text": "A page's title is the largest text on it. Headings are smaller than the title and get smaller with their level (`heading.size-1` to `heading.size-3`, against the text), the smallest still larger than the text.",
+      "related": [
+        "#HEAD-1"
+      ]
     }
   ],
   "values": [
@@ -15,6 +22,24 @@
       "type": "number",
       "value": 3,
       "unit": "levels"
+    },
+    {
+      "id": "heading.size-1",
+      "type": "dimension",
+      "value": "1.45em",
+      "description": "A level-1 heading's size, against the text's."
+    },
+    {
+      "id": "heading.size-2",
+      "type": "dimension",
+      "value": "1.25em",
+      "description": "A level-2 heading's size, against the text's."
+    },
+    {
+      "id": "heading.size-3",
+      "type": "dimension",
+      "value": "1.1em",
+      "description": "A level-3 heading's size, against the text's."
     }
   ]
 }

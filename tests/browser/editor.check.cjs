@@ -1077,6 +1077,44 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(800);
     check("the log is emptied from its menu, asking first", (await q("SELECT count(*) AS n FROM diagnostics WHERE level = 'error'"))[0].n === 0);
 
+    // Spec: BLK-7, HEAD-2
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.goto(APP);
+    await page.getByRole("button", { name: "New page" }).first().click();
+    await page.waitForURL(/\/page\//);
+    await page.locator(".page-title").fill("Test page");
+    await page.keyboard.press("Enter");
+    await page.locator(".bn-editor").click();
+    for (const line of ["# Here is a H1", "## Here is a H2", "### Here is a H3", "Hmm, what to do", "When I want a bit of room between my paragraphs?", "- But I don't want anything on", "lists"]) {
+      await page.keyboard.type(line);
+      await page.keyboard.press("Enter");
+    }
+    await page.keyboard.press("Tab");
+    await page.keyboard.type("or sublists");
+    await page.waitForTimeout(800);
+    const spacing = await page.evaluate(() => {
+      const size = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
+      const blocks = [...document.querySelectorAll(".bn-editor .bn-block-content")];
+      const byText = (t) => blocks.find((b) => (b.textContent ?? "").trim() === t);
+      const gap = (a, b) => (a && b ? Math.round(b.getBoundingClientRect().top - a.getBoundingClientRect().bottom) : -1);
+      const p1 = byText("Hmm, what to do");
+      const p2 = byText("When I want a bit of room between my paragraphs?");
+      const i1 = byText("But I don't want anything on");
+      const i2 = byText("lists");
+      const i3 = byText("or sublists");
+      return {
+        sizes: [size(document.querySelector(".page-title")), size(byText("Here is a H1")), size(byText("Here is a H2")), size(byText("Here is a H3")), size(p1)],
+        paragraphs: gap(p1, p2),
+        beforeList: gap(p2, i1),
+        items: gap(i1, i2),
+        sublist: gap(i2, i3),
+      };
+    });
+    const [titleSize, h1Size, h2Size, h3Size, textSize] = spacing.sizes;
+    check("the page's title is the largest text; headings get smaller by level, all above the text", titleSize > h1Size && h1Size > h2Size && h2Size > h3Size && h3Size > textSize, JSON.stringify(spacing.sizes));
+    check("paragraphs stand apart; a list stands apart as a whole; its items and sublists stand together", spacing.paragraphs >= spacing.items + 8 && spacing.beforeList === spacing.paragraphs && spacing.sublist === spacing.items, JSON.stringify(spacing));
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "spacing.png") });
+
     check("no errors in the console", errors.length === 0, errors.slice(0, 3).join(" | "));
   } finally {
     await browser.close();

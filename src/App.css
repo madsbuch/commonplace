@@ -1538,6 +1538,27 @@ kbd {
 .bn-container .bn-editor [data-content-type="heading"] {
   color: var(--fg);
 }
+/* Spec: HEAD-2 — `heading.size-*`, against the text: all below the page's
+   title (2.2rem, 1.7rem on a phone), each level smaller, all above the text. */
+/* Level 1 is the default, which BlockNote leaves off as an attribute. */
+.bn-container .bn-editor .bn-block-content[data-content-type="heading"] {
+  --level: 1.45em;
+}
+.bn-container .bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] {
+  --level: 1.25em;
+}
+.bn-container .bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] {
+  --level: 1.1em;
+}
+/* Spec: BLK-7 — `blocks.space` between blocks, so a paragraph visibly ends.
+   A list's items stand together, and so does everything nested in one. */
+.bn-container .bn-editor .bn-block-outer + .bn-block-outer {
+  margin-top: 0.6em;
+}
+.bn-container .bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type$="ListItem"]) + .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type$="ListItem"]),
+.bn-container .bn-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type$="ListItem"]) .bn-block-outer {
+  margin-top: 0;
+}
 
 /* Spec: LIB-13 — pdf.js's text layer (after its pdf_viewer.css): invisible
    text over the drawn page, there to be selected and copied. */

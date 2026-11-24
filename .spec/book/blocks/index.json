@@ -93,6 +93,18 @@
     {
       "id": "BLK-6",
       "text": "On a phone, a block's add button and handle stack vertically in a narrow margin, so its text keeps the screen's width."
+    },
+    {
+      "id": "BLK-7",
+      "text": "Blocks stand `blocks.space` apart, beyond their lines' own spacing, so one paragraph visibly ends before the next. The items of a list stand together, with everything nested in them, and a list as a whole stands apart from what's around it as a paragraph does."
+    }
+  ],
+  "values": [
+    {
+      "id": "blocks.space",
+      "type": "dimension",
+      "value": "0.6em",
+      "description": "The room between blocks, beyond their lines' own: about half a line of the text."
     }
   ]
 }

@@ -229,6 +229,13 @@ The book syncs peer to peer over the local network, as Tally does
   `pageLink` nodes holding the page's (and block's) id, showing live titles
   from `src/lib/pageIndex.ts`. Code blocks highlight with Shiki (JS regex
   engine), Lean included.
+- Spacing and sizes are CSS over BlockNote's (`src/App.css`), nothing
+  stored: blocks stand `blocks.space` apart (BLK-7, a margin between
+  `.bn-block-outer`s), except a list's items and everything nested in one
+  (`:has()` on `data-content-type$="ListItem"`); headings take
+  `heading.size-*` (HEAD-2) through BlockNote's `--level`, all below the
+  page's title. Level 1 is set on every heading, since BlockNote leaves a
+  default prop off as an attribute (an H1 has no `data-level`).
 - `tsconfig.json` leaves `exactOptionalPropertyTypes` off: BlockNote's types
   don't hold under it.
 
