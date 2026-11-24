@@ -96,7 +96,8 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1200);
     check("a link shows its page's title", (await page.locator(".page-link").allInnerTexts()).join() === "Simple types");
     await page.goto(url);
-    await page.waitForTimeout(1200);
+    // The title arrives with the page index: waited for, not raced.
+    await page.locator(".page-block", { hasText: "Dependent types" }).waitFor({ timeout: 5000 }).catch(() => undefined);
     check("a subpage shows in its parent with its title", (await page.locator(".page-block").innerText()).includes("Dependent types"));
 
     // Spec: BLK-3
@@ -719,6 +720,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("Settings says whether this computer verifies Lean", (await page.locator(".settings-row", { hasText: "Lean" }).innerText()).includes("Ready · Lean v4.99.0"));
     await page.locator(".settings-row", { hasText: "Lean" }).click();
     await page.getByRole("heading", { name: "Lean" }).waitFor({ timeout: 5000 });
+    await page.locator(".ai-screen", { hasText: "Ready: Lean" }).waitFor({ timeout: 5000 }).catch(() => undefined);
     check("and Settings → Lean says how it stands", (await page.locator(".ai-screen").innerText()).includes("Ready: Lean v4.99.0, with Mathlib."));
 
     // Spec: LIB-23, LIB-24, LIB-27
@@ -933,7 +935,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.setViewportSize({ width: 1200, height: 800 });
     await fetch(`${FAKE}/fake-model`, {
       method: "POST",
-      body: JSON.stringify({ answer: { paragraphs: ["Two point one. Attention.", "Scaled dot-product attention: softmax of Q K transpose, times V."] } }),
+      body: JSON.stringify({ answer: { paragraphs: ["Two point one. Attention.", "Scaled dot-product attention: softmax of Q K transpose, times V.", "Queries meet keys.", "Values are weighed."] } }),
     });
     const sentBefore = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
     await page.goto(`${APP}/library/${arx?.id}`);
@@ -944,13 +946,16 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("button", { name: "Record", exact: true }).click();
     await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
     await page.waitForTimeout(2500);
-    const rec = (await q("SELECT id, kind, section, status, script, chapters, duration_seconds, voice, speech_model FROM recordings"))[0];
-    check("a section of a paper is recorded aloud, word for word", rec?.kind === "verbatim" && rec?.section === "html:S2.SS1" && rec?.status === "ready", JSON.stringify({ ...rec, script: undefined }));
-    check("its script is what the script model made of the section", JSON.parse(rec?.script ?? "{}").chapters?.[0]?.paragraphs?.[1]?.startsWith("Scaled dot-product attention: softmax of Q K"), rec?.script);
+    const rec = (await q("SELECT id, kind, section, status, script, voice, speech_model FROM recordings"))[0];
+    const recScript = JSON.parse(rec?.script ?? "{}");
+    check("a section of a paper is recorded aloud, word for word, made as it's listened to", rec?.kind === "verbatim" && rec?.section === "html:S2.SS1" && rec?.status === "listening", JSON.stringify({ ...rec, script: undefined }));
+    check("its script is the section's text in chunks, each written by the script model when it's reached", recScript.chapters?.[0]?.chunks?.[0]?.source?.includes("2.1 Attention") && recScript.chapters?.[0]?.chunks?.[0]?.passages?.[1]?.startsWith("Scaled dot-product attention: softmax of Q K"), rec?.script?.slice(0, 300));
     const scriptAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(sentBefore));
     check("the script model is told to keep the prose and say the maths", scriptAsk.includes("Keep every word of the prose exactly") && scriptAsk.includes("2.1 Attention") && scriptAsk.includes("softmax}(QK^{T})V"), scriptAsk.slice(0, 200));
     check("in the voice and speech model chosen", rec?.voice === "Charon" && rec?.speech_model === "google/gemini-3.1-flash-tts-preview");
-    check("its audio is Opus in WebM, kept to sync", (await q(`SELECT media_type, length(data) AS n FROM recording_files WHERE recording_id = '${rec?.id}'`))[0]?.media_type === "audio/webm");
+    const piecesAt = async () => (await q(`SELECT id, hex(substr(data, 1, 4)) AS head FROM recording_pieces WHERE recording_id = '${rec?.id}' ORDER BY id`));
+    const firstPieces = await piecesAt();
+    check("only what's ahead of the listener is made: a passage a piece, Opus in WebM, kept to sync", firstPieces.length === 2 && firstPieces.every((p) => p.head === "1A45DFA3"), JSON.stringify(firstPieces));
 
     // Spec: AUD-8, AUD-9, AUD-12
     await page.getByRole("button", { name: "Play" }).click();
@@ -958,16 +963,38 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("the player plays it", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && /#t=[1-3]$/.test(page.url()), page.url());
     await page.getByRole("radio", { name: "1.5×" }).click();
     check("at a speed chosen", (await page.getByRole("radio", { name: "1.5×" }).getAttribute("aria-checked")) === "true");
+    // Spec: AUD-6
+    // At 1.5× the two pieces made last four seconds; the rest is made as it's reached, and it plays on.
+    await page.waitForTimeout(5500);
+    const later = await piecesAt();
+    const playedTo = await page.locator(".player-times span").first().innerText();
+    check("what comes next is made as it's reached, and it plays on", later.length === 4 && (await page.getByRole("button", { name: "Pause" }).count()) === 1 && playedTo >= "0:06", `${later.length} pieces, at ${playedTo}`);
     await page.getByRole("button", { name: "Pause" }).click();
     await page.waitForTimeout(600);
-    const listened = await q(`SELECT position FROM listening WHERE recording_id = '${rec?.id}'`);
-    check("where it was left is kept", listened[0]?.position > 0.5, JSON.stringify(listened));
+    const listened = await q(`SELECT position, piece FROM listening WHERE recording_id = '${rec?.id}'`);
+    check("where it was left is kept, as a moment of a piece", listened[0]?.piece?.startsWith(`${rec?.id}.0.0.`) && listened[0]?.position >= 0, JSON.stringify(listened));
     await page.locator(".recording-chapters button").first().click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(800);
     check("a chapter goes to its start", (await page.locator(".player-times span").first().innerText()) === "0:00");
     await page.goto(`${APP}/audio/${rec?.id}#t=2`);
     await page.waitForTimeout(1800);
     check("an address with a moment opens the recording there", (await page.locator(".player-times span").first().innerText()) === "0:02", await page.locator(".player-times span").first().innerText());
+
+    // A recording made before, at once, as one file, still plays.
+    const oldId = "recordings_01old0000000000000000000000";
+    await q(
+      `INSERT INTO recordings (id, kind, title, items, voice, speech_model, status, progress, script, chapters, duration_seconds, device, created_at, updated_at) VALUES ('${oldId}', 'verbatim', 'Made before', '[]', 'Charon', 'm', 'ready', 1, '{"chapters":[{"title":"Old","paragraphs":["One."]}]}', '[{"title":"Old","start":0}]', 3, 'dev_this', '2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z')`,
+    );
+    await q(`INSERT INTO recording_files (recording_id, media_type, data) SELECT '${oldId}', 'audio/webm', data FROM recording_pieces WHERE recording_id = '${rec?.id}' LIMIT 1`);
+    await page.goto(`${APP}/audio/${oldId}`);
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: "Play" }).click();
+    await page.waitForTimeout(1500);
+    check("a recording made before as one file still plays", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && (await page.locator(".player-times span").first().innerText()) !== "0:00");
+    await page.getByRole("button", { name: "Pause" }).click();
+    check("and isn't made again", (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${oldId}'`))[0].n === 0);
+    await page.goto(`${APP}/audio/${rec?.id}`);
+    await page.waitForTimeout(1200);
 
     // Spec: AUD-1, APP-12
     await page.getByRole("link", { name: "← Audio" }).click();
@@ -979,7 +1006,15 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     // Spec: AUD-4
     await fetch(`${FAKE}/fake-model`, {
       method: "POST",
-      body: JSON.stringify({ answer: { title: "Two papers on machines", parts: [{ title: "The question", paragraphs: ["What can machines compute?"] }, { title: "The answer", paragraphs: ["Less than everything."] }] } }),
+      body: JSON.stringify({
+        answer: {
+          title: "Two papers on machines",
+          parts: [
+            { title: "The question", paragraphs: ["What can machines compute?", "Turing's answer.", "Church's answer."] },
+            { title: "The answer", paragraphs: ["Less than everything.", "Some things can't be decided."] },
+          ],
+        },
+      }),
     });
     await page.getByRole("button", { name: "Summarize papers…" }).click();
     await page.locator(".summarize-items label").nth(0).click();
@@ -988,9 +1023,16 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("button", { name: "Record summary" }).click();
     await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
     await page.waitForTimeout(2000);
-    const sum = (await q("SELECT title, kind, minutes, items, chapters FROM recordings WHERE kind = 'summary'"))[0];
-    check("several papers are summarized aloud, one narrator, at the length chosen", sum?.title === "Two papers on machines" && sum?.minutes === 5 && JSON.parse(sum?.items ?? "[]").length === 2, JSON.stringify(sum));
-    check("the summary's parts are its chapters", (await page.locator(".recording-chapters").innerText()).includes("The question") && JSON.parse(sum?.chapters ?? "[]").length === 2);
+    const sum = (await q("SELECT id, title, kind, minutes, items, script, status FROM recordings WHERE kind = 'summary'"))[0];
+    check("several papers are summarized aloud, one narrator, at the length chosen", sum?.title === "Two papers on machines" && sum?.minutes === 5 && JSON.parse(sum?.items ?? "[]").length === 2, JSON.stringify({ ...sum, script: undefined }));
+    check("the summary's parts are its chapters", (await page.locator(".recording-chapters").innerText()).includes("The question") && JSON.parse(sum?.script ?? "{}").chapters?.length === 2);
+    // Spec: AUD-13
+    const sumMade = (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${sum?.id}'`))[0].n;
+    await page.getByRole("button", { name: "More for this recording" }).click();
+    await page.getByRole("menuitem", { name: "Make it all now" }).click();
+    await page.waitForTimeout(1500);
+    const sumAll = (await q(`SELECT status, (SELECT count(*) FROM recording_pieces WHERE recording_id = r.id) AS n FROM recordings r WHERE id = '${sum?.id}'`))[0];
+    check("the rest of a recording can be made at once", sumMade === 2 && sumAll?.n === 5 && sumAll?.status === "ready", JSON.stringify({ sumMade, ...sumAll }));
     const sumAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(-1));
     check("asked for the words five minutes take", sumAsk.includes("About 750 words"));
     // Spec: AUD-4

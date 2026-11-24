@@ -1,13 +1,14 @@
 // ---------------------------------------------------------------------------
-// The audio library's I/O (AUD-1 to AUD-9): making a recording's script here
-// (a paper's text, by its sections, with the script model turning formulas
-// into speech; or a summary of several papers), then handing it to Rust,
-// which speaks and encodes it (src-tauri/src/audio/). Only the device that
-// started a recording carries on with it: its script here, its audio there.
+// The audio library's I/O (AUD-1 to AUD-13): preparing a recording's script
+// here (a paper's text by its sections, cut into chunks for the script model;
+// or a summary of several papers, written whole), then Rust makes it as it's
+// listened to (src-tauri/src/audio/render.rs): each chunk written when it's
+// reached, each passage spoken into a piece of its own, `audio.lead` ahead of
+// the listener; or all of it at once when asked (AUD-13).
 // ---------------------------------------------------------------------------
 
 import { note } from "./diagnostics";
-import { beginWork } from "./work";
+import { asWork } from "./work";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { z } from "zod";
@@ -19,24 +20,20 @@ import {
   isBibliography,
   MAX_SCRIPT_CHUNK,
   cut,
-  parseSpoken,
   parseSummary,
   passages,
   summaryPrompt,
   SUMMARY_FORMAT,
-  VERBATIM_FORMAT,
-  VERBATIM_PROMPT,
-  type ScriptChapter,
 } from "./audioModel";
 import { execute, getSetting, nowIso, select, setSetting } from "./db";
 import { newId } from "./ids";
 import { bytesOf, getItem, readFile, readHtml, type LibraryItem } from "./library";
 import { notifyTablesChanged } from "./live";
 import { chatJson, errorMessage } from "./openrouter";
-import { AudioEventSchema, parseRecording, type Recording, type Script, type TocEntry } from "./schemas";
+import { AudioEventSchema, ListeningRowSchema, parseRecording, PieceRowSchema, type Recording, type Script, type TocEntry } from "./schemas";
 import { getSyncStatus } from "./sync";
 
-export const AUDIO_TABLES = ["recordings", "recording_files", "listening"];
+export const AUDIO_TABLES = ["recordings", "recording_pieces", "recording_files", "listening"];
 
 // Spec: AUD-5
 export const SPEECH_MODEL_KEY = "speech_model";
@@ -84,7 +81,7 @@ async function create(kind: "verbatim" | "summary", title: string, items: string
     [id, kind, title, JSON.stringify(items), section, minutes, await getVoice(), await getSpeechModel(), await myDevice(), at],
   );
   notifyTablesChanged(AUDIO_TABLES);
-  void writeScript(id);
+  void prepareScript(id);
   return id;
 }
 
@@ -250,18 +247,13 @@ async function wholeText(item: LibraryItem, budget: number): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Writing the script, then speaking it
+// Preparing the script; then Rust makes it as it's listened to
 // ---------------------------------------------------------------------------
 
 /** What a summary can read of its sources in all, in characters. */
 const SUMMARY_BUDGET = 90_000;
 
-const writing = new Set<string>();
-
-async function saveScript(id: string, script: Script, progress: number): Promise<void> {
-  await execute(`UPDATE recordings SET script = $2, progress = $3, updated_at = $4 WHERE id = $1`, [id, JSON.stringify(script), progress, nowIso()]);
-  notifyTablesChanged(["recordings"]);
-}
+const preparing = new Set<string>();
 
 async function fail(id: string, message: string): Promise<void> {
   await execute(`UPDATE recordings SET status = 'failed', error = $2, updated_at = $3 WHERE id = $1`, [id, message, nowIso()]);
@@ -269,92 +261,87 @@ async function fail(id: string, message: string): Promise<void> {
 }
 
 // Spec: AUD-3, AUD-4, AUD-6
-/** Writes a recording's script (carrying on from the chapters already written), then has it spoken. */
-export async function writeScript(id: string): Promise<void> {
-  if (writing.has(id)) return;
-  writing.add(id);
-  // Spec: WORK-1, DIAG-1
-  // Ended after Rust has begun speaking it, so the work never stops in between.
-  const work = beginWork("audio", "Writing a recording's script");
-  const failWith = async (message: string) => {
-    work.failed(message);
-    await fail(id, message);
-  };
+/**
+ * Prepares a recording's script: a verbatim recording's text, by its
+ * sections, cut into chunks the script model writes as they're reached (in
+ * Rust); a summary written whole, here. Then it's made as it's listened to.
+ */
+export async function prepareScript(id: string): Promise<void> {
+  if (preparing.has(id)) return;
+  preparing.add(id);
   try {
     const rec = await getRecording(id);
     if (!rec) return;
-    work.rename(`Writing the script for “${rec.title}”`);
-    const key = await getApiKey();
-    if (!key) return await failWith("There's no OpenRouter key (Settings → AI and models).");
-    const model = await getScriptModel();
-    const items = (await Promise.all(rec.items.map(getItem))).filter((i): i is LibraryItem => i !== null);
-    if (items.length === 0) return await failWith("Its papers are no longer in the library.");
-    await execute(`UPDATE recordings SET status = 'writing', error = NULL, updated_at = $2 WHERE id = $1`, [id, nowIso()]);
-
-    let script: Script;
-    if (rec.kind === "summary") {
-      const budget = Math.floor(SUMMARY_BUDGET / items.length);
-      const works = await Promise.all(
-        // Spec: AUD-4
-        // What they say, not who wrote them: no authors go to the model.
-        items.map(async (i, n) => `Work ${n + 1}: "${i.title}"${i.year ? ` (${i.year})` : ""}\n\n${await wholeText(i, budget)}`),
-      );
-      const raw = await chatJson(key, model, [{ role: "system", content: summaryPrompt(rec.minutes ?? 15) }, { role: "user", content: works.join("\n\n---\n\n") }], SUMMARY_FORMAT, {
-        feature: "audio_script",
-      });
-      const summary = parseSummary(raw);
-      if (summary.chapters.length === 0) return await failWith("The script model wrote nothing to read.");
-      script = { chapters: summary.chapters.map((c): ScriptChapter => ({ title: c.title, paragraphs: passages(c.paragraphs) })) };
-      if (summary.title) await execute(`UPDATE recordings SET title = $2 WHERE id = $1`, [id, summary.title]);
-      await saveScript(id, script, 1);
-    } else {
-      const item = items[0];
-      if (!item) return;
-      const sources = (await htmlChapters(item, rec.section)) ?? (await pdfChapters(item, rec.section));
-      // Carry on: chapters already written stay.
-      script = { chapters: rec.script?.chapters.slice(0, sources.length) ?? [] };
-      for (let i = script.chapters.length; i < sources.length; i++) {
-        const source = sources[i];
-        if (!source) continue;
-        const paragraphs: string[] = [];
-        for (const chunk of cut(`${source.title}\n\n${source.text}`, MAX_SCRIPT_CHUNK)) {
-          const raw = await chatJson(key, model, [{ role: "system", content: VERBATIM_PROMPT }, { role: "user", content: chunk }], VERBATIM_FORMAT, { feature: "audio_script" });
-          paragraphs.push(...parseSpoken(raw));
-        }
-        script.chapters.push({ title: source.title, paragraphs: passages(paragraphs) });
-        await saveScript(id, script, (i + 1) / sources.length);
+    // Spec: WORK-1, DIAG-1
+    await asWork("audio", `Writing the script for “${rec.title}”`, async () => {
+      const items = (await Promise.all(rec.items.map(getItem))).filter((i): i is LibraryItem => i !== null);
+      if (items.length === 0) throw new Error("Its papers are no longer in the library.");
+      await execute(`UPDATE recordings SET status = 'writing', error = NULL, updated_at = $2 WHERE id = $1`, [id, nowIso()]);
+      let script: Script;
+      if (rec.kind === "summary") {
+        const key = await getApiKey();
+        if (!key) throw new Error("There's no OpenRouter key (Settings → AI and models).");
+        const budget = Math.floor(SUMMARY_BUDGET / items.length);
+        const works = await Promise.all(
+          // Spec: AUD-4
+          // What they say, not who wrote them: no authors go to the model.
+          items.map(async (i, n) => `Work ${n + 1}: "${i.title}"${i.year ? ` (${i.year})` : ""}\n\n${await wholeText(i, budget)}`),
+        );
+        const raw = await chatJson(key, await getScriptModel(), [{ role: "system", content: summaryPrompt(rec.minutes ?? 15) }, { role: "user", content: works.join("\n\n---\n\n") }], SUMMARY_FORMAT, {
+          feature: "audio_script",
+        });
+        const summary = parseSummary(raw);
+        if (summary.chapters.length === 0) throw new Error("The script model wrote nothing to read.");
+        script = { chapters: summary.chapters.map((c) => ({ title: c.title, chunks: [{ passages: passages(c.paragraphs) }] })) };
+        if (summary.title) await execute(`UPDATE recordings SET title = $2 WHERE id = $1`, [id, summary.title]);
+      } else {
+        const item = items[0];
+        if (!item) throw new Error("Its paper is no longer in the library.");
+        const sources = (await htmlChapters(item, rec.section)) ?? (await pdfChapters(item, rec.section));
+        script = {
+          chapters: sources.map((s) => ({ title: s.title, chunks: cut(`${s.title}\n\n${s.text}`, MAX_SCRIPT_CHUNK).map((source) => ({ source, passages: null })) })),
+        };
+        if (script.chapters.every((c) => (c.chunks ?? []).length === 0)) throw new Error("There's no text to read in it.");
       }
-    }
-    await execute(`UPDATE recordings SET status = 'speaking', progress = 0, updated_at = $2 WHERE id = $1`, [id, nowIso()]);
-    notifyTablesChanged(["recordings"]);
-    await invoke("audio_render", { id });
-    notifyTablesChanged(AUDIO_TABLES);
+      await execute(`UPDATE recordings SET script = $2, status = 'listening', progress = 0, updated_at = $3 WHERE id = $1`, [id, JSON.stringify(script), nowIso()]);
+      notifyTablesChanged(["recordings"]);
+    });
   } catch (e) {
-    work.failed(e);
     await fail(id, errorMessage(e));
   } finally {
-    work.done();
-    writing.delete(id);
+    preparing.delete(id);
   }
 }
 
 // Spec: AUD-6
-/** Tries a recording that failed again, from where it stopped. */
+/** The listener is at `piece` of a recording (its start when null): Rust makes `audio.lead` ahead of there. */
+export function listenAt(id: string, piece: string | null): void {
+  void invoke("audio_listen", { id, piece })
+    // What's made arrives as `audio-piece`; anything made before the answer is looked for now.
+    .then(() => notifyTablesChanged(["recording_pieces"]))
+    .catch((e: unknown) => note("warning", "audio", `Couldn't ask for a recording to be made ahead: ${errorMessage(e)}`));
+}
+
+// Spec: AUD-13
+/** Makes the rest of a recording at once, on this device. */
+export async function makeAll(id: string): Promise<void> {
+  await invoke("audio_make_all", { id });
+  notifyTablesChanged(["recordings"]);
+}
+
+// Spec: AUD-6
+/** Tries a recording that failed again: its script, if that's what failed; else what was being made. */
 export async function retryRecording(rec: Recording): Promise<void> {
-  const total = rec.script?.chapters.length ?? 0;
-  const scripted = rec.kind === "summary" ? total > 0 : total > 0 && rec.progress >= 1;
-  if (scripted && rec.error !== null && !rec.error.includes("script")) {
-    await execute(`UPDATE recordings SET status = 'speaking', error = NULL, updated_at = $2 WHERE id = $1`, [rec.id, nowIso()]);
-    notifyTablesChanged(["recordings"]);
-    note("info", "audio", `Trying “${rec.title}” again, from what was already spoken`);
-    await invoke("audio_render", { id: rec.id });
-  } else {
-    await writeScript(rec.id);
-  }
+  if (rec.script === null) return prepareScript(rec.id);
+  note("info", "audio", `Trying “${rec.title}” again, from what was already made`);
+  if (rec.status === "failed") return makeAll(rec.id);
+  listenAt(rec.id, null);
 }
 
 // Spec: APP-12
 export async function removeRecording(id: string): Promise<void> {
+  await invoke("audio_forget", { id }).catch(() => undefined);
+  await execute(`DELETE FROM recording_pieces WHERE recording_id = $1`, [id]);
   await execute(`DELETE FROM recording_files WHERE recording_id = $1`, [id]);
   await execute(`DELETE FROM listening WHERE recording_id = $1`, [id]);
   await execute(`DELETE FROM recordings WHERE id = $1`, [id]);
@@ -362,7 +349,7 @@ export async function removeRecording(id: string): Promise<void> {
 }
 
 // Spec: AUD-7
-/** Whether this device has the recording's audio (it may still be on its way). */
+/** Whether this device has a recording made before as one file (it may still be on its way). */
 export async function hasAudio(id: string): Promise<boolean> {
   return (await select(`SELECT 1 AS one FROM recording_files WHERE recording_id = $1`, [id])).length > 0;
 }
@@ -371,34 +358,48 @@ export async function recordingAudio(id: string): Promise<Uint8Array> {
   return bytesOf(z.string().parse(await invoke("audio_read", { id })));
 }
 
-// Spec: AUD-9
-export async function getListening(id: string): Promise<number | null> {
-  const [row] = await select(`SELECT position FROM listening WHERE recording_id = $1`, [id]);
-  const p = row?.["position"];
-  return typeof p === "number" ? p : null;
+// Spec: AUD-6, AUD-7
+/** The pieces of a recording this device has: id → seconds. */
+export async function recordingPieces(id: string): Promise<Map<string, number>> {
+  const rows = (await select(`SELECT id, seconds FROM recording_pieces WHERE recording_id = $1`, [id])).map((r) => PieceRowSchema.parse(r));
+  return new Map(rows.map((r) => [r.id, r.seconds]));
 }
 
-export async function saveListening(id: string, position: number): Promise<void> {
+/** A piece's audio. */
+export async function pieceAudio(pieceId: string): Promise<Uint8Array> {
+  return bytesOf(z.string().parse(await invoke("audio_piece", { id: pieceId })));
+}
+
+// Spec: AUD-9
+/** Where a recording was left: seconds into its piece, or into the recording when it's one file. */
+export async function getListening(id: string): Promise<{ position: number; piece: string | null } | null> {
+  const [row] = await select(`SELECT position, piece FROM listening WHERE recording_id = $1`, [id]);
+  const r = ListeningRowSchema.safeParse(row);
+  return r.success ? r.data : null;
+}
+
+export async function saveListening(id: string, position: number, piece: string | null): Promise<void> {
   await execute(
-    `INSERT INTO listening (recording_id, position, updated_at) VALUES ($1, $2, $3)
-     ON CONFLICT (recording_id) DO UPDATE SET position = excluded.position, updated_at = excluded.updated_at`,
-    [id, position, nowIso()],
+    `INSERT INTO listening (recording_id, position, piece, updated_at) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (recording_id) DO UPDATE SET position = excluded.position, piece = excluded.piece, updated_at = excluded.updated_at`,
+    [id, position, piece, nowIso()],
   );
 }
 
-/** On start: this device's recordings that were being written carry on (Rust carries on with those being spoken). */
+/** On start: this device's recordings whose script was being prepared carry on (Rust carries on with those being made at once). */
 export async function resumeRecordings(): Promise<void> {
   const me = await myDevice();
-  for (const r of await listRecordings()) if (r.status === "writing" && r.device === me) void writeScript(r.id);
+  for (const r of await listRecordings()) if (r.status === "writing" && r.device === me) void prepareScript(r.id);
 }
 
-/** Progress from Rust refreshes what shows recordings. */
+/** What Rust makes refreshes what shows recordings. */
 export function followAudio(): void {
   const refresh = (payload: unknown) => {
-    if (AudioEventSchema.safeParse(payload).success) notifyTablesChanged(["recordings", "recording_files"]);
+    if (AudioEventSchema.safeParse(payload).success) notifyTablesChanged(["recordings", "recording_pieces", "recording_files"]);
   };
   void listen("audio-progress", (e) => refresh(e.payload)).catch(() => undefined);
   void listen("audio-changed", (e) => refresh(e.payload)).catch(() => undefined);
+  void listen("audio-piece", (e) => refresh(e.payload)).catch(() => undefined);
 }
 
 /** An item's sections a recording can cover, as the record dialog offers them. */

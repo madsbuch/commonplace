@@ -3,7 +3,7 @@
   "title": "Audio library",
   "summary": "Recordings of papers and books, verbatim or summarized, to listen to anywhere.",
   "order": 3,
-  "description": "Papers read aloud: verbatim, a whole paper or any of its sections, or a summary of several. Recordings are made once, on any device, and sync to all of them for listening offline, on a phone with the screen off.",
+  "description": "Papers read aloud: verbatim, a whole paper or any of its sections, or a summary of several. Recordings are made as they're listened to, on whichever device plays them, and what's made syncs to all of them for listening offline, on a phone with the screen off.",
   "stories": [
     {
       "id": "US-22",
@@ -14,6 +14,7 @@
         "#AUD-1",
         "#AUD-2",
         "#AUD-3",
+        "#AUD-6",
         "#AUD-7",
         "#AUD-10"
       ]
@@ -72,11 +73,29 @@
     },
     {
       "id": "AUD-6",
-      "text": "A recording is made on any device, in the background while the app runs, and shows how far it has come; if the app stops, it carries on from where it was without speaking again what was already spoken."
+      "text": "A recording is made as it's listened to: on whichever device plays it, `audio.lead` ahead of where the author is, its text prepared and spoken a passage at a time. Paused, it stops once that much is made; skipping to a part not yet made waits while that part is made. What's made is kept, so nothing is made twice, and making carries on where it was when the app starts again.",
+      "history": [
+        {
+          "version": 1,
+          "text": "A recording is made on any device, in the background while the app runs, and shows how far it has come; if the app stops, it carries on from where it was without speaking again what was already spoken.",
+          "reason": "Making a whole recording before any of it could play kept the author waiting minutes, and paid for parts never listened to.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-7",
-      "text": "Recordings are kept as Opus in WebM, mono at `audio.bitrate`, and sync to every device for listening offline."
+      "text": "Recordings are kept as Opus in WebM, mono at `audio.bitrate`, a passage at a time as they're made, and what's made syncs to every device for listening offline.",
+      "history": [
+        {
+          "version": 1,
+          "text": "Recordings are kept as Opus in WebM, mono at `audio.bitrate`, and sync to every device for listening offline.",
+          "reason": "Making a whole recording before any of it could play kept the author waiting minutes, and paid for parts never listened to.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-8",
@@ -102,6 +121,13 @@
       "text": "The player's address holds the recording and the moment playing, `#t=<seconds>`.",
       "related": [
         "#APP-10"
+      ]
+    },
+    {
+      "id": "AUD-13",
+      "text": "The author can have the rest of a recording made at once, for listening offline: on the device that asked, in the background while the app runs, showing how far it has come, and carrying on after the app stops.",
+      "related": [
+        "#AUD-6"
       ]
     }
   ],
@@ -153,6 +179,12 @@
         "2×"
       ],
       "description": "The speeds the player plays at."
+    },
+    {
+      "id": "audio.lead",
+      "type": "duration",
+      "value": "3min",
+      "description": "How far ahead of the listener a recording is made."
     }
   ]
 }

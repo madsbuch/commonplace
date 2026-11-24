@@ -1,7 +1,9 @@
 // The commands are Kotlin's (android/); Tauri forwards each call there.
-// Listing them here generates their permissions.
+// Listing them here generates their permissions. The queue is set and
+// extended by the app's Rust, not its frontend.
 const COMMANDS: &[&str] = &[
-    "set_recording",
+    "set_queue",
+    "extend_queue",
     "play",
     "pause",
     "toggle",

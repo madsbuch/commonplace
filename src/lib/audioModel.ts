@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { z } from "zod";
+import type { RecordingChapter, Script } from "./schemas";
 
 // Spec: AUD-5
 /** `audio.speech-model` and `audio.voice` in the spec. */
@@ -110,31 +111,6 @@ export function isBibliography(title: string): boolean {
   return /^(?:[\dA-Z.]+\s+)?(references|bibliography|works cited|literature cited|citations)\s*$/i.test(title.trim());
 }
 
-// Spec: AUD-3
-export const VERBATIM_PROMPT = `You prepare a passage of a scientific paper or book for reading aloud to a listener, word for word.
-
-- Keep every word of the prose exactly as written, in its order. Don't summarize, explain, shorten or add anything.
-- Say each formula the way a mathematician reads it aloud: "x squared plus y", "the sum over i from 1 to n of a sub i", "f of x", "for all x in A". Maths may be given as LaTeX between $ signs, or garbled by extraction from a PDF; read what it means. Keep a formula's number only if the text refers to it.
-- Drop what isn't read aloud: the authors' names, their institutions, emails and footnotes about them; page numbers, running heads, footnote marks, numeric citation marks like [12], URLs, and hyphens that only split a word across lines.
-- Read figure and table captions. Leave out the body of a table and an algorithm's code, saying in a few words what it shows.
-- Split the passage into paragraphs as written.`;
-
-export const VERBATIM_FORMAT = {
-  name: "spoken_passage",
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    required: ["paragraphs"],
-    properties: { paragraphs: { type: "array", items: { type: "string" } } },
-  },
-} as const;
-
-/** The script model's answer for a verbatim passage: its paragraphs, to be read. */
-export function parseSpoken(raw: unknown): string[] {
-  const r = z.object({ paragraphs: z.array(z.coerce.string()) }).safeParse(raw);
-  return r.success ? r.data.paragraphs.map((p) => p.trim()).filter((p) => p !== "") : [];
-}
-
 // Spec: AUD-4
 export function summaryPrompt(minutes: number): string {
   const words = minutes * WORDS_PER_MINUTE;
@@ -209,4 +185,106 @@ export function chapterAt(chapters: readonly { start: number }[], t: number): nu
 export function timeOfFragment(hash: string): number | null {
   const m = /^#?t=(\d+(?:\.\d+)?)$/.exec(hash);
   return m ? Number(m[1]) : null;
+}
+
+// ---------------------------------------------------------------------------
+// A recording made as it's listened to: its timeline
+// ---------------------------------------------------------------------------
+
+// Spec: AUD-6
+/** How fast a passage is read before any is made, in characters a second (as Rust's `CHARS_PER_SECOND`). */
+export const CHARS_PER_SECOND = 15;
+
+/** A place in a recording: a passage (made or not), or a chunk of its script not yet written. */
+export interface Slot {
+  /** The piece's id, `<recording>.<chapter>.<chunk>.<passage>`; for a chunk not yet written, its first passage's. */
+  id: string;
+  chapter: number;
+  chunk: number;
+  /** Null for a chunk not yet written. */
+  passage: number | null;
+  /** When it starts, in seconds: what's made counts as it is, the rest as it will likely be. */
+  start: number;
+  seconds: number;
+  made: boolean;
+}
+
+export interface Timeline {
+  slots: Slot[];
+  chapters: RecordingChapter[];
+  /** The whole length, as likely as it can be said. */
+  duration: number;
+  /** How much of it is made. */
+  madeSeconds: number;
+}
+
+/** A script's chunks, a chapter's; a chapter of a recording made before is one, written. */
+export function chunksOf(chapter: Script["chapters"][number]): { source?: string; passages: string[] | null }[] {
+  return chapter.chunks ?? (chapter.paragraphs ? [{ passages: chapter.paragraphs }] : []);
+}
+
+export function pieceId(recordingId: string, chapter: number, chunk: number, passage: number): string {
+  return `${recordingId}.${chapter}.${chunk}.${passage}`;
+}
+
+// Spec: AUD-6, AUD-8
+/**
+ * Where everything in a recording is, given which pieces are made (`made`:
+ * id → seconds). A passage not yet made, or a chunk not yet written, takes
+ * as long as its text at the pace of what's made (or `CHARS_PER_SECOND`).
+ */
+export function timeline(recordingId: string, script: Script, made: ReadonlyMap<string, number>): Timeline {
+  const places: { id: string; chapter: number; chunk: number; passage: number | null; chars: number }[] = [];
+  script.chapters.forEach((ch, c) =>
+    chunksOf(ch).forEach((k, i) => {
+      if (k.passages === null) {
+        places.push({ id: pieceId(recordingId, c, i, 0), chapter: c, chunk: i, passage: null, chars: k.source?.length ?? 0 });
+        return;
+      }
+      k.passages.forEach((text, p) => {
+        if (text.trim() !== "") places.push({ id: pieceId(recordingId, c, i, p), chapter: c, chunk: i, passage: p, chars: text.length });
+      });
+    }),
+  );
+  let chars = 0;
+  let secs = 0;
+  for (const p of places) {
+    const s = p.passage === null ? undefined : made.get(p.id);
+    if (s !== undefined) {
+      chars += p.chars;
+      secs += s;
+    }
+  }
+  const pace = chars > 0 && secs > 1 ? chars / secs : CHARS_PER_SECOND;
+  const slots: Slot[] = [];
+  let at = 0;
+  let madeSeconds = 0;
+  for (const p of places) {
+    const s = p.passage === null ? undefined : made.get(p.id);
+    const seconds = s ?? p.chars / pace;
+    slots.push({ id: p.id, chapter: p.chapter, chunk: p.chunk, passage: p.passage, start: at, seconds, made: s !== undefined });
+    if (s !== undefined) madeSeconds += s;
+    at += seconds;
+  }
+  const chapters = script.chapters.flatMap((ch, c) => {
+    const first = slots.find((s) => s.chapter === c);
+    return first ? [{ title: ch.title, start: first.start }] : [];
+  });
+  return { slots, chapters, duration: at, madeSeconds };
+}
+
+/** The slot playing at `t` seconds, and how far into it: the last that starts at or before it. */
+export function slotAt(tl: Timeline, t: number): { index: number; offset: number } | null {
+  if (tl.slots.length === 0) return null;
+  let index = 0;
+  tl.slots.forEach((s, i) => {
+    if (s.start <= t + 0.001) index = i;
+  });
+  const slot = tl.slots[index];
+  return slot ? { index, offset: Math.max(0, Math.min(t - slot.start, slot.seconds)) } : null;
+}
+
+/** When a piece starts in the recording, if it's in it. */
+export function startOf(tl: Timeline, id: string): number | null {
+  return tl.slots.find((s) => s.id === id)?.start ?? null;
 }

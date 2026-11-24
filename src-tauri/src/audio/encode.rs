@@ -56,7 +56,9 @@ impl OpusStream {
         self.samples as f64 / f64::from(SAMPLE_RATE)
     }
 
-    /// A chapter starts here.
+    /// A chapter starts here. (Recordings are made a passage at a time now,
+    /// so their chapters are the app's; the browser checks' fixture keeps them.)
+    #[cfg(test)]
     pub fn chapter(&mut self, title: &str) {
         self.chapters.push(Chapter { title: title.to_string(), start_ms: self.samples * 1000 / u64::from(SAMPLE_RATE) });
     }

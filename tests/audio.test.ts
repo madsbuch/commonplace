@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { chapterAt, clock, cut, isBibliography, MAX_PASSAGE, parseSpoken, parseSummary, passages, summaryPrompt, timeOfFragment, VERBATIM_PROMPT, VOICES } from "../src/lib/audioModel";
+import { readFileSync } from "node:fs";
+import { chapterAt, CHARS_PER_SECOND, clock, cut, isBibliography, MAX_PASSAGE, parseSummary, passages, pieceId, slotAt, startOf, summaryPrompt, timeline, timeOfFragment, VOICES } from "../src/lib/audioModel";
+
+/** What the script model is told for a verbatim recording: Rust's prompt (src-tauri/src/audio/verbatim.md). */
+const VERBATIM_PROMPT = readFileSync(new URL("../src-tauri/src/audio/verbatim.md", import.meta.url), "utf8");
 
 describe("passages for the speech model", () => {
   test("paragraphs stay whole when they fit, and short ones go together", () => {
@@ -27,10 +31,6 @@ describe("verbatim recordings", () => {
     expect(isBibliography("A. References")).toBe(true);
     expect(isBibliography("References to prior work in logic")).toBe(false);
     expect(isBibliography("2.1 Attention")).toBe(false);
-  });
-  test("read the model's paragraphs, dropping empty ones", () => {
-    expect(parseSpoken({ paragraphs: [" x squared. ", "", "Next."] })).toEqual(["x squared.", "Next."]);
-    expect(parseSpoken("nonsense")).toEqual([]);
   });
 });
 
@@ -74,5 +74,49 @@ describe("the player", () => {
   test("thirty voices, each with what it sounds like", () => {
     expect(VOICES.length).toBe(30);
     expect(new Set(VOICES.map((v) => v.name)).size).toBe(30);
+  });
+});
+
+// Spec: AUD-6, AUD-8
+describe("a recording made as it's listened to", () => {
+  const script = {
+    chapters: [
+      { title: "One", chunks: [{ source: "a", passages: ["First passage.", "", "Second."] }, { source: "x".repeat(300), passages: null }] },
+      { title: "Two", chunks: [{ source: "c", passages: ["Third."] }] },
+    ],
+  };
+
+  test("is its passages in order, and its chunks not yet written, each where it starts", () => {
+    const tl = timeline("rec", script, new Map([[pieceId("rec", 0, 0, 0), 4]]));
+    expect(tl.slots.map((s) => s.id)).toEqual(["rec.0.0.0", "rec.0.0.2", "rec.0.1.0", "rec.1.0.0"]);
+    expect(tl.slots.map((s) => s.made)).toEqual([true, false, false, false]);
+    expect(tl.slots[2]?.passage).toBeNull();
+    // Made: as it is; the rest at the pace of what's made ("First passage." is 14 characters in 4 s).
+    expect(tl.slots[1]?.start).toBe(4);
+    expect(tl.slots[1]?.seconds).toBeCloseTo(7 / (14 / 4));
+    expect(tl.madeSeconds).toBe(4);
+    expect(tl.chapters.map((c) => c.title)).toEqual(["One", "Two"]);
+    expect(tl.chapters[1]?.start).toBeCloseTo(tl.slots[3]?.start ?? -1);
+    expect(tl.duration).toBeCloseTo((tl.slots[3]?.start ?? 0) + (tl.slots[3]?.seconds ?? 0));
+  });
+
+  test("before any is made, its text gives its length", () => {
+    const tl = timeline("rec", script, new Map());
+    expect(tl.slots[0]?.seconds).toBeCloseTo(14 / CHARS_PER_SECOND);
+    expect(tl.madeSeconds).toBe(0);
+  });
+
+  test("a moment is a slot and how far into it; a piece, where it starts", () => {
+    const tl = timeline("rec", script, new Map([["rec.0.0.0", 4], ["rec.0.0.2", 2]]));
+    expect(slotAt(tl, 0)).toEqual({ index: 0, offset: 0 });
+    expect(slotAt(tl, 5)).toEqual({ index: 1, offset: 1 });
+    expect(slotAt(tl, 6.5)?.index).toBe(2);
+    expect(startOf(tl, "rec.0.0.2")).toBe(4);
+    expect(startOf(tl, "rec.9.0.0")).toBeNull();
+  });
+
+  test("a recording made before reads as one written chunk a chapter", () => {
+    const tl = timeline("old", { chapters: [{ title: "A", paragraphs: ["One.", "Two."] }] }, new Map());
+    expect(tl.slots.map((s) => s.id)).toEqual(["old.0.0.0", "old.0.0.1"]);
   });
 });

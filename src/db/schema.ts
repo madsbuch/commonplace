@@ -402,11 +402,15 @@ export const leanChecks = sqliteTable("lean_checks", {
 // The audio library (src/lib/audio.ts, src-tauri/src/audio/)
 // ---------------------------------------------------------------------------
 
-// Spec: AUD-1, AUD-2, AUD-4, AUD-6
+// Spec: AUD-1, AUD-2, AUD-4, AUD-6, AUD-13
 /**
  * A recording of library items: verbatim (an item, or one of its sections)
- * or a summary of several. Made on one device (`device`), which alone carries
- * on with it: "writing" its script, then "speaking" it, then "ready".
+ * or a summary of several. "writing" while the app prepares its script's
+ * sources (a summary's whole script); then "listening": made as it's
+ * listened to, a passage at a time (`recording_pieces`), by whichever device
+ * plays it; "making" while the device that asked (`device`) makes the rest
+ * at once; "ready" once all of it is made. Recordings made before were
+ * "speaking" (now made at once) and kept as one file (`recording_files`).
  */
 export const recordings = sqliteTable(
   "recordings",
@@ -423,17 +427,22 @@ export const recordings = sqliteTable(
     minutes: integer("minutes"),
     voice: text("voice").notNull(),
     speechModel: text("speech_model").notNull(),
-    /** "writing" | "speaking" | "ready" | "failed". */
+    /** "writing" | "listening" | "making" | "ready" | "failed". */
     status: text("status").notNull(),
     /** How far the stage is, 0 to 1. */
     progress: real("progress").notNull().default(0),
     error: text("error"),
-    /** JSON: what's read, `{ chapters: [{ title, paragraphs }] }`, filled as it's written. */
+    /**
+     * JSON: what's read, `{ chapters: [{ title, chunks: [{ source?, passages }] }] }`:
+     * a verbatim recording's chunks of source text, each's `passages` (what's
+     * spoken, a piece each) null until written; a summary's written whole.
+     * Recordings made before hold `{ chapters: [{ title, paragraphs }] }`.
+     */
     script: text("script"),
-    /** JSON: `[{ title, start }]`, seconds, once spoken. */
+    /** JSON: `[{ title, start }]`, seconds: a recording kept as one file's (made before). */
     chapters: text("chapters"),
     durationSeconds: real("duration_seconds"),
-    /** The device making it (its sync device id). */
+    /** The device that started it, or asked for the rest at once (its sync device id). */
     device: text("device").notNull(),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
@@ -441,8 +450,30 @@ export const recordings = sqliteTable(
   (t) => [index("recordings_created").on(t.createdAt)],
 );
 
+// Spec: AUD-6, AUD-7
+/**
+ * A recording's audio, a passage at a time as it's made: Opus in WebM, the
+ * pause after it included. `id` is `<recording id>.<chapter>.<chunk>.<passage>`,
+ * so two devices making the same passage make the same row.
+ */
+export const recordingPieces = sqliteTable(
+  "recording_pieces",
+  {
+    id: text("id").primaryKey(),
+    recordingId: text("recording_id").notNull(),
+    chapter: integer("chapter").notNull(),
+    chunk: integer("chunk").notNull(),
+    passage: integer("passage").notNull(),
+    /** Its length, the pause after it included. */
+    seconds: real("seconds").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("recording_pieces_recording").on(t.recordingId)],
+);
+
 // Spec: AUD-7
-/** A recording's audio: Opus in WebM. Kept apart from it, as PDFs are from items. */
+/** A recording made before as one file: Opus in WebM. Kept apart from it, as PDFs are from items. */
 export const recordingFiles = sqliteTable("recording_files", {
   recordingId: text("recording_id").primaryKey(),
   mediaType: text("media_type").notNull(),
@@ -453,16 +484,18 @@ export const recordingFiles = sqliteTable("recording_files", {
 /** Where the author stopped listening to a recording, on whichever device. */
 export const listening = sqliteTable("listening", {
   recordingId: text("recording_id").primaryKey(),
-  /** Seconds. */
+  /** Seconds: into `piece` when it's set, else into the recording. */
   position: real("position").notNull(),
+  /** The piece it's in (`recording_pieces.id`); null for a recording kept as one file. */
+  piece: text("piece"),
   updatedAt: text("updated_at").notNull(),
 });
 
 // Spec: AUD-6
 /**
- * Passages already spoken, on this device only, until their recording is
- * done: a recording that stops carries on without paying for them again.
- * Keyed by SHA-256 of the model, voice and text.
+ * Passages spoken by recordings made before (all at once), on this device
+ * only: a recording that was being made then carries on without paying for
+ * them again. Keyed by SHA-256 of the model, voice and text.
  */
 export const speechClips = sqliteTable("speech_clips", {
   key: text("key").primaryKey(),

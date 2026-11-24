@@ -23,20 +23,26 @@ import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
 
 @InvokeArg
-class ChapterArg {
-    var title: String = ""
-    var start: Double = 0.0
+class QueueItemArg {
+    var id: String = ""
+    var path: String = ""
 }
 
+/** What to play (AUD-6, AUD-10): a recording's pieces, a file each, or a recording made before as one file with its chapters' starts. */
 @InvokeArg
-class RecordingArgs {
-    lateinit var id: String
-    lateinit var path: String
-    var title: String = ""
-    var chapters: List<ChapterArg> = emptyList()
+class QueueArgs {
+    var items: List<QueueItemArg> = emptyList()
+    var index: Int = 0
     var position: Double = 0.0
     var play: Boolean = false
     var speed: Double = 1.0
+    var title: String = ""
+    var starts: List<Double> = emptyList()
+}
+
+@InvokeArg
+class ItemsArgs {
+    var items: List<QueueItemArg> = emptyList()
 }
 
 @InvokeArg
@@ -59,6 +65,8 @@ class AudioPlayerPlugin(private val activity: Activity) : Plugin(activity) {
     private var future: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private val waiting = mutableListOf<(MediaController) -> Unit>()
+    /** The recording's title, for pieces added later. */
+    private var title = ""
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -136,24 +144,52 @@ class AudioPlayerPlugin(private val activity: Activity) : Plugin(activity) {
         trigger("state", stateObject(c))
     }
 
-    /** A recording, from its file, with its chapters, at a position. */
+    private fun mediaItem(id: String, path: String): MediaItem {
+        val uri = Uri.fromFile(File(path))
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setUri(uri)
+            // Survives the hand-over to the service; see onAddMediaItems.
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist("Commonplace").build())
+            .build()
+    }
+
+    /** A queue: a recording's pieces from one of them, or one file with its chapters, at a position. Set by the app's Rust. */
     @Command
-    fun setRecording(invoke: Invoke) {
-        val args = invoke.parseArgs(RecordingArgs::class.java)
+    fun setQueue(invoke: Invoke) {
+        val args = invoke.parseArgs(QueueArgs::class.java)
         withController(invoke) { c ->
-            PlaybackService.instance?.player?.starts = args.chapters.map { (it.start * 1000).toLong() }
-            val uri = Uri.fromFile(File(args.path))
-            val item = MediaItem.Builder()
-                .setMediaId(args.id)
-                .setUri(uri)
-                // Survives the hand-over to the service; see onAddMediaItems.
-                .setRequestMetadata(MediaItem.RequestMetadata.Builder().setMediaUri(uri).build())
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(args.title).setArtist("Commonplace").build())
-                .build()
-            c.setMediaItem(item, (args.position * 1000).toLong())
+            title = args.title
+            PlaybackService.instance?.player?.starts = args.starts.map { (it * 1000).toLong() }
+            val items = args.items.map { mediaItem(it.id, it.path) }
+            c.setMediaItems(items, args.index.coerceIn(0, maxOf(0, items.size - 1)), (args.position * 1000).toLong())
             c.setPlaybackSpeed(args.speed.toFloat())
             c.prepare()
             if (args.play) c.play()
+            null
+        }
+    }
+
+    /**
+     * Pieces made since (AUD-6), added after the queue's last. If it had
+     * played to its end waiting for them, it goes on with the first.
+     */
+    @Command
+    fun extendQueue(invoke: Invoke) {
+        val args = invoke.parseArgs(ItemsArgs::class.java)
+        withController(invoke) { c ->
+            val count = c.mediaItemCount
+            val queued = (0 until count).map { c.getMediaItemAt(it).mediaId }.toSet()
+            val fresh = args.items.filter { it.id !in queued }.map { mediaItem(it.id, it.path) }
+            if (fresh.isNotEmpty()) {
+                val waited = c.playbackState == Player.STATE_ENDED && c.playWhenReady
+                c.addMediaItems(fresh)
+                if (waited) {
+                    c.seekTo(count, 0)
+                    c.play()
+                }
+            }
             null
         }
     }

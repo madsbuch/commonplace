@@ -1,9 +1,8 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Playing recordings: loading one, the controls, and its state."
+description = "Playing recordings: the controls, and its state (the queue is set by the app's Rust)."
 permissions = [
-  "allow-set-recording",
   "allow-play",
   "allow-pause",
   "allow-toggle",

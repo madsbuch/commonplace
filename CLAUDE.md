@@ -99,7 +99,7 @@ The book syncs peer to peer over the local network, as Tally does
 
 - Every table syncs between the book's devices unless it's listed in
   `LOCAL_TABLES` (`scripts/sync-triggers.ts`: `device_settings`, sync's
-  own bookkeeping, `speech_clips` and `diagnostics`). Sync rides on triggers: a migration that adds a table
+  own bookkeeping, `speech_clips` (passages spoken by recordings made before) and `diagnostics`). Sync rides on triggers: a migration that adds a table
   must add its triggers (`bun scripts/sync-triggers.ts <table>` prints them,
   appended after a `-- @generated` line); one that rebuilds a table must
   re-create them (dropping a table drops its triggers); and one that adds a
@@ -461,45 +461,73 @@ read and show verdicts.
 
 Recordings of library items (`recordings`, synced): verbatim (a whole item,
 or a section and those within it, `section` = `html:<anchor>` or `toc:<i>`)
-or a summary of several, one narrator, 5/15/30 minutes. Only the device
-that starts one carries on with it (`device`).
+or a summary of several, one narrator, 5/15/30 minutes. A recording is made
+as it's listened to (AUD-6), `audio.lead` (3 min) ahead of the listener, on
+whichever device plays it, or all of it at once when asked (AUD-13, on the
+device that asked: `device`).
 
-- The app writes the script (`src/lib/audio.ts`; pure parts in
-  `audioModel.ts`): an item's sections from its HTML version (each without
-  the sections in it, the front matter first, the bibliography left out), or
-  from its PDF by its contents' pages and titles; each chapter through the
-  script model (`audio_script` in the ledger) to keep the prose and say the
-  maths; or one call for a summary. The script is saved chapter by chapter,
-  so writing carries on after a restart (`resumeRecordings`).
-- Rust speaks and encodes it (`src-tauri/src/audio/`): OpenRouter's
-  `/audio/speech` (raw PCM asked for), three passages at once, each kept in
-  `speech_clips` (local, in `LOCAL_TABLES`) until the recording is done;
-  `speech` rows in the ledger count characters (OpenRouter doesn't price
-  speech). Then one Opus stream (`opus-pure`, pure Rust: it builds for
-  Android) at 24 kbit/s mono, 24 kHz, muxed by our own WebM writer
-  (`webm.rs`: SeekHead, Info, Tracks, Chapters, Clusters, Cues), into
-  `recording_files` (synced). Ogg Opus would be simpler, but Safari plays
-  WebM Opus reliably and Ogg not. Rust resumes "speaking" recordings on
-  start (`sync_start`); it emits `audio-progress` and `audio-changed`.
+- The app prepares the script (`src/lib/audio.ts`, `prepareScript`; pure
+  parts in `audioModel.ts`): an item's sections from its HTML version (each
+  without the sections in it, the front matter first, the bibliography left
+  out), or from its PDF by its contents' pages and titles, cut into chunks
+  (`MAX_SCRIPT_CHUNK`) with `passages: null`; a summary is written whole here
+  (one call, `audio_script` in the ledger). The script's shape is
+  `{ chapters: [{ title, chunks: [{ source?, passages }] }] }`; recordings
+  made before hold `{ title, paragraphs }` chapters, read as one written
+  chunk each. Status: `writing` → `listening` (or `making`) → `ready`.
+- Rust makes it (`src-tauri/src/audio/`): `plan.rs` is pure (slots in order,
+  a piece per passage, `<recording>.<chapter>.<chunk>.<passage>`, and what
+  to make next within the lead, or all), `script.rs` writes a chunk through
+  the script model (the prompt is `verbatim.md`, the one copy; structured
+  JSON, `ai.most-answer.audio-script`; logged as `audio_script` with its
+  cost), and `render.rs`'s `AudioService` runs a worker per recording:
+  `listen(id, piece)` (from the web view's player every 5 s while playing, on
+  a seek, or Android's player's state, asked every 3 s) aims it, it writes
+  the chunk reached, then speaks up to three passages at once through
+  OpenRouter's `/audio/speech` (raw PCM asked for; `speech` rows in the
+  ledger count characters), each into a piece of its own (`OpusStream`,
+  `opus-pure`, pure Rust: it builds for Android; 24 kbit/s mono, 24 kHz,
+  our own WebM writer, `webm.rs`), its pauses included, in
+  `recording_pieces` (synced: any device plays what's made, and two making
+  the same passage make the same row). With nothing left in the lead it
+  waits for the listener to move on, and stops after 10 min. `make_all`
+  makes the rest in order; `resume` (in `sync_start`) carries on `making`
+  ones, and old `speaking` ones (their `speech_clips`, local, are used and
+  dropped). It emits `audio-piece`, `audio-progress` and `audio-changed`.
+  Ogg Opus would be simpler, but Safari plays WebM Opus reliably and Ogg not.
+- Recordings made before, at once, are one file (`recording_files`): only
+  they have `duration_seconds` and `chapters`, and they play as one.
 - `tests/browser/fixtures/speech.webm` is our encoder's output
-  (`WRITE_SPEECH_FIXTURE=… cargo test speech_in_opus`); the fake Tauri layer
-  "renders" with it, so the browser checks play real WebM Opus.
-- One player for the app (`src/lib/player.ts`): an audio element on a Blob
-  of the recording (`audio_read`, base64), Media Session for media keys,
-  chapters, speed (per device), where it was left saved every 5 s and on
-  pause (`listening`, synced), and `#t=<seconds>` in the recording's address.
+  (`WRITE_SPEECH_FIXTURE=… cargo test speech_in_opus`). The fake Tauri layer
+  makes pieces with it as Rust would (`audio_listen`: the chunk reached is
+  "written", its request recorded, and the piece listened at and the one
+  after are made; `audio_make_all`: all), so the browser checks play real
+  WebM Opus, wait for what isn't made, and go on.
+- One player for the app (`src/lib/player.ts`): a recording's timeline
+  (`timeline` in `audioModel.ts`: pieces made count as they are, the rest at
+  the pace of what's made), chapters, speed (per device), where it was left
+  saved every 5 s and on pause (`listening`: seconds into its `piece`; synced),
+  and `#t=<seconds>` in the recording's address. At a part not yet made it
+  waits (`waiting`, "Making this part…") and goes on when the piece arrives.
+  On a computer, two audio elements on Blobs (`audio_piece`, base64), the
+  next piece loaded while one plays; Media Session for media keys.
   `MiniPlayer` shows what's playing on other screens.
 - On Android the player is native (AUD-10): `src-tauri/plugins/audio-player`,
   ported from learn-polish's song player. Media3 ExoPlayer in a
-  `MediaSessionService` (foreground, plays with the screen off; notification
-  with a Close button; headphones unplugged pause), its player wrapped in a
-  `ChapterPlayer` (a `ForwardingPlayer`) so the lock screen's next and
-  previous skip chapters of the one file. Media3 plays files, so
-  `audio_file` writes the recording to `<app data>/recordings/<id>.webm`
-  (via `.part`). Its commands (`set_recording`, `play`, `pause`, `seek_to`,
-  `set_speed`, `stop`, `get_state`) and its `state` events are used by
-  `player.ts`; `audio-player:default` is in the mobile capability. Only the
-  APK build (CI) compiles its Kotlin.
+  `MediaSessionService` (foreground, plays with the screen off and keeps
+  Wi-Fi awake, `WAKE_MODE_NETWORK`, since pieces are made while it plays;
+  notification with a Close button; headphones unplugged pause). Its queue is
+  set by Rust (`audio_native_play` → `play_native`: the made pieces around
+  where it starts, a file each under `<app data>/recordings/<id>/`, via
+  `.part`; a recording made before, its one file), which adds pieces as
+  they're made (`extendQueue`: one that played to its end waiting goes on)
+  and asks it where it is (`getState`), so making keeps ahead, and where it
+  was left is kept, with the web view stopped. `ChapterPlayer` (a
+  `ForwardingPlayer`) makes the lock screen's next and previous skip chapters
+  (a piece's chapter is in its id; a file's at `starts`). The web view's
+  player uses its `play`, `pause`, `seek_to`, `set_speed`, `stop` and its
+  `state` events; `audio-player:default` is in the mobile capability. Only
+  the APK build (CI) compiles its Kotlin.
 
 ## Diagnostics and work in the background
 
@@ -536,9 +564,10 @@ that starts one carries on with it (`device`).
   Android foreground service (type dataSync, a partial wake lock, a
   notification listing what runs; `WorkService.kt`), and on a computer holds
   `caffeinate -i` / `systemd-inhibit` so it doesn't sleep. Android won't
-  start that service with the app in the background, so a hand-over never
-  lets the list go empty: Rust's `audio_render` begins "Speaking …" before
-  it returns, and the script writer ends its own work after.
+  start that service with the app in the background, so work begins where
+  the app is in front: a recording made at once begins when asked; one made
+  ahead of the listener as it plays, the player's own foreground service
+  keeping the app going meanwhile.
 - Requests that fail for the network (no connection, dropped, 408/425/429/5xx)
   are tried again for up to three minutes (`work.network-patience`:
   `NETWORK_WAITS_MS` in `openrouter.ts`, `NETWORK_WAITS` in

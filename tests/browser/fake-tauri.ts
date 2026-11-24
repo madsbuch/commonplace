@@ -8,7 +8,7 @@
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { parseJson } from "../../src/lib/schemas";
+import { parseJson, ScriptSchema } from "../../src/lib/schemas";
 import { hashInput, importsOf, isModuleName } from "../../src/lib/leanModel";
 
 const PORT = Number(process.env["FAKE_TAURI_PORT"] ?? 1430);
@@ -367,18 +367,57 @@ if (import.meta.main) {
         }
         // Sync, enough for the pairing screen: a device that holds a book, a
         // code as long as a real one, and joins recorded for the checks.
-        // Spec: AUD-6, AUD-7
-        // The Rust job, as if it had spoken the script: the fixture our encoder made, its chapters spread over it.
-        if (cmd === "audio_render") {
+        // Spec: AUD-6, AUD-7, AUD-13
+        // Rust's maker, as if it had written and spoken: from where the listener
+        // is, each chunk not yet written is written (the request the script
+        // model would get is recorded, the scripted answer taken), and the fake's
+        // lead, the piece listened at and the one after, is spoken, a piece
+        // each: the fixture our encoder made. All of it, when asked for at once.
+        if (cmd === "audio_listen" || cmd === "audio_make_all") {
           const id = String(args["id"]);
-          const row = z.object({ script: z.string() }).parse(db.query("SELECT script FROM recordings WHERE id = ?").get(id));
-          const script = z.object({ chapters: z.array(z.object({ title: z.string() })) }).parse(parseJson(row.script));
-          const chapters = script.chapters.map((c, i) => ({ title: c.title, start: (i * 3) / Math.max(1, script.chapters.length) }));
+          const all = cmd === "audio_make_all";
+          const row = z.object({ script: z.string().nullable(), status: z.string() }).optional().parse(db.query("SELECT script, status FROM recordings WHERE id = ?").get(id) ?? undefined);
+          if (!row?.script) return Response.json({ ok: null }, { headers: cors });
+          const script = ScriptSchema.parse(parseJson(row.script));
+          const at = typeof args["piece"] === "string" ? args["piece"].split(".").slice(-3).map(Number) : [0, 0, 0];
+          const prompt = readFileSync(new URL("src-tauri/src/audio/verbatim.md", root), "utf8");
           const webm = new Uint8Array(readFileSync(new URL("tests/browser/fixtures/speech.webm", root)));
-          db.query("INSERT OR REPLACE INTO recording_files (recording_id, media_type, data) VALUES (?, 'audio/webm', ?)").run(id, webm);
-          db.query("UPDATE recordings SET status = 'ready', progress = 1, chapters = ?, duration_seconds = 3 WHERE id = ?").run(JSON.stringify(chapters), id);
+          const order: [number, number, number, string][] = [];
+          script.chapters.forEach((ch, c) =>
+            (ch.chunks ?? []).forEach((k, i) => {
+              if (k.passages === null) {
+                chatRequests.push({ model: "anthropic/claude-haiku-5.5", messages: [{ role: "system", content: prompt }, { role: "user", content: k.source ?? "" }], max_tokens: 16000 });
+                const answer = z.object({ paragraphs: z.array(z.string()) }).safeParse(modelAnswer);
+                k.passages = answer.success ? answer.data.paragraphs : [];
+              }
+              k.passages.forEach((p, n) => order.push([c, i, n, p]));
+            }),
+          );
+          db.query("UPDATE recordings SET script = ? WHERE id = ?").run(JSON.stringify(script), id);
+          const from = Math.max(0, order.findIndex(([c, k, n]) => c === at[0] && k === at[1] && n === at[2]));
+          const wanted = all ? order : order.slice(from, from + 2);
+          for (const [c, k, n] of wanted) {
+            db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES (?, ?, ?, ?, ?, 3, ?, ?)").run(
+              `${id}.${c}.${k}.${n}`,
+              id,
+              c,
+              k,
+              n,
+              webm,
+              new Date().toISOString(),
+            );
+          }
+          const made = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM recording_pieces WHERE recording_id = ?").get(id)).n;
+          const done = made >= order.length;
+          db.query("UPDATE recordings SET status = ?, progress = ? WHERE id = ?").run(done ? "ready" : all ? "making" : row.status, order.length ? made / order.length : 1, id);
           return Response.json({ ok: null }, { headers: cors });
         }
+        if (cmd === "audio_piece") {
+          const row = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(db.query("SELECT data FROM recording_pieces WHERE id = ?").get(String(args["id"])) ?? undefined);
+          if (!row) return Response.json({ err: "this part of the recording hasn't reached this device yet" }, { headers: cors });
+          return Response.json({ ok: Buffer.from(row.data).toString("base64") }, { headers: cors });
+        }
+        if (cmd === "audio_forget") return Response.json({ ok: null }, { headers: cors });
         if (cmd === "audio_read") {
           const row = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(db.query("SELECT data FROM recording_files WHERE recording_id = ?").get(String(args["id"])) ?? undefined);
           if (!row) return Response.json({ err: "this recording hasn't reached this device yet" }, { headers: cors });

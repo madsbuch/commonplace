@@ -4,6 +4,8 @@
 //! device, phones included: it's pure Rust.
 
 pub mod encode;
+pub mod plan;
 pub mod render;
+pub mod script;
 pub mod speech;
 pub mod webm;

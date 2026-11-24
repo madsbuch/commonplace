@@ -19,12 +19,15 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
 /**
- * A recording's chapters on the lock screen (AUD-10): one file, its next and
- * previous are the chapters', not the queue's. Back within the first three
- * seconds of a chapter goes to the one before; later, to its start.
+ * A recording's chapters on the lock screen (AUD-10): its next and previous
+ * are the chapters', not the queue's. A recording made as it's listened to is
+ * queued a piece at a time (AUD-6), each piece's id ending in its chapter,
+ * chunk and passage; one made before is one file, its chapters at `starts`.
+ * Back within the first three seconds of a chapter goes to the one before;
+ * later, to its start.
  */
 class ChapterPlayer(player: Player) : ForwardingPlayer(player) {
-    /** Where each chapter starts, in milliseconds. */
+    /** A recording made before as one file: where each chapter starts, in milliseconds. */
     @Volatile
     var starts: List<Long> = emptyList()
 
@@ -35,26 +38,68 @@ class ChapterPlayer(player: Player) : ForwardingPlayer(player) {
         Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
     )
 
+    /** The chapter of the piece at `index` (`<recording>.<chapter>.<chunk>.<passage>`), or null for a file. */
+    private fun chapterOf(index: Int): Int? {
+        if (index < 0 || index >= mediaItemCount) return null
+        val parts = getMediaItemAt(index).mediaId.split('.')
+        return if (parts.size >= 4) parts[parts.size - 3].toIntOrNull() else null
+    }
+
+    private val pieces: Boolean
+        get() = starts.isEmpty() && chapterOf(currentMediaItemIndex) != null
+
+    /** The first piece of the next chapter, if it's queued. */
+    private fun nextChapter(): Int? {
+        val here = chapterOf(currentMediaItemIndex) ?: return null
+        return (currentMediaItemIndex + 1 until mediaItemCount).firstOrNull { chapterOf(it) != here }
+    }
+
+    /** The first queued piece of the chapter the piece at `index` is in. */
+    private fun chapterStart(index: Int): Int {
+        val chapter = chapterOf(index)
+        var i = index
+        while (i > 0 && chapterOf(i - 1) == chapter) i--
+        return i
+    }
+
+    private val skipping: Boolean
+        get() = starts.size > 1 || pieces
+
     override fun getAvailableCommands(): Player.Commands {
         val commands = super.getAvailableCommands().buildUpon()
-        if (starts.size > 1) skips.forEach { commands.add(it) }
+        if (skipping) skips.forEach { commands.add(it) }
         return commands.build()
     }
 
     override fun isCommandAvailable(command: Int): Boolean =
-        (starts.size > 1 && command in skips) || super.isCommandAvailable(command)
+        (skipping && command in skips) || super.isCommandAvailable(command)
 
-    override fun hasNextMediaItem(): Boolean = starts.any { it > currentPosition + 500 }
+    override fun hasNextMediaItem(): Boolean =
+        if (pieces) nextChapter() != null else starts.any { it > currentPosition + 500 }
 
-    override fun hasPreviousMediaItem(): Boolean = starts.isNotEmpty()
+    override fun hasPreviousMediaItem(): Boolean = if (pieces) true else starts.isNotEmpty()
 
     override fun seekToNext() {
+        if (pieces) {
+            nextChapter()?.let { seekTo(it, 0) }
+            return
+        }
         starts.firstOrNull { it > currentPosition + 500 }?.let { seekTo(it) }
     }
 
     override fun seekToNextMediaItem() = seekToNext()
 
     override fun seekToPrevious() {
+        if (pieces) {
+            val i = currentMediaItemIndex
+            val first = chapterStart(i)
+            when {
+                i > first || currentPosition > 3000 -> seekTo(first, 0)
+                first > 0 -> seekTo(chapterStart(first - 1), 0)
+                else -> seekTo(0, 0)
+            }
+            return
+        }
         val at = currentPosition
         val i = starts.indexOfLast { it <= at }
         val target = when {
@@ -102,7 +147,8 @@ class PlaybackService : MediaSessionService() {
             )
             // Pause when headphones are unplugged.
             .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
+            // The network too: a recording is made ahead of the listener while it plays (AUD-6).
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             // Skipping in a spoken recording: 15 s back, 30 s on.
             .setSeekBackIncrementMs(15_000)
             .setSeekForwardIncrementMs(30_000)

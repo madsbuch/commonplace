@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreMenu } from "../components/MoreMenu";
 import { PauseIcon, PlayIcon } from "../components/Icons";
 import { replaceFragment } from "../lib/address";
-import { AUDIO_TABLES, getRecording, hasAudio, removeRecording, retryRecording } from "../lib/audio";
+import { AUDIO_TABLES, getRecording, hasAudio, makeAll, removeRecording, retryRecording } from "../lib/audio";
 import { chapterAt, clock, SPEEDS, timeOfFragment } from "../lib/audioModel";
 import { getItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
@@ -36,8 +36,11 @@ export default function RecordingPage() {
     };
   }, [id, version]);
 
-  // Ready and here: into the player, at the address's moment or where it was left.
-  const ready = rec !== null && rec !== "missing" && rec.status === "ready" && here;
+  // Spec: AUD-6
+  // Into the player, at the address's moment or where it was left, as soon as
+  // there's a script to make it from (or, made before as one file, once it's here).
+  const oneFile = rec !== null && rec !== "missing" && rec.durationSeconds !== null;
+  const ready = rec !== null && rec !== "missing" && (oneFile ? here : rec.script !== null && rec.status !== "writing");
   const [start] = useState(() => ({ key: location.key, at: timeOfFragment(location.hash) }));
   useEffect(() => {
     if (ready && rec !== null && typeof rec !== "string") void load(rec, { at: start.at });
@@ -67,7 +70,9 @@ export default function RecordingPage() {
     );
   }
   if (rec === null) return null;
-  const current = chapterAt(rec.chapters, mine ? p.position : 0);
+  // The chapters as the player has them (a recording made as it's listened to has them from its timeline).
+  const chapters = mine && p.chapters.length > 0 ? p.chapters : rec.chapters;
+  const current = chapterAt(chapters, mine ? p.position : 0);
   const duration = mine && p.duration > 0 ? p.duration : (rec.durationSeconds ?? 0);
 
   return (
@@ -82,6 +87,8 @@ export default function RecordingPage() {
             label="More for this recording"
             actions={[
               ...(rec.status === "failed" ? [{ label: "Try again", onClick: () => void retryRecording(rec) }] : []),
+              // Spec: AUD-13
+              ...(rec.status === "listening" ? [{ label: "Make it all now", onClick: () => void makeAll(rec.id) }] : []),
               {
                 label: "Delete recording",
                 confirm: "Really delete this recording?",
@@ -106,10 +113,10 @@ export default function RecordingPage() {
         ))}
       </p>
 
-      {rec.status !== "ready" ? (
+      {rec.status === "writing" || rec.status === "making" || rec.status === "speaking" || rec.status === "failed" || (rec.error && !oneFile) ? (
         <div className="recording-progress">
           <p>{recordingState(rec)}</p>
-          {rec.status === "failed" ? (
+          {rec.status === "failed" || rec.error ? (
             <>
               <p className="ai-error">{rec.error}</p>
               <button type="button" onClick={() => void retryRecording(rec)}>
@@ -122,8 +129,9 @@ export default function RecordingPage() {
             </div>
           )}
         </div>
-      ) : !here ? (
-        <p className="muted">This recording hasn't reached this device yet. It arrives with the next sync.</p>
+      ) : null}
+      {!ready ? (
+        oneFile && !here ? <p className="muted">This recording hasn't reached this device yet. It arrives with the next sync.</p> : null
       ) : (
         <div className="player" aria-label="Player">
           <input
@@ -164,13 +172,20 @@ export default function RecordingPage() {
               </button>
             ))}
           </div>
+          {/* Spec: AUD-6 */}
+          {mine && p.waiting ? <p className="muted recording-waiting">Making this part…</p> : null}
+          {mine && p.made !== null && rec.status === "listening" ? (
+            <p className="muted recording-made">
+              Made as you listen · {clock(p.made)} of {p.duration > 0 ? `about ${clock(p.duration)}` : "it"} made
+            </p>
+          ) : null}
           {p.error && mine ? <p className="ai-error">{p.error}</p> : null}
         </div>
       )}
 
-      {rec.chapters.length > 0 ? (
+      {chapters.length > 0 ? (
         <ol className="recording-chapters" aria-label="Chapters">
-          {rec.chapters.map((c, i) => (
+          {chapters.map((c, i) => (
             <li key={i}>
               <button type="button" className={mine && i === current ? "active" : undefined} onClick={() => (mine ? seek(c.start) : undefined)}>
                 <span>{c.title}</span>

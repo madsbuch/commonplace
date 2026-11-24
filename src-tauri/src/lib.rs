@@ -95,6 +95,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0009_diagnostics.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "recording_pieces",
+            sql: include_str!("../migrations/0010_recording_pieces.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -165,14 +171,41 @@ fn audio_service(app: &tauri::AppHandle) -> std::sync::Arc<audio::render::AudioS
 }
 
 // Spec: AUD-6
-/// Makes a recording's audio from its script, in the background (`audio-progress`, `audio-changed`).
+/// The listener is at `piece` of recording `id` (its start when None): it's made ahead of there (`audio-piece`, `audio-changed`).
 #[tauri::command]
-fn audio_render(app: tauri::AppHandle, id: String) {
-    audio_service(&app).render(app.clone(), id);
+fn audio_listen(app: tauri::AppHandle, id: String, piece: Option<String>) {
+    audio_service(&app).listen(&app, &id, piece.as_deref());
+}
+
+// Spec: AUD-13
+/// Makes the rest of a recording at once, on this device.
+#[tauri::command]
+async fn audio_make_all(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    audio_service(&app).make_all(&app, &id).await
+}
+
+// Spec: APP-12
+/// A recording deleted: its making stops and its files go.
+#[tauri::command]
+fn audio_forget(app: tauri::AppHandle, id: String) {
+    audio_service(&app).forget(&app, &id);
 }
 
 // Spec: AUD-7
-/// A recording's audio, as base64, for the player.
+/// A piece of a recording's audio, as base64, for the player.
+#[tauri::command]
+async fn audio_piece(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let bytes: Vec<u8> = sqlx::query_scalar("SELECT data FROM recording_pieces WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&db_pool(&app).await?)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("this part of the recording hasn't reached this device yet")?;
+    Ok(library::encode(&bytes))
+}
+
+// Spec: AUD-7
+/// A recording made before as one file, as base64, for the player.
 #[tauri::command]
 async fn audio_read(app: tauri::AppHandle, id: String) -> Result<String, String> {
     let bytes: Vec<u8> = sqlx::query_scalar("SELECT data FROM recording_files WHERE recording_id = ?")
@@ -185,29 +218,10 @@ async fn audio_read(app: tauri::AppHandle, id: String) -> Result<String, String>
 }
 
 // Spec: AUD-10
-/**
- * A recording's audio as a file, for Android's player (Media3 plays files,
- * not bytes): written to the app's data folder once, and again if it changed.
- */
+/// Android's player plays recording `id` from `piece` (a recording made before as one file when None), `position` seconds into it.
 #[tauri::command]
-async fn audio_file(app: tauri::AppHandle, id: String) -> Result<String, String> {
-    let bytes: Vec<u8> = sqlx::query_scalar("SELECT data FROM recording_files WHERE recording_id = ?")
-        .bind(&id)
-        .fetch_optional(&db_pool(&app).await?)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or("this recording hasn't reached this device yet")?;
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recordings");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let safe: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
-    let path = dir.join(format!("{safe}.webm"));
-    if std::fs::metadata(&path).map(|m| m.len()).ok() != Some(bytes.len() as u64) {
-        // Written beside it, then moved: the player never sees half a file.
-        let part = dir.join(format!("{safe}.webm.part"));
-        std::fs::write(&part, &bytes).map_err(|e| e.to_string())?;
-        std::fs::rename(&part, &path).map_err(|e| e.to_string())?;
-    }
-    Ok(path.to_string_lossy().into_owned())
+async fn audio_native_play(app: tauri::AppHandle, id: String, piece: Option<String>, position: f64, play: bool, speed: f64) -> Result<(), String> {
+    audio_service(&app).play_native(&app, &id, piece.as_deref(), position, play, speed).await
 }
 
 // ---------------------------------------------------------------------------
@@ -533,9 +547,12 @@ pub fn run() {
             sync_remove_device,
             library_save_file,
             library_read_file,
-            audio_render,
+            audio_listen,
+            audio_make_all,
+            audio_forget,
+            audio_piece,
             audio_read,
-            audio_file,
+            audio_native_play,
             lean_status,
             lean_set_up,
             lean_check,

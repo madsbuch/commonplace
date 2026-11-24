@@ -8,13 +8,15 @@ import { useTablesVersion } from "../lib/live";
 import type { Recording } from "../lib/schemas";
 import { useNotedProblem } from "../lib/diagnostics";
 
-/** "Writing the script, 40%" and the like: how a recording stands. */
+/** "Made as you listen, 40% made" and the like: how a recording stands. */
 export function recordingState(r: Recording): string {
   const pct = `${Math.round(r.progress * 100)}%`;
-  if (r.status === "writing") return `Writing the script, ${pct}`;
-  if (r.status === "speaking") return `Speaking, ${pct}`;
+  if (r.status === "writing") return "Writing the script";
+  // Spec: AUD-6, AUD-13
+  if (r.status === "listening") return r.progress > 0 ? `Made as you listen, ${pct} made` : "Made as you listen";
+  if (r.status === "making" || r.status === "speaking") return `Making all of it, ${pct}`;
   if (r.status === "failed") return "Couldn't be made";
-  return r.durationSeconds ? clock(r.durationSeconds) : "Ready";
+  return r.durationSeconds ? clock(r.durationSeconds) : "All made";
 }
 
 // Spec: AUD-4
@@ -106,7 +108,7 @@ export default function AudioPage() {
           {/* Spec: APP-9 */}
           <InfoButton title="The audio library">
             <p>Papers and books read aloud: a whole paper or one of its sections, word for word, with formulas said as a mathematician would say them; or a spoken summary of several.</p>
-            <p>Record one from a paper's menu (⋯) in the library. Recordings are made once, on the device you start them on, and sync to your other devices for listening offline.</p>
+            <p>Record one from a paper's menu (⋯) in the library. A recording is made as you listen, a few minutes ahead of where you are, so it starts at once and you pay only for what you hear; skipping ahead waits a moment while that part is made. What's made syncs to your other devices, and a recording's menu can make all of it at once, to listen offline.</p>
           </InfoButton>
         </div>
         <button type="button" className="button-primary" onClick={() => setSummarizing(true)}>

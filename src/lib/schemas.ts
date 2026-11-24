@@ -341,8 +341,15 @@ export const LeanSetupEventSchema = z.object({
 // ---------------------------------------------------------------------------
 
 // Spec: AUD-2, AUD-4
+// Spec: AUD-6
+/**
+ * A recording's script: chapters of chunks, each chunk's source text and the
+ * passages written of it (null until written; a piece each). Recordings made
+ * before hold a chapter's passages as `paragraphs`.
+ */
+export const ScriptChunkSchema = z.object({ source: z.string().optional(), passages: z.array(z.string()).nullable() });
 export const ScriptSchema = z.object({
-  chapters: z.array(z.object({ title: z.string(), paragraphs: z.array(z.string()) })),
+  chapters: z.array(z.object({ title: z.string(), chunks: z.array(ScriptChunkSchema).optional(), paragraphs: z.array(z.string()).optional() })),
 });
 export type Script = z.infer<typeof ScriptSchema>;
 
@@ -358,7 +365,8 @@ const RecordingRowSchema = z.object({
   minutes: z.number().nullable(),
   voice: z.string(),
   speech_model: z.string(),
-  status: z.enum(["writing", "speaking", "ready", "failed"]),
+  // "speaking": made at once before recordings were made as they're listened to.
+  status: z.enum(["writing", "listening", "making", "speaking", "ready", "failed"]),
   progress: z.number(),
   error: z.string().nullable(),
   script: z.string().nullable(),
@@ -399,4 +407,10 @@ export function parseRecording(row: unknown) {
 }
 export type Recording = ReturnType<typeof parseRecording>;
 
-export const AudioEventSchema = z.object({ id: z.string(), progress: z.number().optional() });
+export const AudioEventSchema = z.object({ id: z.string(), progress: z.number().optional(), piece: z.string().optional() });
+
+/** A recording's pieces as listed: which are made, and how long each is. */
+export const PieceRowSchema = z.object({ id: z.string(), seconds: z.number() });
+
+/** Where a recording was left: seconds into its piece, or into the recording when it's one file. */
+export const ListeningRowSchema = z.object({ position: z.number(), piece: z.string().nullable() });
