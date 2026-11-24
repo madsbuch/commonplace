@@ -487,9 +487,17 @@ device that asked: `device`).
   OpenRouter's `/audio/speech` (raw PCM asked for; `speech` rows in the
   ledger count characters), each into a piece of its own (`OpusStream`,
   `opus-pure`, pure Rust: it builds for Android; 24 kbit/s mono, 24 kHz,
-  our own WebM writer, `webm.rs`), its pauses included, in
+  our own WebM writer, `webm.rs`), the pause after it included, in
   `recording_pieces` (synced: any device plays what's made, and two making
-  the same passage make the same row). With nothing left in the lead it
+  the same passage make the same row). What another recording made is used
+  again (AUD-14): a chunk whose source another script has written already
+  takes its passages (`written_elsewhere`; a section's chunks are the same
+  text in the whole paper's script, which the browser checks hold to), and
+  a passage spoken in the same voice is the same piece, found by its
+  `speech_key` (SHA-256 of the speech model, voice and text) and copied. So
+  a piece is the same wherever it falls: no lead-in, and its pause comes from
+  its own text (`pause_after`: a heading's longer). Pieces made before the
+  key get it when the app starts (`name_pieces`). With nothing left in the lead it
   waits for the listener to move on, and stops after 10 min. `make_all`
   makes the rest in order; `resume` (in `sync_start`) carries on `making`
   ones, and old `speaking` ones (their `speech_clips`, local, are used and
@@ -500,9 +508,10 @@ device that asked: `device`).
 - `tests/browser/fixtures/speech.webm` is our encoder's output
   (`WRITE_SPEECH_FIXTURE=… cargo test speech_in_opus`). The fake Tauri layer
   makes pieces with it as Rust would (`audio_listen`: the chunk reached is
-  "written", its request recorded, and the piece listened at and the one
-  after are made; `audio_make_all`: all), so the browser checks play real
-  WebM Opus, wait for what isn't made, and go on.
+  "written", its request recorded, unless another recording wrote its source
+  already, and the piece listened at and the one after are made, with their
+  `speech_key`; `audio_make_all`: all), so the browser checks play real WebM
+  Opus, wait for what isn't made, go on, and reuse a section's text.
 - One player for the app (`src/lib/player.ts`): a recording's timeline
   (`timeline` in `audioModel.ts`: pieces made count as they are, the rest at
   the pace of what's made), chapters, speed (per device), where it was left

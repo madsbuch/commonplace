@@ -980,6 +980,30 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1800);
     check("an address with a moment opens the recording there", (await page.locator(".player-times span").first().innerText()) === "0:02", await page.locator(".player-times span").first().innerText());
 
+    // Spec: AUD-14
+    // The whole paper, after one of its sections: what the section made is used again.
+    const askedBefore = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
+    await page.goto(`${APP}/library/${arx?.id}`);
+    await page.waitForTimeout(1200);
+    await page.getByRole("button", { name: "More for this item" }).click();
+    await page.getByRole("menuitem", { name: "Record aloud…" }).click();
+    await page.getByRole("button", { name: "Record", exact: true }).click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(2000);
+    const wholeId = page.url().split("/audio/")[1]?.split(/[?#]/)[0];
+    await page.getByRole("button", { name: "More for this recording" }).click();
+    await page.getByRole("menuitem", { name: "Make it all now" }).click();
+    await page.waitForTimeout(1500);
+    const whole = (await q(`SELECT script FROM recordings WHERE id = '${wholeId}'`))[0];
+    const sectionSource = recScript.chapters?.[0]?.chunks?.[0]?.source;
+    const wholeChapter = JSON.parse(whole?.script ?? "{}").chapters?.findIndex((c) => c.title === "2.1 Attention");
+    const wholeSource = JSON.parse(whole?.script ?? "{}").chapters?.[wholeChapter]?.chunks?.[0]?.source;
+    const askedWhole = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(askedBefore));
+    check("recording the whole paper after a section, the section's text is the same and isn't written again", wholeSource === sectionSource && !askedWhole.includes("softmax}(QK^{T})V") && askedWhole.includes("1 Introduction"), `${wholeChapter} ${JSON.stringify(wholeSource)?.slice(0, 80)}`);
+    const sectionKeys = (await q(`SELECT speech_key FROM recording_pieces WHERE recording_id = '${rec?.id}' ORDER BY id`)).map((r) => r.speech_key);
+    const wholeKeys = (await q(`SELECT speech_key FROM recording_pieces WHERE recording_id = '${wholeId}' AND chapter = ${wholeChapter} ORDER BY id`)).map((r) => r.speech_key);
+    check("and its passages are the same pieces", sectionKeys.length === 4 && JSON.stringify(wholeKeys) === JSON.stringify(sectionKeys), JSON.stringify({ sectionKeys, wholeKeys }));
+
     // A recording made before, at once, as one file, still plays.
     const oldId = "recordings_01old0000000000000000000000";
     await q(

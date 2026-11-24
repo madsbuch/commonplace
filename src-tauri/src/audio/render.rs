@@ -76,9 +76,15 @@ pub struct AudioService {
     scripts: tokio::sync::Mutex<()>,
 }
 
-/// A passage's key: the model, the voice and the text.
+/// A passage's key, as recordings made before kept their PCM: the model, the voice and the text.
 pub fn clip_key(model: &str, voice: &str, text: &str) -> String {
     hex::encode(Sha256::digest(format!("{model}\u{1}{voice}\u{1}{text}").as_bytes()))
+}
+
+// Spec: AUD-14
+/// A piece's key: what it is (the speech model, the voice, the passage), never where it falls; the same in every recording.
+pub fn speech_key(model: &str, voice: &str, text: &str) -> String {
+    hex::encode(Sha256::digest(format!("piece/1\u{1}{model}\u{1}{voice}\u{1}{text}").as_bytes()))
 }
 
 /// A TypeID for a ledger row, time-ordered as the app's own are.
@@ -244,13 +250,38 @@ async fn spoken(app: &AppHandle, pool: &SqlitePool, client: &reqwest::Client, ke
 struct PieceJob {
     key: PieceKey,
     text: String,
-    first: bool,
-    pause: f64,
 }
 
-// Spec: AUD-7
-/// Speaks a passage and keeps it as a piece: Opus in WebM, its pauses included.
+async fn keep_piece(pool: &SqlitePool, id: &str, key: &PieceKey, seconds: f64, webm: Vec<u8>, speech: &str) -> Result<()> {
+    sqlx::query("INSERT OR REPLACE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(key.id(id))
+        .bind(id)
+        .bind(key.chapter as i64)
+        .bind(key.chunk as i64)
+        .bind(key.passage as i64)
+        .bind(seconds)
+        .bind(webm)
+        .bind(crate::sync::now_iso())
+        .bind(speech)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Spec: AUD-14
+/// The same passage, spoken in the same voice for any recording (this one included): its audio and length.
+async fn spoken_before(pool: &SqlitePool, speech: &str) -> Result<Option<(Vec<u8>, f64)>> {
+    sqlx::query_as("SELECT data, seconds FROM recording_pieces WHERE speech_key = ? LIMIT 1").bind(speech).fetch_optional(pool).await.map_err(|e| e.to_string())
+}
+
+// Spec: AUD-7, AUD-14
+/// Speaks a passage and keeps it as a piece: Opus in WebM, its pause included. One spoken before is used again.
 async fn make_piece(app: &AppHandle, pool: &SqlitePool, client: &reqwest::Client, key: &str, (model, voice, id, title): (&str, &str, &str, &str), job: PieceJob) -> Result<()> {
+    let speech = speech_key(model, voice, &job.text);
+    if let Some((webm, seconds)) = spoken_before(pool, &speech).await? {
+        return keep_piece(pool, id, &job.key, seconds, webm, &speech).await;
+    }
     // A passage a recording made before had spoken already isn't paid for again.
     let clip = clip_key(model, voice, &job.text);
     let kept: Option<Vec<u8>> = sqlx::query_scalar("SELECT pcm FROM speech_clips WHERE key = ?").bind(&clip).fetch_optional(pool).await.map_err(|e| e.to_string())?;
@@ -259,31 +290,40 @@ async fn make_piece(app: &AppHandle, pool: &SqlitePool, client: &reqwest::Client
         None => spoken(app, pool, client, key, model, voice, &job.text).await?,
     };
     let named = title.to_string();
+    let pause = plan::pause_after(&job.text);
     let (webm, seconds) = tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<u8>, f64)> {
         let mut s = OpusStream::new()?;
-        if job.first {
-            s.silence(plan::LEAD_IN)?;
-        }
         s.push(&pcm)?;
-        s.silence(job.pause)?;
+        s.silence(pause)?;
         let (webm, seconds, _) = s.finish(&named)?;
         Ok((webm, seconds))
     })
     .await
     .map_err(|e| e.to_string())??;
-    sqlx::query("INSERT OR REPLACE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(job.key.id(id))
-        .bind(id)
-        .bind(job.key.chapter as i64)
-        .bind(job.key.chunk as i64)
-        .bind(job.key.passage as i64)
-        .bind(seconds)
-        .bind(webm)
-        .bind(crate::sync::now_iso())
-        .execute(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    keep_piece(pool, id, &job.key, seconds, webm, &speech).await?;
     let _ = sqlx::query("DELETE FROM speech_clips WHERE key = ?").bind(&clip).execute(pool).await;
+    Ok(())
+}
+
+// Spec: AUD-14
+/// Pieces made before they were known by what they are get their key, so they're used again too.
+async fn name_pieces(pool: &SqlitePool) -> Result<()> {
+    let recordings: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT recording_id FROM recording_pieces WHERE speech_key IS NULL").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for id in recordings {
+        let Some(rec) = row(pool, &id).await.ok().flatten() else { continue };
+        let Some(script) = rec.script else { continue };
+        for slot in plan::slots(&script) {
+            if let Slot::Piece { key, text } = slot {
+                sqlx::query("UPDATE recording_pieces SET speech_key = ? WHERE id = ? AND speech_key IS NULL")
+                    .bind(speech_key(&rec.model, &rec.voice, &text))
+                    .bind(key.id(&id))
+                    .execute(pool)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -390,6 +430,9 @@ impl AudioService {
      */
     pub async fn resume(self: Arc<Self>, app: AppHandle) -> Result<()> {
         let pool = crate::db_pool(&app).await?;
+        if let Err(e) = name_pieces(&pool).await {
+            diagnostics::report(&app, Level::Warning, "audio", &format!("Naming the pieces made before failed: {e}"));
+        }
         let me = crate::sync::session::identity(&pool).await?.device_id;
         let ids: Vec<String> = sqlx::query_scalar("SELECT id FROM recordings WHERE status IN ('making', 'speaking') AND device = ?")
             .bind(me)
@@ -455,7 +498,7 @@ impl AudioService {
                     let jobs: Vec<PieceJob> = slots
                         .iter()
                         .filter_map(|s| match s {
-                            Slot::Piece { key, text, first, pause } if keys.contains(key) => Some(PieceJob { key: *key, text: text.clone(), first: *first, pause: *pause }),
+                            Slot::Piece { key, text } if keys.contains(key) => Some(PieceJob { key: *key, text: text.clone() }),
                             _ => None,
                         })
                         .collect();
@@ -518,6 +561,14 @@ impl AudioService {
             .and_then(|r| r.script)
             .and_then(|s| s.chapters.get(chapter).and_then(|c| c.chunks.as_ref()?.get(chunk).and_then(|k| k.source.clone())))
             .ok_or("the chunk to write isn't in the script")?;
+        // Spec: AUD-14
+        // The same text written for another recording (a section, then the whole paper) is used again.
+        let others: Vec<String> =
+            sqlx::query_scalar("SELECT script FROM recordings WHERE id != ? AND script IS NOT NULL").bind(id).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        let others: Vec<Script> = others.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
+        if let Some(passages) = plan::written_elsewhere(&others, &source) {
+            return self.keep_passages(app, pool, id, chapter, chunk, passages).await;
+        }
         let (mut network, mut unusable) = (0usize, 0usize);
         let written = loop {
             match writer::write(client, &key, &model, &source).await {
@@ -550,7 +601,11 @@ impl AudioService {
             .execute(pool)
             .await
             .map_err(|e| e.to_string())?;
-        let passages = plan::passages(&written.paragraphs);
+        self.keep_passages(app, pool, id, chapter, chunk, plan::passages(&written.paragraphs)).await
+    }
+
+    /// Keeps a chunk's passages in `id`'s script.
+    async fn keep_passages(&self, app: &AppHandle, pool: &SqlitePool, id: &str, chapter: usize, chunk: usize, passages: Vec<String>) -> Result<()> {
         // Read again and written back at once: nothing else of the script is lost.
         let _held = self.scripts.lock().await;
         let mut script = row(pool, id).await?.and_then(|r| r.script).ok_or("the recording went")?;
@@ -718,6 +773,42 @@ mod tests {
         let b = ledger_id();
         assert!(a.starts_with("ai_usage_") && a.len() == "ai_usage_".len() + 26);
         assert!(a < b);
+    }
+
+    // Spec: AUD-14
+    #[tokio::test]
+    async fn a_passage_spoken_for_one_recording_is_the_same_piece_in_another() {
+        let scratch = crate::test_db::Scratch::new();
+        let pool = crate::test_db::migrated_db(&scratch).await;
+        // A section, recorded first; its pieces made before they were known by what they are.
+        let section = r#"{"chapters":[{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":["2 Background","Once."]}]}]}"#;
+        sqlx::query("INSERT INTO recordings (id, kind, title, items, voice, speech_model, status, progress, script, device, created_at, updated_at) VALUES ('r1', 'verbatim', 'Background', '[]', 'Charon', 'm', 'listening', 0, ?, 'd', 'x', 'x')")
+            .bind(section)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES ('r1.0.0.1', 'r1', 0, 0, 1, 2.5, x'010203', 'x')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        name_pieces(&pool).await.unwrap();
+        let once = speech_key("m", "Charon", "Once.");
+        assert_eq!(spoken_before(&pool, &once).await.unwrap(), Some((vec![1, 2, 3], 2.5)));
+        // In another voice, it's another piece.
+        assert_eq!(spoken_before(&pool, &speech_key("m", "Kore", "Once.")).await.unwrap(), None);
+        // The whole paper takes it as its own.
+        let at = PieceKey { chapter: 1, chunk: 0, passage: 1 };
+        keep_piece(&pool, "r2", &at, 2.5, vec![1, 2, 3], &once).await.unwrap();
+        let copied: (String, f64) = sqlx::query_as("SELECT speech_key, seconds FROM recording_pieces WHERE id = 'r2.1.0.1'").fetch_one(&pool).await.unwrap();
+        assert_eq!(copied, (once, 2.5));
+    }
+
+    #[test]
+    fn a_piece_is_known_by_what_it_is() {
+        let a = speech_key("m", "Charon", "Attention.");
+        assert_eq!(a, speech_key("m", "Charon", "Attention."));
+        assert_ne!(a, speech_key("m", "Kore", "Attention."));
+        assert_ne!(a, clip_key("m", "Charon", "Attention."));
     }
 
     #[test]

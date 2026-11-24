@@ -376,15 +376,27 @@ if (import.meta.main) {
         if (cmd === "audio_listen" || cmd === "audio_make_all") {
           const id = String(args["id"]);
           const all = cmd === "audio_make_all";
-          const row = z.object({ script: z.string().nullable(), status: z.string() }).optional().parse(db.query("SELECT script, status FROM recordings WHERE id = ?").get(id) ?? undefined);
+          const row = z
+            .object({ script: z.string().nullable(), status: z.string(), voice: z.string(), speech_model: z.string() })
+            .optional()
+            .parse(db.query("SELECT script, status, voice, speech_model FROM recordings WHERE id = ?").get(id) ?? undefined);
           if (!row?.script) return Response.json({ ok: null }, { headers: cors });
           const script = ScriptSchema.parse(parseJson(row.script));
           const at = typeof args["piece"] === "string" ? args["piece"].split(".").slice(-3).map(Number) : [0, 0, 0];
           const prompt = readFileSync(new URL("src-tauri/src/audio/verbatim.md", root), "utf8");
           const webm = new Uint8Array(readFileSync(new URL("tests/browser/fixtures/speech.webm", root)));
           const order: [number, number, number, string][] = [];
+          // Spec: AUD-14
+          // Chunks another recording wrote already, by their source.
+          const elsewhere = new Map<string, string[]>();
+          for (const other of z.array(z.object({ script: z.string() })).parse(db.query("SELECT script FROM recordings WHERE id != ? AND script IS NOT NULL").all(id))) {
+            const s = ScriptSchema.safeParse(parseJson(other.script));
+            if (s.success) for (const ch of s.data.chapters) for (const k of ch.chunks ?? []) if (k.source !== undefined && k.passages) elsewhere.set(k.source, k.passages);
+          }
           script.chapters.forEach((ch, c) =>
             (ch.chunks ?? []).forEach((k, i) => {
+              const before = k.source === undefined ? undefined : elsewhere.get(k.source);
+              if (k.passages === null && before) k.passages = before;
               if (k.passages === null) {
                 chatRequests.push({ model: "anthropic/claude-haiku-5.5", messages: [{ role: "system", content: prompt }, { role: "user", content: k.source ?? "" }], max_tokens: 16000 });
                 const answer = z.object({ paragraphs: z.array(z.string()) }).safeParse(modelAnswer);
@@ -397,7 +409,8 @@ if (import.meta.main) {
           const from = Math.max(0, order.findIndex(([c, k, n]) => c === at[0] && k === at[1] && n === at[2]));
           const wanted = all ? order : order.slice(from, from + 2);
           for (const [c, k, n] of wanted) {
-            db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES (?, ?, ?, ?, ?, 3, ?, ?)").run(
+            const text = order.find(([oc, ok, on]) => oc === c && ok === k && on === n)?.[3] ?? "";
+            db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, 3, ?, ?, ?)").run(
               `${id}.${c}.${k}.${n}`,
               id,
               c,
@@ -405,6 +418,7 @@ if (import.meta.main) {
               n,
               webm,
               new Date().toISOString(),
+              `${row.speech_model}|${row.voice}|${text}`,
             );
           }
           const made = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM recording_pieces WHERE recording_id = ?").get(id)).n;

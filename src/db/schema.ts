@@ -468,8 +468,13 @@ export const recordingPieces = sqliteTable(
     seconds: real("seconds").notNull(),
     data: blob("data", { mode: "buffer" }).notNull(),
     createdAt: text("created_at").notNull(),
+    /**
+     * What it is: SHA-256 of the speech model, the voice and the passage. The
+     * same passage for another recording is this piece again (AUD-14).
+     */
+    speechKey: text("speech_key"),
   },
-  (t) => [index("recording_pieces_recording").on(t.recordingId)],
+  (t) => [index("recording_pieces_recording").on(t.recordingId), index("recording_pieces_speech").on(t.speechKey)],
 );
 
 // Spec: AUD-7

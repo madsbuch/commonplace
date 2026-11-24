@@ -14,10 +14,9 @@ pub const LEAD_SECONDS: f64 = 180.0;
 pub const MAX_PASSAGE: usize = 900;
 /// How fast a passage is read, before any is: for how long one not yet made will take.
 pub const CHARS_PER_SECOND: f64 = 15.0;
-/// Silence before the first passage, after a passage, and after a chapter's last.
-pub const LEAD_IN: f64 = 0.4;
+/// Silence after a passage, and after a heading (a chapter's title, read as a passage of its own).
 pub const BETWEEN_PARAGRAPHS: f64 = 0.45;
-pub const BETWEEN_CHAPTERS: f64 = 1.2;
+pub const AFTER_HEADING: f64 = 0.9;
 
 /// A recording's script, as the app writes it (src/lib/audio.ts).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -87,7 +86,7 @@ pub fn recording_of(piece: &str) -> Option<&str> {
 /// A place in the recording: a passage to speak, or a chunk not yet written.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Slot {
-    Piece { key: PieceKey, text: String, first: bool, pause: f64 },
+    Piece { key: PieceKey, text: String },
     Unwritten { chapter: usize, chunk: usize, chars: usize },
 }
 
@@ -111,29 +110,44 @@ impl Slot {
 /// The recording in order: every passage, and every chunk not yet written.
 pub fn slots(script: &Script) -> Vec<Slot> {
     let mut out = Vec::new();
-    let chapters = script.chapters.len();
     for (c, chapter) in script.chapters.iter().enumerate() {
-        let chunks = chapter.chunks();
-        let last_chunk = chunks.len().saturating_sub(1);
-        for (k, chunk) in chunks.iter().enumerate() {
+        for (k, chunk) in chapter.chunks().iter().enumerate() {
             match &chunk.passages {
                 None => out.push(Slot::Unwritten { chapter: c, chunk: k, chars: chunk.source.as_deref().map_or(0, |s| s.chars().count()) }),
                 Some(passages) => {
-                    let spoken: Vec<(usize, &String)> = passages.iter().enumerate().filter(|(_, p)| !p.trim().is_empty()).collect();
-                    for (n, (p, text)) in spoken.iter().enumerate() {
-                        let ends_chapter = k == last_chunk && n + 1 == spoken.len();
-                        out.push(Slot::Piece {
-                            key: PieceKey { chapter: c, chunk: k, passage: *p },
-                            text: (*text).clone(),
-                            first: out.is_empty(),
-                            pause: if ends_chapter && c + 1 < chapters { BETWEEN_CHAPTERS } else { BETWEEN_PARAGRAPHS },
-                        });
+                    for (p, text) in passages.iter().enumerate().filter(|(_, p)| !p.trim().is_empty()) {
+                        out.push(Slot::Piece { key: PieceKey { chapter: c, chunk: k, passage: p }, text: text.clone() });
                     }
                 }
             }
         }
     }
     out
+}
+
+// Spec: AUD-14
+/**
+ * The silence after a passage: a heading's longer, a paragraph's shorter.
+ * It depends on the passage alone, never on where it falls, so a passage
+ * spoken for one recording is the same piece in any other.
+ */
+pub fn pause_after(text: &str) -> f64 {
+    let t = text.trim();
+    let heading = t.chars().count() <= 80 && !t.ends_with(['.', '!', '?', ':', ';', '"', '\'', ')', ']']);
+    if heading {
+        AFTER_HEADING
+    } else {
+        BETWEEN_PARAGRAPHS
+    }
+}
+
+// Spec: AUD-14
+/// A chunk with this source already written for another recording: its passages, to use again.
+pub fn written_elsewhere<'a>(scripts: impl IntoIterator<Item = &'a Script>, source: &str) -> Option<Vec<String>> {
+    scripts.into_iter().flat_map(|s| s.chapters.iter().flat_map(Chapter::chunks)).find_map(|k| match (k.source.as_deref(), k.passages) {
+        (Some(s), Some(p)) if s == source && !p.is_empty() => Some(p),
+        _ => None,
+    })
 }
 
 /// What to make next.
@@ -378,7 +392,7 @@ mod tests {
         let s = script(r#"{"chapters":[{"title":"1 Introduction","paragraphs":["One.","Two."]}]}"#);
         let slots = slots(&s);
         assert_eq!(slots.len(), 2);
-        assert!(matches!(&slots[0], Slot::Piece { key, first: true, .. } if *key == pk(0, 0, 0)));
+        assert!(matches!(&slots[0], Slot::Piece { key, .. } if *key == pk(0, 0, 0)));
     }
 
     #[test]
@@ -386,20 +400,27 @@ mod tests {
         let s = script(TWO_CHAPTERS);
         let slots = slots(&s);
         assert_eq!(slots.len(), 4);
-        assert!(matches!(&slots[0], Slot::Piece { first: true, pause, .. } if *pause == BETWEEN_PARAGRAPHS));
+        assert!(matches!(&slots[0], Slot::Piece { key, .. } if *key == pk(0, 0, 0)));
         assert!(matches!(&slots[2], Slot::Unwritten { chapter: 0, chunk: 1, chars: 1 }));
-        // The last of the recording pauses as a paragraph does; not a chapter.
-        assert!(matches!(&slots[3], Slot::Piece { key, first: false, pause, .. } if *key == pk(1, 0, 0) && *pause == BETWEEN_PARAGRAPHS));
-        // Written, a chapter's last passage pauses for the chapter.
-        let mut s = s;
-        if let Some(chunks) = s.chapters[0].chunks.as_mut() {
-            chunks[1].passages = Some(vec!["Fourth.".into()]);
-        }
-        assert!(matches!(&slots_of(&s)[2], Slot::Piece { pause, .. } if *pause == BETWEEN_CHAPTERS));
+        assert!(matches!(&slots[3], Slot::Piece { key, .. } if *key == pk(1, 0, 0)));
     }
 
-    fn slots_of(s: &Script) -> Vec<Slot> {
-        slots(s)
+    #[test]
+    fn a_passage_pauses_by_what_it_is_not_where_it_falls() {
+        assert_eq!(pause_after("2.1 Attention"), AFTER_HEADING);
+        assert_eq!(pause_after("Background"), AFTER_HEADING);
+        assert_eq!(pause_after("Attention weighs every word against every other."), BETWEEN_PARAGRAPHS);
+        assert_eq!(pause_after("As follows:"), BETWEEN_PARAGRAPHS);
+        assert_eq!(pause_after(&"word ".repeat(30)), BETWEEN_PARAGRAPHS);
+    }
+
+    #[test]
+    fn a_chunk_written_for_another_recording_is_found_by_its_source() {
+        let section = script(r#"{"chapters":[{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":["2 Background","Once."]}]}]}"#);
+        let whole = script(r#"{"chapters":[{"title":"1 Intro","chunks":[{"source":"1 Intro\n\nHi.","passages":null}]},{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":null}]}]}"#);
+        assert_eq!(written_elsewhere([&section, &whole], "2 Background\n\nOnce."), Some(vec!["2 Background".to_string(), "Once.".to_string()]));
+        assert_eq!(written_elsewhere([&section, &whole], "1 Intro\n\nHi."), None);
+        assert_eq!(written_elsewhere([&whole], "2 Background\n\nOnce."), None);
     }
 
     #[test]
