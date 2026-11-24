@@ -55,6 +55,8 @@ struct Target {
     from: Option<PieceKey>,
     /// All of it at once (AUD-13), not just ahead of the listener.
     all: bool,
+    /// Chapters asked to be made now, all of each (AUD-18), after what's ahead of the listener.
+    chapters: std::collections::BTreeSet<usize>,
     /// When it last changed.
     at: Instant,
     wake: Arc<Notify>,
@@ -252,7 +254,14 @@ struct PieceJob {
     text: String,
 }
 
+/// A piece kept aside by a reading prepared again: its passage isn't placed yet (its chunk is to be written again), so it's kept to use when it is.
+fn parked_id(id: &str, speech: &str) -> String {
+    format!("{id}.parked.{}", &speech[..speech.len().min(32)])
+}
+
 async fn keep_piece(pool: &SqlitePool, id: &str, key: &PieceKey, seconds: f64, webm: Vec<u8>, speech: &str) -> Result<()> {
+    // Placed now: a piece kept aside for it isn't needed any more.
+    sqlx::query("DELETE FROM recording_pieces WHERE id = ?").bind(parked_id(id, speech)).execute(pool).await.map_err(|e| e.to_string())?;
     sqlx::query("INSERT OR REPLACE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(key.id(id))
         .bind(id)
@@ -383,20 +392,77 @@ async fn take_in(pool: &SqlitePool, reading: &str, old: &[String]) -> Result<Str
     Ok(rec.title)
 }
 
+// Spec: AUD-17
+/** `id`'s script becomes `script`; its pieces follow their passages, and where it was left follows its piece. */
+async fn lay_over(pool: &SqlitePool, id: &str, script: &Script) -> Result<()> {
+    name_pieces(pool).await?;
+    let rec = row(pool, id).await?.ok_or("the reading isn't there")?;
+    let kept: Vec<(String, Option<String>, f64, Vec<u8>)> =
+        sqlx::query_as("SELECT id, speech_key, seconds, data FROM recording_pieces WHERE recording_id = ?").bind(id).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let listening: Option<(Option<String>,)> = sqlx::query_as("SELECT piece FROM listening WHERE recording_id = ?").bind(id).fetch_optional(pool).await.map_err(|e| e.to_string())?;
+    let was_at = listening.and_then(|(p,)| p).and_then(|p| kept.iter().find(|k| k.0 == p).and_then(|k| k.1.clone()));
+    let by_key: HashMap<String, (f64, Vec<u8>)> = kept.into_iter().filter_map(|(_, k, s, d)| k.map(|k| (k, (s, d)))).collect();
+    sqlx::query("UPDATE recordings SET script = ?, updated_at = ? WHERE id = ?")
+        .bind(serde_json::to_string(script).map_err(|e| e.to_string())?)
+        .bind(crate::sync::now_iso())
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM recording_pieces WHERE recording_id = ?").bind(id).execute(pool).await.map_err(|e| e.to_string())?;
+    let mut now_at: Option<String> = None;
+    let mut placed = std::collections::HashSet::new();
+    for slot in plan::slots(script) {
+        let Slot::Piece { key, text } = slot else { continue };
+        let speech = speech_key(&rec.model, &rec.voice, &text);
+        if was_at.as_deref() == Some(speech.as_str()) && now_at.is_none() {
+            now_at = Some(key.id(id));
+        }
+        if let Some((seconds, webm)) = by_key.get(&speech) {
+            keep_piece(pool, id, &key, *seconds, webm.clone(), &speech).await?;
+            placed.insert(speech);
+        }
+    }
+    // What isn't placed waits, kept aside, for its chunk to be written again: the same passage then needn't be spoken again.
+    for (speech, (seconds, webm)) in by_key.iter().filter(|(k, _)| !placed.contains(*k)) {
+        sqlx::query("INSERT OR REPLACE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, -1, -1, -1, ?, ?, ?, ?)")
+            .bind(parked_id(id, speech))
+            .bind(id)
+            .bind(seconds)
+            .bind(webm.clone())
+            .bind(crate::sync::now_iso())
+            .bind(speech)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match now_at {
+        Some(piece) => sqlx::query("UPDATE listening SET piece = ? WHERE recording_id = ?").bind(piece).bind(id).execute(pool).await,
+        None => sqlx::query("DELETE FROM listening WHERE recording_id = ?").bind(id).execute(pool).await,
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 impl AudioService {
     fn target(&self, id: &str) -> Option<Target> {
         self.targets.lock().ok()?.get(id).cloned()
     }
 
     /// Sets what `id`'s worker is to make, keeping what isn't said; wakes it.
-    fn aim(&self, id: &str, from: Option<Option<PieceKey>>, all: Option<bool>) {
+    fn aim(&self, id: &str, from: Option<Option<PieceKey>>, all: Option<bool>, chapter: Option<usize>) {
         let Ok(mut targets) = self.targets.lock() else { return };
-        let t = targets.entry(id.to_string()).or_insert_with(|| Target { from: None, all: false, at: Instant::now(), wake: Arc::new(Notify::new()) });
+        let t = targets
+            .entry(id.to_string())
+            .or_insert_with(|| Target { from: None, all: false, chapters: Default::default(), at: Instant::now(), wake: Arc::new(Notify::new()) });
         if let Some(f) = from {
             t.from = f;
         }
         if let Some(a) = all {
             t.all = a;
+        }
+        if let Some(c) = chapter {
+            t.chapters.insert(c);
         }
         t.at = Instant::now();
         t.wake.notify_one();
@@ -439,7 +505,14 @@ impl AudioService {
     /// The listener is at `piece` of `id` (its start when not known): make ahead of there.
     pub fn listen(self: &Arc<Self>, app: &AppHandle, id: &str, piece: Option<&str>) {
         let from = piece.and_then(|p| PieceKey::parse(p, id));
-        self.aim(id, Some(from), None);
+        self.aim(id, Some(from), None, None);
+        self.spawn(app, id);
+    }
+
+    // Spec: AUD-18
+    /// Makes a chapter of `id`, all of it, now (after what's ahead of the listener).
+    pub fn make_chapter(self: &Arc<Self>, app: &AppHandle, id: &str, chapter: usize) {
+        self.aim(id, None, None, Some(chapter));
         self.spawn(app, id);
     }
 
@@ -455,7 +528,7 @@ impl AudioService {
             .execute(&pool)
             .await
             .map_err(|e| e.to_string())?;
-        self.aim(id, None, Some(true));
+        self.aim(id, None, Some(true), None);
         self.spawn(app, id);
         let _ = app.emit("audio-changed", json!({ "id": id }));
         Ok(())
@@ -538,7 +611,22 @@ impl AudioService {
             }
             let lead = (!target.all).then_some(plan::LEAD_SECONDS);
             let from = if target.all { None } else { target.from };
-            let next = plan::next(&slots, &made, from.as_ref(), lead, PARALLEL);
+            let mut next = plan::next(&slots, &made, from.as_ref(), lead, PARALLEL);
+            // Spec: AUD-18
+            // Then the chapters asked for, each until it's made.
+            for &c in &target.chapters {
+                if !matches!(next, Next::Nothing) {
+                    break;
+                }
+                next = plan::next_in_chapter(&slots, &made, c, PARALLEL);
+                if matches!(next, Next::Nothing) {
+                    if let Ok(mut t) = self.targets.lock() {
+                        if let Some(t) = t.get_mut(id) {
+                            t.chapters.remove(&c);
+                        }
+                    }
+                }
+            }
             if !matches!(next, Next::Nothing) && !working {
                 working = true;
                 let what = if target.all { "Making" } else { "Making ahead" };
@@ -699,6 +787,24 @@ impl AudioService {
         }
         diagnostics::report(app, Level::Info, "audio", &format!("{} recording(s) from before became part of the reading of “{title}”", old.len()));
         let _ = app.emit("audio-changed", json!({ "id": reading }));
+        Ok(())
+    }
+
+    // Spec: AUD-17
+    /**
+     * Lays a reading over a script prepared afresh from its item: its pieces
+     * go where their passages now are (found by what they are), those whose
+     * passages are gone go, and where it was left follows its passage.
+     */
+    pub async fn reshape(&self, app: &AppHandle, id: &str, script: Script) -> Result<()> {
+        let pool = crate::db_pool(app).await?;
+        {
+            let _held = self.scripts.lock().await;
+            lay_over(&pool, id, &script).await?;
+        }
+        self.forget(app, id);
+        diagnostics::report(app, Level::Info, "audio", &format!("A reading was prepared again from its item's text, keeping what was made of it ({id})"));
+        let _ = app.emit("audio-changed", json!({ "id": id }));
         Ok(())
     }
 
@@ -915,6 +1021,45 @@ mod tests {
         let left: i64 = sqlx::query_scalar("SELECT count(*) FROM recordings WHERE id = 'old'").fetch_one(&pool).await.unwrap();
         let listened: i64 = sqlx::query_scalar("SELECT count(*) FROM listening").fetch_one(&pool).await.unwrap();
         assert_eq!((left, listened), (0, 0));
+    }
+
+    // Spec: AUD-17
+    #[tokio::test]
+    async fn a_reading_prepared_again_keeps_what_was_made_of_its_unchanged_text() {
+        let scratch = crate::test_db::Scratch::new();
+        let pool = crate::test_db::migrated_db(&scratch).await;
+        // Prepared before as one long chapter; its first two passages made, the listener in the second.
+        let before = r#"{"chapters":[{"title":"Post","key":"front","chunks":[{"source":"all of it","passages":["Opening.","The loop.","More."]}]}]}"#;
+        sqlx::query("INSERT INTO recordings (id, kind, title, items, voice, speech_model, status, progress, script, device, created_at, updated_at) VALUES ('r', 'verbatim', 'Post', '[]', 'Charon', 'm', 'listening', 0, ?, 'd', 'x', 'x')")
+            .bind(before)
+            .execute(&pool)
+            .await
+            .unwrap();
+        for (n, data) in [(0, "01"), (1, "02")] {
+            sqlx::query(&format!("INSERT INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES ('r.0.0.{n}', 'r', 0, 0, {n}, 2, x'{data}', 'x')"))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        sqlx::query("INSERT INTO listening (recording_id, position, piece, updated_at) VALUES ('r', 1.5, 'r.0.0.1', 'x')").execute(&pool).await.unwrap();
+        // Prepared again: the opening, then "The loop" as a chapter of its own.
+        let after: Script = serde_json::from_str(r#"{"chapters":[{"title":"Post","key":"front","chunks":[{"source":"opening","passages":["Opening."]}]},{"title":"The loop","key":"html:sec-2","chunks":[{"source":"loop","passages":["The loop.","Changed."]}]}]}"#).unwrap();
+        lay_over(&pool, "r", &after).await.unwrap();
+        let pieces: Vec<(String, Vec<u8>)> = sqlx::query_as("SELECT id, data FROM recording_pieces WHERE id NOT LIKE '%.parked.%' ORDER BY id").fetch_all(&pool).await.unwrap();
+        assert_eq!(pieces, vec![("r.0.0.0".to_string(), vec![1]), ("r.1.0.0".to_string(), vec![2])]);
+        assert_eq!(made(&pool, "r").await.unwrap().len(), 2);
+        let at: (Option<String>, f64) = sqlx::query_as("SELECT piece, position FROM listening WHERE recording_id = 'r'").fetch_one(&pool).await.unwrap();
+        assert_eq!(at, (Some("r.1.0.0".to_string()), 1.5));
+
+        // Its opening to be written again: what was made of it waits, kept aside, and is used once it's written.
+        let rewritten: Script = serde_json::from_str(r#"{"chapters":[{"title":"Post","key":"front","chunks":[{"source":"just the opening","passages":null}]},{"title":"The loop","key":"html:sec-2","chunks":[{"source":"loop","passages":["The loop.","Changed."]}]}]}"#).unwrap();
+        lay_over(&pool, "r", &rewritten).await.unwrap();
+        let opening = speech_key("m", "Charon", "Opening.");
+        assert_eq!(spoken_before(&pool, &opening).await.unwrap(), Some((vec![1], 2.0)));
+        assert_eq!(made(&pool, "r").await.unwrap().len(), 1);
+        keep_piece(&pool, "r", &PieceKey { chapter: 0, chunk: 0, passage: 0 }, 2.0, vec![1], &opening).await.unwrap();
+        let parked: i64 = sqlx::query_scalar("SELECT count(*) FROM recording_pieces WHERE id LIKE '%.parked.%'").fetch_one(&pool).await.unwrap();
+        assert_eq!(parked, 0);
     }
 
     #[test]

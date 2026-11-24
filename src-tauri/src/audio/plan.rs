@@ -223,6 +223,20 @@ pub fn next(slots: &[Slot], made: &HashMap<PieceKey, f64>, from: Option<&PieceKe
     }
 }
 
+// Spec: AUD-18
+/// What to make next of one chapter, all of it.
+pub fn next_in_chapter(slots: &[Slot], made: &HashMap<PieceKey, f64>, chapter: usize, at_once: usize) -> Next {
+    let own: Vec<Slot> = slots
+        .iter()
+        .filter(|s| match s {
+            Slot::Piece { key, .. } => key.chapter == chapter,
+            Slot::Unwritten { chapter: c, .. } => *c == chapter,
+        })
+        .cloned()
+        .collect();
+    next(&own, made, None, None, at_once)
+}
+
 /// Whether every passage of the recording is made.
 pub fn complete(slots: &[Slot], made: &HashMap<PieceKey, f64>) -> bool {
     slots.iter().all(|s| matches!(s, Slot::Piece { key, .. } if made.contains_key(key)))
@@ -451,6 +465,21 @@ mod tests {
         assert!(!complete(&slots, &made));
         // "First." "Second." and "Third." made, of those and one character not yet written.
         assert!((progress(&slots, &made) - 19.0 / 20.0).abs() < 1e-9);
+    }
+
+    // Spec: AUD-18
+    #[test]
+    fn a_chapter_is_made_on_its_own() {
+        let slots = slots(&script(TWO_CHAPTERS));
+        let mut made = HashMap::new();
+        assert_eq!(next_in_chapter(&slots, &made, 1, 3), Next::Speak(vec![pk(1, 0, 0)]));
+        assert_eq!(next_in_chapter(&slots, &made, 0, 3), Next::Speak(vec![pk(0, 0, 0), pk(0, 0, 1)]));
+        made.insert(pk(0, 0, 0), 1.0);
+        made.insert(pk(0, 0, 1), 1.0);
+        assert_eq!(next_in_chapter(&slots, &made, 0, 3), Next::Write { chapter: 0, chunk: 1 });
+        made.insert(pk(1, 0, 0), 1.0);
+        assert_eq!(next_in_chapter(&slots, &made, 1, 3), Next::Nothing);
+        assert_eq!(next_in_chapter(&slots, &made, 7, 3), Next::Nothing);
     }
 
     #[test]

@@ -2500,6 +2500,58 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* Spec: AUD-18 — how much of a chapter is made, and making one now. */
+.recording-chapters li {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.recording-chapters li > button:first-child {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+.chapter-made {
+  position: absolute;
+  left: 10px;
+  bottom: 0;
+  height: 2px;
+  max-width: calc(100% - 20px);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.recording-chapters li > .recording-chapter-pending {
+  border-bottom: none;
+}
+.recording-chapters li > .chapter-make,
+.recording-chapters li > .chapter-state {
+  flex: none;
+  width: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+.recording-chapters li > .chapter-make:hover:not(:disabled) {
+  color: var(--accent);
+}
+.recording-chapters li > .chapter-make.making {
+  color: var(--accent);
+  animation: chapter-making 1.2s ease-in-out infinite;
+}
+@keyframes chapter-making {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recording-chapters li > .chapter-make.making {
+    animation: none;
+  }
+}
 /* What's playing, at the bottom of every other screen. */
 .mini-player {
   position: fixed;

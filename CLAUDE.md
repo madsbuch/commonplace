@@ -483,13 +483,25 @@ one file stay as they are.
 - The app prepares the script (`src/lib/audio.ts`, `prepareScript`; pure
   parts in `audioModel.ts`): an item's sections from its HTML version (each
   without the sections in it, the front matter first, the bibliography left
-  out), or from its PDF by its contents' pages and titles, cut into chunks
+  out; a `section` element's own text, or where the sections are only
+  headings, as in a post, a heading and what follows up to the next, taken
+  with a DOM Range, `between`), or from its PDF by its contents' pages and
+  titles, cut into chunks
   (`MAX_SCRIPT_CHUNK`) with `passages: null`; a summary is written whole here
   (one call, `audio_script` in the ledger). The script's shape is
   `{ chapters: [{ title, key, chunks: [{ source?, passages, model? }] }] }`
   (`key`: the section, `html:<anchor>`, `toc:<i>` or `front`); recordings
   made before hold `{ title, paragraphs }` chapters, read as one written
-  chunk each. Status: `writing` → `listening` (or `making`) → `ready`.
+  chunk each. Status: `writing` → `listening` (or `making`) → `ready`. A
+  reading follows its item's text (AUD-17, `refreshReading`: at Listen…, and
+  when the app starts for readings of HTML versions): prepared afresh
+  (`scriptOf`, keeping chunks whose source is unchanged), and if its
+  chapters or chunks differ Rust lays the reading over it (`audio_reshape` →
+  `lay_over`): pieces go where their passages now are, by `speech_key`;
+  those not placed yet (their chunk to be written again) are kept aside as
+  `<id>.parked.<key>` rows (chapter -1, out of the timeline) for
+  `spoken_before` to find, and dropped once placed; where it was left
+  follows its piece.
 - Rust makes it (`src-tauri/src/audio/`): `plan.rs` is pure (slots in order,
   a piece per passage, `<recording>.<chapter>.<chunk>.<passage>`, and what
   to make next within the lead, or all), `script.rs` writes a chunk through
@@ -525,15 +537,22 @@ one file stay as they are.
   makes pieces with it as Rust would (`audio_listen`: from the listener on,
   each chunk reached is "written", its request recorded, unless another
   recording wrote its source already, until two passages are, and those are
-  made, with their `speech_key`; `audio_make_all`: all; `audio_adopt`, as
-  `take_in`), so the browser checks play real WebM Opus from a section, wait
-  for what isn't made, go on, and take in a section recorded before.
+  made, with their `speech_key`; `audio_make_all`: all; `audio_make_chapter`:
+  one; `audio_adopt` and `audio_reshape`, as `take_in` and `lay_over`), so
+  the browser checks play real WebM Opus from a section, wait for what isn't
+  made, go on, make a chapter now, take in a section recorded before, and
+  reshape a post's reading prepared the old way.
 - One player for the app (`src/lib/player.ts`): a recording's timeline
   (`timeline` in `audioModel.ts`: pieces made count as they are, the rest at
   the pace of what's made), chapters, speed (per device), where it was left
   saved every 5 s and on pause (`listening`: seconds into its `piece`; synced),
   and `#t=<seconds>` in the recording's address. At a part not yet made it
   waits (`waiting`, "Making this part…") and goes on when the piece arrives.
+  Its chapters show how much of each is made (AUD-18, `Timeline.made`: a bar
+  under the chapter, a ✓ when all of it is) and a chapter not yet made can be
+  made now (`makeChapter` → `audio_make_chapter`: the worker's target holds
+  chapters to make, each after what's ahead of the listener,
+  `plan::next_in_chapter`).
   On a computer, two audio elements on Blobs (`audio_piece`, base64), the
   next piece loaded while one plays; Media Session for media keys.
   `MiniPlayer` shows what's playing on other screens.

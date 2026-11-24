@@ -203,6 +203,21 @@ async fn audio_adopt(app: tauri::AppHandle, reading: String, old: Vec<String>) -
     audio_service(&app).adopt(&app, &reading, &old).await
 }
 
+// Spec: AUD-18
+/// Makes a chapter of recording `id`, all of it, now.
+#[tauri::command]
+fn audio_make_chapter(app: tauri::AppHandle, id: String, chapter: usize) {
+    audio_service(&app).make_chapter(&app, &id, chapter);
+}
+
+// Spec: AUD-17
+/// Lays a reading over its script prepared afresh (JSON), keeping what was made of what didn't change.
+#[tauri::command]
+async fn audio_reshape(app: tauri::AppHandle, id: String, script: String) -> Result<(), String> {
+    let script: audio::plan::Script = serde_json::from_str(&script).map_err(|e| format!("the script can't be read: {e}"))?;
+    audio_service(&app).reshape(&app, &id, script).await
+}
+
 // Spec: APP-12
 /// A recording deleted: its making stops and its files go.
 #[tauri::command]
@@ -569,6 +584,8 @@ pub fn run() {
             audio_listen,
             audio_make_all,
             audio_adopt,
+            audio_make_chapter,
+            audio_reshape,
             audio_forget,
             audio_piece,
             audio_read,

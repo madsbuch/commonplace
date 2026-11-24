@@ -41,6 +41,8 @@ export interface PlayerState {
   waiting: boolean;
   /** How much of it is made, in seconds: null for a recording kept as one file. */
   made: number | null;
+  /** For each of `chapters`: the script's chapter it is, and how much of it is made (AUD-18); null for one file. */
+  chapterMade: { chapter: number; made: number }[] | null;
   error: string | null;
 }
 
@@ -70,6 +72,7 @@ let state: PlayerState = {
   loading: false,
   waiting: false,
   made: null,
+  chapterMade: null,
   error: null,
 };
 const listeners = new Set<() => void>();
@@ -390,7 +393,7 @@ async function refresh(): Promise<void> {
   }
   const slot = tl.slots[current];
   const into = native ? nativeAt : (audio?.currentTime ?? 0);
-  set({ title: fresh.title, chapters: tl.chapters, duration: tl.duration, made: tl.madeSeconds, ...(slot && !want ? { position: slot.start + into } : {}) });
+  set({ title: fresh.title, chapters: tl.chapters, chapterMade: tl.made, duration: tl.duration, made: tl.madeSeconds, ...(slot && !want ? { position: slot.start + into } : {}) });
   if (want) {
     const w = want;
     // A chunk not yet written was waited for by its first passage's id: once written, its first passage.
@@ -442,7 +445,7 @@ export async function load(r: Recording, opts: { at?: number | null; play?: bool
   want = null;
   // A recording made before, at once, is one file: only those have a length of their own.
   const oneFile = r.durationSeconds !== null;
-  set({ recordingId: r.id, title: r.title, chapters: r.chapters, duration: r.durationSeconds ?? 0, position: 0, playing: false, loading: true, waiting: false, made: null, error: null });
+  set({ recordingId: r.id, title: r.title, chapters: r.chapters, duration: r.durationSeconds ?? 0, position: 0, playing: false, loading: true, waiting: false, made: null, chapterMade: null, error: null });
   try {
     if (oneFile) {
       const saved = await getListening(r.id);
@@ -465,7 +468,7 @@ export async function load(r: Recording, opts: { at?: number | null; play?: bool
     if (!r.script) throw new Error("Its script isn't ready yet.");
     tl = timeline(r.id, r.script, await recordingPieces(r.id));
     if (rec !== r) return;
-    set({ chapters: tl.chapters, duration: tl.duration, made: tl.madeSeconds });
+    set({ chapters: tl.chapters, chapterMade: tl.made, duration: tl.duration, made: tl.madeSeconds });
     const saved = opts.at === undefined || opts.at === null ? await getListening(r.id) : null;
     const at = opts.at ?? (saved ? (saved.piece ? (startOf(tl, saved.piece) ?? 0) : 0) + saved.position : 0);
     set({ loading: false });
@@ -585,5 +588,5 @@ export function unload(id: string): void {
   tl = null;
   current = -1;
   want = null;
-  set({ recordingId: null, title: "", chapters: [], duration: 0, position: 0, playing: false, waiting: false, made: null });
+  set({ recordingId: null, title: "", chapters: [], duration: 0, position: 0, playing: false, waiting: false, made: null, chapterMade: null });
 }

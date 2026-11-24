@@ -100,6 +100,16 @@ describe("a recording made as it's listened to", () => {
     expect(tl.duration).toBeCloseTo((tl.slots[3]?.start ?? 0) + (tl.slots[3]?.seconds ?? 0));
   });
 
+  // Spec: AUD-18
+  test("each chapter says how much of it is made", () => {
+    const none = timeline("rec", script, new Map());
+    expect(none.made).toEqual([{ chapter: 0, made: 0 }, { chapter: 1, made: 0 }]);
+    const some = timeline("rec", script, new Map([["rec.0.0.0", 4], ["rec.1.0.0", 1]]));
+    expect(some.made[0]?.made).toBeGreaterThan(0);
+    expect(some.made[0]?.made).toBeLessThan(1);
+    expect(some.made[1]).toEqual({ chapter: 1, made: 1 });
+  });
+
   test("before any is made, its text gives its length", () => {
     const tl = timeline("rec", script, new Map());
     expect(tl.slots[0]?.seconds).toBeCloseTo(14 / CHARS_PER_SECOND);

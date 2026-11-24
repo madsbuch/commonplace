@@ -443,6 +443,84 @@ if (import.meta.main) {
           db.query("UPDATE recordings SET status = ?, progress = ? WHERE id = ?").run(done ? "ready" : all ? "making" : row.status, order.length ? made / order.length : 1, id);
           return Response.json({ ok: null }, { headers: cors });
         }
+        // Spec: AUD-18
+        // A chapter made now: its chunks written, its passages spoken.
+        if (cmd === "audio_make_chapter") {
+          const id = String(args["id"]);
+          const chapter = z.number().parse(args["chapter"]);
+          const row = z.object({ script: z.string(), voice: z.string(), speech_model: z.string() }).parse(db.query("SELECT script, voice, speech_model FROM recordings WHERE id = ?").get(id));
+          const script = ScriptSchema.parse(parseJson(row.script));
+          const webm = new Uint8Array(readFileSync(new URL("tests/browser/fixtures/speech.webm", root)));
+          const prompt = readFileSync(new URL("src-tauri/src/audio/verbatim.md", root), "utf8");
+          (script.chapters[chapter]?.chunks ?? []).forEach((k, i) => {
+            if (k.passages === null) {
+              chatRequests.push({ model: "anthropic/claude-haiku-5.5", messages: [{ role: "system", content: prompt }, { role: "user", content: k.source ?? "" }], max_tokens: 16000 });
+              const answer = z.object({ paragraphs: z.array(z.string()) }).safeParse(modelAnswer);
+              k.passages = answer.success ? answer.data.paragraphs : [];
+            }
+            k.passages.forEach((text, n) =>
+              db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, 3, ?, ?, ?)").run(
+                `${id}.${chapter}.${i}.${n}`,
+                id,
+                chapter,
+                i,
+                n,
+                webm,
+                new Date().toISOString(),
+                `${row.speech_model}|${row.voice}|${text}`,
+              ),
+            );
+          });
+          db.query("UPDATE recordings SET script = ? WHERE id = ?").run(JSON.stringify(script), id);
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        // Spec: AUD-17
+        // Rust's lay_over: the script afresh, the pieces where their passages now are, where it was left after its piece.
+        if (cmd === "audio_reshape") {
+          const id = String(args["id"]);
+          const script = ScriptSchema.parse(parseJson(String(args["script"])));
+          const row = z.object({ voice: z.string(), speech_model: z.string() }).parse(db.query("SELECT voice, speech_model FROM recordings WHERE id = ?").get(id));
+          const kept = z.array(z.object({ id: z.string(), speech_key: z.string().nullable(), data: z.instanceof(Uint8Array) })).parse(db.query("SELECT id, speech_key, data FROM recording_pieces WHERE recording_id = ?").all(id));
+          const at = z.object({ piece: z.string().nullable() }).optional().parse(db.query("SELECT piece FROM listening WHERE recording_id = ?").get(id) ?? undefined);
+          const wasAt = kept.find((k) => k.id === at?.piece)?.speech_key ?? null;
+          db.query("UPDATE recordings SET script = ? WHERE id = ?").run(JSON.stringify(script), id);
+          db.query("DELETE FROM recording_pieces WHERE recording_id = ?").run(id);
+          let nowAt: string | null = null;
+          script.chapters.forEach((ch, c) =>
+            (ch.chunks ?? []).forEach((k, i) =>
+              (k.passages ?? []).forEach((text, n) => {
+                const key = `${row.speech_model}|${row.voice}|${text}`;
+                const piece = kept.find((p) => p.speech_key === key);
+                if (key === wasAt) nowAt ??= `${id}.${c}.${i}.${n}`;
+                if (piece)
+                  db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, 3, ?, ?, ?)").run(
+                    `${id}.${c}.${i}.${n}`,
+                    id,
+                    c,
+                    i,
+                    n,
+                    piece.data,
+                    new Date().toISOString(),
+                    key,
+                  );
+              }),
+            ),
+          );
+          // What isn't placed waits, kept aside, for its chunk to be written again.
+          const placed = new Set(script.chapters.flatMap((ch) => (ch.chunks ?? []).flatMap((k) => (k.passages ?? []).map((text) => `${row.speech_model}|${row.voice}|${text}`))));
+          for (const p of kept)
+            if (p.speech_key && !placed.has(p.speech_key))
+              db.query("INSERT OR REPLACE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, -1, -1, -1, 3, ?, ?, ?)").run(
+                `${id}.parked.${p.speech_key.slice(-32)}`,
+                id,
+                p.data,
+                new Date().toISOString(),
+                p.speech_key,
+              );
+          if (nowAt) db.query("UPDATE listening SET piece = ? WHERE recording_id = ?").run(nowAt, id);
+          else db.query("DELETE FROM listening WHERE recording_id = ?").run(id);
+          return Response.json({ ok: null }, { headers: cors });
+        }
         // Spec: AUD-14
         // Rust's take_in: an item's earlier recordings' chunks and pieces into its reading, then they go.
         if (cmd === "audio_adopt") {

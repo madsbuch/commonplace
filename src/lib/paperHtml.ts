@@ -175,6 +175,29 @@ export function sectionsOf(root: Element): TocEntry[] {
   return out;
 }
 
+// Spec: AUD-2
+/**
+ * What lies between two elements of `root`, as a copy: from just before
+ * `start` (the root's beginning when null) to just before `end` (its end when
+ * null), whatever they're nested in. A page whose sections are only headings
+ * reads a section this way: its heading and what follows, up to the next.
+ */
+export function between(root: Element, start: Element | null, end: Element | null): Element {
+  const range = root.ownerDocument.createRange();
+  if (start) range.setStartBefore(start);
+  else range.setStart(root, 0);
+  if (end) range.setEndBefore(end);
+  else range.setEnd(root, root.childNodes.length);
+  const box = root.ownerDocument.createElement("div");
+  box.append(range.cloneContents());
+  return box;
+}
+
+/** Whether a paper's sections are `section` elements (LaTeXML's), not just headings. */
+export function hasSections(root: Element): boolean {
+  return [...root.querySelectorAll("section[id]")].some((s) => s.querySelector(":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6"));
+}
+
 // Spec: ATL-10
 /** An element's text, maths as `$LaTeX$`, a block per line. */
 export function textOf(el: Element): string {

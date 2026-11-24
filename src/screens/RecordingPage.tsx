@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreMenu } from "../components/MoreMenu";
-import { PauseIcon, PlayIcon } from "../components/Icons";
+import { MakeNowIcon, PauseIcon, PlayIcon } from "../components/Icons";
 import { replaceFragment } from "../lib/address";
-import { AUDIO_TABLES, getRecording, hasAudio, makeAll, readInVoice, removeRecording, retryRecording } from "../lib/audio";
+import { AUDIO_TABLES, getRecording, hasAudio, makeAll, makeChapter, readInVoice, removeRecording, retryRecording } from "../lib/audio";
 import { chapterAt, chunksOf, clock, SPEEDS, timeOfFragment, VOICES } from "../lib/audioModel";
 import { getItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
@@ -107,6 +107,9 @@ export default function RecordingPage() {
   const [here, setHere] = useState(false);
   const [sources, setSources] = useState<{ id: string; title: string }[]>([]);
   const [revoicing, setRevoicing] = useState(false);
+  // Spec: AUD-18
+  // Chapters asked to be made now, until they are.
+  const [asked, setAsked] = useState<ReadonlySet<number>>(new Set());
   const p = usePlayer();
 
   useEffect(() => {
@@ -276,14 +279,44 @@ export default function RecordingPage() {
 
       {chapters.length > 0 ? (
         <ol className="recording-chapters" aria-label="Chapters">
-          {chapters.map((c, i) => (
-            <li key={i}>
-              <button type="button" className={mine && i === current ? "active" : undefined} onClick={() => (mine ? seek(c.start) : undefined)}>
-                <span>{c.title}</span>
-                <span className="muted">{clock(c.start)}</span>
-              </button>
-            </li>
-          ))}
+          {chapters.map((c, i) => {
+            // Spec: AUD-18
+            const made = mine ? p.chapterMade?.[i] : undefined;
+            const making = made !== undefined && made.made < 1 && asked.has(made.chapter);
+            return (
+              <li key={i}>
+                <button
+                  type="button"
+                  className={mine && i === current ? "active" : undefined}
+                  title={made ? (made.made >= 1 ? "Made" : `${Math.round(made.made * 100)}% made`) : undefined}
+                  onClick={() => (mine ? seek(c.start) : undefined)}
+                >
+                  <span>{c.title}</span>
+                  <span className="muted">{clock(c.start)}</span>
+                  {made ? <span className="chapter-made" style={{ width: `${Math.round(made.made * 100)}%` }} aria-hidden /> : null}
+                </button>
+                {made && made.made >= 1 ? (
+                  <span className="chapter-state" role="img" aria-label={`“${c.title}” is made`}>
+                    ✓
+                  </span>
+                ) : made && !oneFile ? (
+                  <button
+                    type="button"
+                    className={making ? "chapter-make making" : "chapter-make"}
+                    aria-label={making ? `Making “${c.title}”` : `Make “${c.title}” now`}
+                    title={making ? "Making it…" : "Make it now"}
+                    disabled={making}
+                    onClick={() => {
+                      setAsked((s) => new Set([...s, made.chapter]));
+                      void makeChapter(rec.id, made.chapter);
+                    }}
+                  >
+                    <MakeNowIcon />
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
       ) : rec.script ? (
         <ol className="recording-chapters" aria-label="Chapters">

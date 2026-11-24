@@ -212,6 +212,8 @@ export interface Slot {
 export interface Timeline {
   slots: Slot[];
   chapters: RecordingChapter[];
+  /** For each of `chapters`: the script's chapter it is, and how much of it is made, 0 to 1 (AUD-18). */
+  made: { chapter: number; made: number }[];
   /** The whole length, as likely as it can be said. */
   duration: number;
   /** How much of it is made. */
@@ -270,7 +272,15 @@ export function timeline(recordingId: string, script: Script, made: ReadonlyMap<
     const first = slots.find((s) => s.chapter === c);
     return first ? [{ title: ch.title, start: first.start }] : [];
   });
-  return { slots, chapters, duration: at, madeSeconds };
+  // Spec: AUD-18
+  const madeOf = script.chapters.flatMap((_, c) => {
+    const own = slots.filter((s) => s.chapter === c);
+    if (own.length === 0) return [];
+    const all = own.reduce((n, s) => n + s.seconds, 0);
+    const done = own.reduce((n, s) => n + (s.made ? s.seconds : 0), 0);
+    return [{ chapter: c, made: own.every((s) => s.made) ? 1 : all > 0 ? Math.min(0.99, done / all) : 0 }];
+  });
+  return { slots, chapters, made: madeOf, duration: at, madeSeconds };
 }
 
 /** The slot playing at `t` seconds, and how far into it: the last that starts at or before it. */

@@ -106,3 +106,12 @@ export const SparkIcon = () => (
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />
   </Icon>
 );
+// Spec: AUD-18
+/** Making a chapter now: an arrow down onto a line. */
+export const MakeNowIcon = () => (
+  <Icon size={16}>
+    <path d="M12 4v11" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 20h14" />
+  </Icon>
+);

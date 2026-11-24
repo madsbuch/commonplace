@@ -28,7 +28,7 @@ import {
 } from "./audioModel";
 import { execute, getSetting, nowIso, select, setSetting } from "./db";
 import { derivedId, newId } from "./ids";
-import { bytesOf, getItem, readFile, readHtml, type LibraryItem } from "./library";
+import { bytesOf, getItem, hasHtml, readFile, readHtml, type LibraryItem } from "./library";
 import { notifyTablesChanged } from "./live";
 import { chatJson, errorMessage } from "./openrouter";
 import { AudioEventSchema, ListeningRowSchema, parseRecording, PieceRowSchema, type Provenance, type Recording, type Script, type TocEntry } from "./schemas";
@@ -108,7 +108,59 @@ export async function startReading(itemId: string, voice?: string): Promise<stri
   const rec = await getRecording(id);
   if (rec && rec.script === null) await prepareScript(id);
   else if (rec?.status === "writing") await preparing.get(id);
+  else await refreshReading(id).catch((e: unknown) => note("warning", "audio", `Preparing a reading again failed: ${errorMessage(e)}`));
   return id;
+}
+
+/**
+ * A reading's script from its item's sections, cut into chunks for the
+ * script model; a chunk `before` has written already (the same source) keeps
+ * what was written, and the model that wrote it.
+ */
+function scriptOf(sources: readonly SourceChapter[], before: Script | null): Script {
+  const written = new Map<string, { passages: string[]; model?: string }>();
+  for (const ch of before?.chapters ?? []) {
+    for (const k of ch.chunks ?? []) if (k.source !== undefined && k.passages) written.set(k.source, { passages: k.passages, ...(k.model ? { model: k.model } : {}) });
+  }
+  return {
+    chapters: sources.map((s) => ({
+      title: s.title,
+      key: s.key,
+      chunks: cut(`${s.title}\n\n${s.text}`, MAX_SCRIPT_CHUNK).map((source) => {
+        const w = written.get(source);
+        return { source, passages: w?.passages ?? null, ...(w?.model ? { model: w.model } : {}) };
+      }),
+    })),
+  };
+}
+
+// Spec: AUD-17
+/**
+ * Prepares a reading again from its item's text when what it was prepared
+ * from has changed (a fresher HTML version, a better way of reading it into
+ * chapters); Rust lays the reading over it, keeping what was made of what
+ * didn't change. Whether it changed.
+ */
+export async function refreshReading(id: string): Promise<boolean> {
+  const rec = await getRecording(id);
+  const itemId = rec?.items[0];
+  if (!rec?.script || rec.kind !== "verbatim" || rec.durationSeconds !== null || rec.status === "writing" || !itemId) return false;
+  const item = await getItem(itemId);
+  if (!item) return false;
+  const script = scriptOf((await htmlChapters(item, null)) ?? (await pdfChapters(item, null)), rec.script);
+  const shape = (s: Script) => JSON.stringify(s.chapters.map((c) => [c.title, c.key ?? null, (c.chunks ?? []).map((k) => k.source ?? null)]));
+  if (shape(script) === shape(rec.script)) return false;
+  await invoke("audio_reshape", { id, script: JSON.stringify(script) });
+  note("info", "audio", `“${rec.title}” was prepared again from its text`);
+  notifyTablesChanged(AUDIO_TABLES);
+  return true;
+}
+
+// Spec: AUD-18
+/** Makes a chapter of a recording (by its place in the script), all of it, now. */
+export async function makeChapter(id: string, chapter: number): Promise<void> {
+  await invoke("audio_make_chapter", { id, chapter });
+  notifyTablesChanged(["recording_pieces", "recordings"]);
 }
 
 // Spec: AUD-2
@@ -197,27 +249,46 @@ function scope(flat: readonly Flat[], from: number | null): Flat[] {
   return out;
 }
 
-/** The sections of an item's HTML version a recording reads, each without the sections within it. */
+// Spec: AUD-2, AUD-3
+/**
+ * The sections of an item's HTML version a recording reads, each without
+ * the sections within it: a `section` element's own text, or, where the
+ * sections are only headings (a blog post, an HTML file), a heading and what
+ * follows it up to the next. The front matter comes first, without authors.
+ */
 async function htmlChapters(item: LibraryItem, section: string | null): Promise<SourceChapter[] | null> {
   const html = await readHtml(item.id);
   if (html === null) return null;
-  const { sanitizePaper, sectionsOf, textOf, withoutAuthors } = await import("./paperHtml");
+  const { between, hasSections, sanitizePaper, sectionsOf, textOf, withoutAuthors } = await import("./paperHtml");
   const root = new DOMParser().parseFromString(sanitizePaper(html), "text/html").body;
   const flat = flatten(sectionsOf(root));
   const anchor = section?.startsWith("html:") ? section.slice(5) : null;
   const from = anchor === null ? null : flat.findIndex((f) => f.entry.anchor === anchor);
+  const sectioned = hasSections(root);
+  const at = (f: Flat | undefined): Element | null => (f?.entry.anchor ? root.querySelector(`[id="${CSS.escape(f.entry.anchor)}"]`) : null);
   const chapters: SourceChapter[] = [];
-  const own = (el: Element): string => {
+  const own = (f: Flat): string => {
+    const el = at(f);
+    if (!el) return "";
+    if (!sectioned) return textOf(between(root, el, at(flat[flat.indexOf(f) + 1])));
     const copy = el.cloneNode(true);
     if (!(copy instanceof Element)) return "";
     for (const nested of copy.querySelectorAll("section[id]")) nested.remove();
     return textOf(copy);
   };
   if (from === null) {
-    // What comes before the first section: the title and the abstract.
-    const front = root.cloneNode(true);
-    if (front instanceof Element) {
-      for (const s of front.querySelectorAll("section[id]")) s.remove();
+    // What comes before the first section: the title and the abstract, or a post's opening.
+    let front: Element | null = null;
+    if (sectioned) {
+      const copy = root.cloneNode(true);
+      if (copy instanceof Element) {
+        for (const s of copy.querySelectorAll("section[id]")) s.remove();
+        front = copy;
+      }
+    } else {
+      front = between(root, null, at(flat[0]));
+    }
+    if (front) {
       // Spec: AUD-3
       withoutAuthors(front);
       const text = textOf(front);
@@ -225,8 +296,7 @@ async function htmlChapters(item: LibraryItem, section: string | null): Promise<
     }
   }
   for (const f of scope(flat, from === -1 ? null : from)) {
-    const el = f.entry.anchor ? root.querySelector(`[id="${CSS.escape(f.entry.anchor)}"]`) : null;
-    if (el && f.entry.anchor) chapters.push({ title: f.entry.title, text: own(el), key: `html:${f.entry.anchor}` });
+    if (f.entry.anchor && at(f)) chapters.push({ title: f.entry.title, text: own(f), key: `html:${f.entry.anchor}` });
   }
   return chapters;
 }
@@ -361,10 +431,7 @@ async function prepare(id: string): Promise<void> {
       } else {
         const item = items[0];
         if (!item) throw new Error("Its paper is no longer in the library.");
-        const sources = (await htmlChapters(item, rec.section)) ?? (await pdfChapters(item, rec.section));
-        script = {
-          chapters: sources.map((s) => ({ title: s.title, key: s.key, chunks: cut(`${s.title}\n\n${s.text}`, MAX_SCRIPT_CHUNK).map((source) => ({ source, passages: null })) })),
-        };
+        script = scriptOf((await htmlChapters(item, rec.section)) ?? (await pdfChapters(item, rec.section)), null);
         if (script.chapters.every((c) => (c.chunks ?? []).length === 0)) throw new Error("There's no text to read in it.");
       }
       await execute(`UPDATE recordings SET script = $2, status = 'listening', progress = 0, updated_at = $3 WHERE id = $1`, [id, JSON.stringify(script), nowIso()]);
@@ -425,7 +492,8 @@ export async function recordingAudio(id: string): Promise<Uint8Array> {
 // Spec: AUD-6, AUD-7
 /** The pieces of a recording this device has: id → seconds. */
 export async function recordingPieces(id: string): Promise<Map<string, number>> {
-  const rows = (await select(`SELECT id, seconds FROM recording_pieces WHERE recording_id = $1`, [id])).map((r) => PieceRowSchema.parse(r));
+  // Pieces kept aside for a chunk to be written again (AUD-17) aren't in its timeline.
+  const rows = (await select(`SELECT id, seconds FROM recording_pieces WHERE recording_id = $1 AND chapter >= 0`, [id])).map((r) => PieceRowSchema.parse(r));
   return new Map(rows.map((r) => [r.id, r.seconds]));
 }
 
@@ -456,6 +524,13 @@ export async function resumeRecordings(): Promise<void> {
   const all = await listRecordings();
   for (const r of all) if (r.status === "writing" && r.device === me) void prepareScript(r.id);
   await adoptEarlier(all).catch((e: unknown) => note("warning", "audio", `Taking earlier recordings into their readings failed: ${errorMessage(e)}`));
+  // Spec: AUD-17
+  // Readings of HTML versions follow their text (reading a PDF again costs more: that's done when one is listened to).
+  for (const r of await listRecordings()) {
+    const item = r.items[0];
+    if (r.kind !== "verbatim" || r.durationSeconds !== null || !item || !(await hasHtml(item))) continue;
+    await refreshReading(r.id).catch((e: unknown) => note("warning", "audio", `Preparing “${r.title}” again failed: ${errorMessage(e)}`));
+  }
 }
 
 // Spec: AUD-14

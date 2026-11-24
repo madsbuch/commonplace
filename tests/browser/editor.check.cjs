@@ -974,6 +974,17 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(600);
     const listened = await q(`SELECT position, piece FROM listening WHERE recording_id = '${rec?.id}'`);
     check("where it was left is kept, as a moment of a piece", listened[0]?.piece?.startsWith(`${rec?.id}.${attention}.0.`) && listened[0]?.position >= 0, JSON.stringify(listened));
+    // Spec: AUD-18
+    const modelAt = (recScript.chapters ?? []).findIndex((c) => c.key === "html:S2");
+    check("a chapter all made says so", (await page.locator(".recording-chapters li", { hasText: "2.1 Attention" }).getByRole("img", { name: "“2.1 Attention” is made" }).count()) === 1);
+    await page.getByRole("button", { name: "Make “2 Model” now" }).click();
+    await page.waitForTimeout(1500);
+    check(
+      "and a chapter not yet made can be made now, ahead of listening",
+      (await page.getByRole("img", { name: "“2 Model” is made" }).count()) === 1 && (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${rec?.id}' AND chapter = ${modelAt}`))[0].n === 4,
+      String(modelAt),
+    );
+    if (process.env.CHECK_SHOTS) await page.locator(".recording-screen").screenshot({ path: join(process.env.CHECK_SHOTS, "chapters-made.png") });
     await page.locator(".recording-chapters button").first().click();
     await page.waitForTimeout(800);
     check("a chapter goes to its start", (await page.locator(".player-times span").first().innerText()) === "0:00");
@@ -1034,6 +1045,49 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       "read in another voice, it starts afresh: what was spoken goes, its text stays",
       kore?.voice === "Kore" && JSON.parse(kore?.script ?? "{}").chapters?.[attention]?.chunks?.[0]?.passages?.length === 4 && koreKeys.length > 0 && koreKeys.every((k) => k.includes("|Kore|")),
       JSON.stringify({ voice: kore?.voice, koreKeys }),
+    );
+
+    // Spec: AUD-2
+    // A post's sections are its headings: each is its heading and what follows it, up to the next.
+    await page.goto(`${APP}/library/${post?.id}`);
+    await page.waitForTimeout(1200);
+    await page.getByRole("button", { name: "More for this item" }).click();
+    await page.getByRole("menuitem", { name: "Listen…" }).click();
+    await page.getByRole("button", { name: "Listen", exact: true }).click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(2000);
+    const postReading = page.url().split("/audio/")[1]?.split(/[?#]/)[0];
+    const ps = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${postReading}'`))[0]?.script ?? "{}");
+    const src = (c) => (c?.chunks ?? []).map((k) => k.source).join(" ");
+    check(
+      "a post read aloud: its opening, then each heading with what follows it, up to the next",
+      (ps.chapters ?? []).map((c) => c.title).join("|") === "On Compilers|Front ends|Back ends" &&
+        src(ps.chapters[0]).includes("Why, paragraph 6") &&
+        !src(ps.chapters[0]).includes("Parsing") &&
+        src(ps.chapters[1]).includes("Parsing, paragraph 6") &&
+        !src(ps.chapters[1]).includes("Emitting") &&
+        src(ps.chapters[2]).includes("Emitting, paragraph 6"),
+      JSON.stringify((ps.chapters ?? []).map((c) => [c.title, src(c).length])),
+    );
+
+    // Spec: AUD-17
+    // A reading prepared before its text was read this way follows it again; what was made waits, kept aside.
+    const stale = JSON.stringify({
+      chapters: [
+        { title: "On Compilers", key: "front", chunks: [{ source: "the whole post, as it was read before", passages: ps.chapters?.[0]?.chunks?.[0]?.passages }] },
+        { title: "Front ends", key: ps.chapters?.[1]?.key, chunks: [{ source: "Front ends", passages: null }] },
+      ],
+    }).replace(/'/g, "''");
+    const madeBefore = (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${postReading}'`))[0].n;
+    await q(`UPDATE recordings SET script = '${stale}' WHERE id = '${postReading}'`);
+    await page.goto(`${APP}/audio`);
+    await page.waitForTimeout(2500);
+    const followed = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${postReading}'`))[0]?.script ?? "{}");
+    const parked = (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${postReading}' AND id LIKE '%.parked.%'`))[0].n;
+    check(
+      "a reading follows its item's text again, what was made of it kept aside to use again",
+      (followed.chapters ?? []).map((c) => c.title).join("|") === "On Compilers|Front ends|Back ends" && src(followed.chapters?.[0]) === src(ps.chapters?.[0]) && madeBefore === 2 && parked === 2,
+      JSON.stringify({ madeBefore, parked, titles: (followed.chapters ?? []).map((c) => c.title) }),
     );
 
     // A recording made before, at once, as one file, still plays.
