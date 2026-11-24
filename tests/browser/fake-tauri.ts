@@ -107,7 +107,8 @@ let modelAnswer: unknown = { title: "A title", authors: [], year: null, kind: "p
 
 /** Scripted replies for streamed chat rounds, taken in order (POST /fake-chat). */
 const ReplySchema = z.union([
-  z.object({ text: z.string() }),
+  // `cut`: the answer stops at its most (finish_reason "length").
+  z.object({ text: z.string(), cut: z.boolean().optional() }),
   z.object({ tools: z.array(z.object({ name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() })) }),
   z.object({ error: z.string() }),
 ]);
@@ -195,6 +196,10 @@ function fakeWeb(url: string): { status: number; contentType: string; url: strin
   if (url === "https://blog.example.com/images/fig.png") return ok(PNG, "image/png");
   if (url === "https://spa.example.com/blog/loops") return ok(SHELL_POST, "text/html");
   if (url === "https://cdn.example.org/loop.png") return ok(PNG, "image/png");
+  // Spec: LIB-29
+  // A PDF, served as some servers do, as anything at all.
+  if (url === "https://papers.example.com/files/on-loops.pdf")
+    return ok(new Uint8Array(readFileSync(new URL("tests/browser/fixtures/with-contents.pdf", root))), "application/octet-stream");
   if (url === "https://blog.example.com/missing") return { status: 404, contentType: "text/html", url, data: Buffer.from("Not Found").toString("base64") };
   return null;
 }
@@ -215,7 +220,7 @@ function sse(reply: z.infer<typeof ReplySchema>): string {
       out += ev({ choices: [{ delta: { tool_calls: [{ index, function: { arguments: args.slice(3) } }] } }] });
     });
   }
-  out += ev({ choices: [{ delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0004 } });
+  out += ev({ choices: [{ delta: {}, finish_reason: "text" in reply && reply.cut ? "length" : "stop" }], usage: { prompt_tokens: 900, completion_tokens: 40, cost: 0.0004 } });
   return out + "data: [DONE]\n\n";
 }
 let nextRid = 1;

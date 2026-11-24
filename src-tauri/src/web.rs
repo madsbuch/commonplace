@@ -1,6 +1,6 @@
 //! Web pages for the library (LIB-28): a blog post fetched by its address,
-//! and its figures. Only the address goes out: a plain GET, http or https,
-//! no cookies, at most `MOST` bytes. A page that builds itself in the
+//! and its figures, or a PDF there (LIB-29). Only the address goes out: a
+//! plain GET, http or https, no cookies, at most `MOST` bytes. A page that builds itself in the
 //! browser (its HTML an empty shell, its text drawn by its JavaScript) is
 //! rendered instead: on a computer in a hidden window of the app's own
 //! webview, its finished HTML taken with `eval_with_callback`; on Android
@@ -11,8 +11,9 @@ use serde::Serialize;
 use std::time::Duration;
 use tauri_plugin_http::reqwest;
 
-/// The most a page or a figure may weigh.
-const MOST: usize = 25 * 1024 * 1024;
+// Spec: LIB-2, LIB-29
+/// The most anything fetched may weigh: `library.max-file-size`, as a PDF added by its address may.
+const MOST: usize = 100 * 1024 * 1024;
 const WAIT: Duration = Duration::from_secs(30);
 /// Some sites turn away what doesn't look like a browser.
 const AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";

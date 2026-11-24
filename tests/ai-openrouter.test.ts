@@ -1,6 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import { contentToText, emptyStreamState, foldChunk, isTextModel, promptPricePerMillion, splitSse, usageOf } from "../src/lib/openrouter";
-import { parseChatChunk, parseChatResponse, parseModelList, parseModelsResponse } from "../src/lib/schemas";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { contentToText, emptyStreamState, foldChunk, isTextModel, MOST_ANSWER, promptPricePerMillion, splitSse, usageOf } from "../src/lib/openrouter";
+import { parseChatChunk, parseChatResponse, parseJson, parseModelList, parseModelsResponse } from "../src/lib/schemas";
+
+describe("the most an answer may run to", () => {
+  // Spec: AI-7
+  test("every chat feature has its most, the spec's `ai.most-answer.*`", () => {
+    const spec = z
+      .object({ values: z.array(z.object({ id: z.string(), value: z.unknown() })) })
+      .parse(parseJson(readFileSync(join(import.meta.dir, "..", ".spec", "ai.json"), "utf8")));
+    const most = Object.fromEntries(
+      spec.values.filter((v) => v.id.startsWith("ai.most-answer.")).map((v) => [v.id.slice("ai.most-answer.".length).replace(/-/g, "_"), v.value]),
+    );
+    expect(MOST_ANSWER).toEqual(most);
+  });
+});
 
 describe("server-sent events", () => {
   test("complete events are cut out; the rest waits", () => {

@@ -352,9 +352,11 @@ read and show verdicts.
   in `webModel.ts`): the Library's field takes an arXiv number or any web
   address. Rust fetches the page (`web_get` in `src-tauri/src/web.rs`: a
   plain GET with a browser's user agent, no cookies, http(s) only, at most
-  25 MB; figures go the same way), and Mozilla's Readability finds the post
-  in it. A page that builds itself in the browser (z.ai's blog: an empty
-  `<div id="root">`) reads as too little (`MIN_ARTICLE_TEXT`), so it's
+  `library.max-file-size`; figures go the same way). A PDF there (as its
+  type says, or its first bytes: LIB-29) is added as the file would be,
+  named from the address (`pdfName`); a page goes to Mozilla's Readability,
+  which finds the post in it. A page that builds itself in the browser
+  (z.ai's blog: an empty `<div id="root">`) reads as too little (`MIN_ARTICLE_TEXT`), so it's
   rendered (`web_render`) and read again: on a computer a hidden
   `WebviewWindow` of the app's webview (`page-render-N`, in no capability,
   so the page can't call the app), its HTML taken with `eval_with_callback`
@@ -373,7 +375,8 @@ read and show verdicts.
   page around it, and never changes a post's kind. Without a PDF,
   `readDetails` reads an item's stored text. The fake Tauri layer answers
   as two blogs (`blog.example.com`, served as HTML; `spa.example.com`, a
-  shell until rendered).
+  shell until rendered) and serves a PDF at
+  `papers.example.com/files/on-loops.pdf`.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -551,8 +554,15 @@ Rust, `web_get` and `web_render`, with nothing but their address.)
   returns.
 - Every response that reports its cost is logged in `ai_usage` under its
   feature (`AI_FEATURES` in `src/lib/aiCost.ts`). A new feature that calls a
-  model gets a name there and passes it as `feature`. `aiCost.ts` is pure (the
-  Costs screen's roll-ups); `aiUsage.ts` reads and writes the ledger.
+  model gets a name there and passes it as `feature`, and a most for its
+  answers in `MOST_ANSWER` (`openrouter.ts`, the spec's `ai.most-answer.*`;
+  AI-7): every request sends it as `max_tokens`, since without one
+  OpenRouter holds back credit for the model's whole output limit and a
+  few requests at once ask for more than the account holds (402). An answer
+  cut off there (`finish_reason` "length") fails for JSON and for a round
+  with tool calls; an assistant answer keeps its text and says it was cut
+  off. The fake Tauri layer cuts a scripted reply with `cut: true`.
+  `aiCost.ts` is pure (the Costs screen's roll-ups); `aiUsage.ts` reads and writes the ledger.
 - The assistant is a chat (`src/lib/assistantRunner.ts`, a state machine
   outside React, like Tally's): transcripts are rows of `chats` (JSON,
   OpenAI-style, tool calls included) saved after every round; sync splits a

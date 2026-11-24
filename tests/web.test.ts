@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, webAddress, yearOf } from "../src/lib/webModel";
+import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, pdfName, webAddress, yearOf } from "../src/lib/webModel";
 import { detailsMessages } from "../src/lib/libraryDetailsModel";
 
 describe("blog posts by address", () => {
@@ -35,6 +35,17 @@ describe("blog posts by address", () => {
     expect(bylineAuthors("Posted on March 3, 2024 in Research")).toEqual([]);
     expect(bylineAuthors("Follow us at https://example.com")).toEqual([]);
     expect(bylineAuthors("A very long sentence that goes on about the post and what it says, and is no byline at all")).toEqual([]);
+  });
+
+  // Spec: LIB-29
+  test("a PDF is known by what it says it is, or by its first bytes, and named from its address", () => {
+    const pdf = new TextEncoder().encode("%PDF-1.7\n%âãÏÓ");
+    expect(isPdf("application/pdf", new Uint8Array())).toBe(true);
+    expect(isPdf("application/octet-stream", pdf)).toBe(true);
+    expect(isPdf("text/html", new TextEncoder().encode("<!DOCTYPE html>"))).toBe(false);
+    expect(pdfName("https://papers.example.com/files/on-loops.pdf?dl=1")).toBe("on-loops.pdf");
+    expect(pdfName("https://example.com/download/On%20Loops")).toBe("On Loops.pdf");
+    expect(pdfName("https://www.example.com/")).toBe("example.com.pdf");
   });
 
   test("a date gives its year", () => {

@@ -55,6 +55,26 @@ export function isPage(contentType: string): boolean {
   return type === "" || type === "text/html" || type === "application/xhtml+xml" || type === "text/plain";
 }
 
+// Spec: LIB-29
+/** Whether a response is a PDF: as it says, or as its first bytes show (some servers call it anything). */
+export function isPdf(contentType: string, bytes: Uint8Array): boolean {
+  if ((contentType.split(";")[0]?.trim().toLowerCase() ?? "") === "application/pdf") return true;
+  return new TextDecoder("latin1").decode(bytes.slice(0, 1024)).includes("%PDF-");
+}
+
+/** The file name a PDF at `address` goes by: its last part, else its site's name. */
+export function pdfName(address: string): string {
+  let last = "";
+  try {
+    const parts = new URL(address).pathname.split("/").filter((p) => p !== "");
+    last = decodeURIComponent(parts[parts.length - 1] ?? "");
+  } catch {
+    last = "";
+  }
+  const name = last.replace(/[\\/:*?"<>|]+/g, " ").trim() || hostOf(address);
+  return /\.pdf$/i.test(name) ? name : `${name}.pdf`;
+}
+
 // Spec: LIB-28
 /**
  * The people a byline names: "By Ada Lovelace and Charles Babbage" →

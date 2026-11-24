@@ -35,6 +35,29 @@ export class OpenRouterError extends Error {
   }
 }
 
+/** What a chat request can be for: every feature but speech, which isn't one. */
+export type ChatFeature = Exclude<AiFeature, "speech">;
+
+// Spec: AI-7
+/**
+ * `ai.most-answer.*` in the spec: the most each feature's answer may run to,
+ * in tokens (a reasoning model's thinking counts). Without it OpenRouter
+ * holds back enough credit for the model's whole output limit while it
+ * answers, and a few requests at once can ask for more than the account
+ * holds (402).
+ */
+export const MOST_ANSWER: Record<ChatFeature, number> = {
+  assistant: 16_000,
+  library_details: 4_000,
+  audio_script: 16_000,
+  connection_test: 2_000,
+};
+
+/** The error for an answer cut off at its most. */
+function cutOff(feature: ChatFeature, status: number): OpenRouterError {
+  return new OpenRouterError(`The answer reached the most it may run to (${MOST_ANSWER[feature].toLocaleString("en")} tokens) before it was done.`, status);
+}
+
 // Spec: AI-2
 /** The live model list (no key needed). */
 export async function fetchModels(): Promise<ORModel[]> {
@@ -146,8 +169,8 @@ export function foldChunk(state: StreamState, chunk: ChatResponse): StreamState 
 // ---------------------------------------------------------------------------
 
 export interface ChatOptions {
-  /** What the request is for, as the Costs screen groups it. */
-  feature: AiFeature;
+  /** What the request is for, as the Costs screen groups it; it sets the most the answer may run to. */
+  feature: ChatFeature;
   /** Called with the whole answer so far, as it streams in. */
   onText?: (text: string) => void;
   signal?: AbortSignal;
@@ -240,7 +263,8 @@ async function readStream(res: Response, onText: ((text: string) => void) | unde
  * before anything has streamed; an abort is never retried.
  */
 export async function chat(apiKey: string, model: string, messages: ChatMessage[], opts: ChatOptions): Promise<string> {
-  const body: Record<string, unknown> = { model, messages, stream: true, usage: { include: true } };
+  // Spec: AI-7
+  const body: Record<string, unknown> = { model, messages, stream: true, usage: { include: true }, max_tokens: MOST_ANSWER[opts.feature] };
   // Claude models cache only when asked; the page and the conversation so far
   // are then re-read from the cache on every follow-up.
   if (model.startsWith("anthropic/")) body["cache_control"] = { type: "ephemeral" };
@@ -270,6 +294,8 @@ export async function chat(apiKey: string, model: string, messages: ChatMessage[
     // author's choices rather than by provider variants.
     logUsage(opts.feature, model, state.usage);
     if (state.error) throw new OpenRouterError(state.error, res.status);
+    // Spec: AI-7
+    if (state.finishReason === "length") throw cutOff(opts.feature, res.status);
     if (state.text.trim() === "") {
       const err = new OpenRouterError("The model returned an empty answer", res.status);
       if (await again("unusable", err)) continue;
@@ -337,6 +363,8 @@ export async function chatRound(
     }),
     stream: true,
     usage: { include: true },
+    // Spec: AI-7
+    max_tokens: MOST_ANSWER[opts.feature],
     ...(tools.length > 0
       ? { tools: tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } })) }
       : {}),
@@ -398,6 +426,13 @@ export async function chatRound(
     logUsage(opts.feature, model, state.usage);
     if (state.error) throw new OpenRouterError(state.error, res.status);
     const toolCalls = calls.filter((c) => c.function.name !== "").map((c, i) => ({ ...c, id: c.id || `call_${i}` }));
+    // Spec: AI-7
+    // Cut off: a tool call's arguments may be cut too, so that fails; text says where it stops.
+    if (state.finishReason === "length") {
+      if (toolCalls.length > 0 || state.text.trim() === "") throw cutOff(opts.feature, res.status);
+      note("warning", "ai", `A ${opts.feature} answer from ${model} reached the most it may run to and was cut off.`);
+      return { text: `${state.text}\n\n*(Cut off: the answer reached the most it may run to, ${MOST_ANSWER[opts.feature].toLocaleString("en")} tokens.)*`, toolCalls: [] };
+    }
     if (state.text.trim() === "" && toolCalls.length === 0) {
       const err = new OpenRouterError("The model returned an empty answer", res.status);
       if (await again("unusable", err)) continue;
@@ -434,12 +469,14 @@ export async function chatJson(
   model: string,
   messages: RichMessage[],
   format: JsonSchemaFormat,
-  opts: { feature: AiFeature; signal?: AbortSignal },
+  opts: { feature: ChatFeature; signal?: AbortSignal },
 ): Promise<unknown> {
   const body: Record<string, unknown> = {
     model,
     messages,
     usage: { include: true },
+    // Spec: AI-7
+    max_tokens: MOST_ANSWER[opts.feature],
     response_format: { type: "json_schema", json_schema: { name: format.name, strict: true, schema: format.schema } },
   };
   const again = retrier(opts.feature, model, opts.signal);
@@ -462,6 +499,8 @@ export async function chatJson(
       if (await again("network", err)) continue;
       throw err;
     }
+    // Spec: AI-7
+    if (json.choices?.[0]?.finish_reason === "length") throw cutOff(opts.feature, res.status);
     // Some models wrap the JSON in a code fence despite the format.
     const text = contentToText(json.choices?.[0]?.message?.content).trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
     try {

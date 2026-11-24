@@ -42,9 +42,47 @@
     {
       "id": "AI-6",
       "text": "Book content is sent to no third party but OpenRouter, for the model the author chose."
+    },
+    {
+      "id": "AI-7",
+      "text": "Every model request names the most its answer may run to, by what it's for (`ai.most-answer.*`), so OpenRouter holds back no more of the author's credit than that while it answers. An answer cut off there says so rather than passing for whole.",
+      "related": [
+        "#AI-1",
+        "#AI-3"
+      ]
     }
   ],
   "related": [
     "assistant"
+  ],
+  "values": [
+    {
+      "id": "ai.most-answer.assistant",
+      "type": "number",
+      "value": 16000,
+      "unit": "tokens",
+      "description": "The most an answer may run to: a round of the assistant's answer, its thinking included."
+    },
+    {
+      "id": "ai.most-answer.library-details",
+      "type": "number",
+      "value": 4000,
+      "unit": "tokens",
+      "description": "The most an answer may run to: the details a model reads of a library item."
+    },
+    {
+      "id": "ai.most-answer.audio-script",
+      "type": "number",
+      "value": 16000,
+      "unit": "tokens",
+      "description": "The most an answer may run to: a recording's script: a passage put into speech, or a whole summary."
+    },
+    {
+      "id": "ai.most-answer.connection-test",
+      "type": "number",
+      "value": 2000,
+      "unit": "tokens",
+      "description": "The most an answer may run to: the answer to the key's test in Settings."
+    }
   ]
 }

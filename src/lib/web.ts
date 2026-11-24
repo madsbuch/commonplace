@@ -10,10 +10,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
-import { addPost, bytesOf, findBySource } from "./library";
+import { addFile, addPost, bytesOf, findBySource } from "./library";
 import { asWork } from "./work";
 import { messageOf, note } from "./diagnostics";
-import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, MIN_ARTICLE_TEXT, webAddress, yearOf } from "./webModel";
+import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, MIN_ARTICLE_TEXT, pdfName, webAddress, yearOf } from "./webModel";
 
 const FetchedSchema = z.object({ status: z.number(), contentType: z.string(), url: z.string(), data: z.string() });
 const RenderedSchema = z.object({ html: z.string(), url: z.string() });
@@ -145,10 +145,11 @@ async function rendered(url: string): Promise<{ html: string; url: string }> {
   return RenderedSchema.parse(await invoke("web_render", { url }));
 }
 
-// Spec: LIB-28
+// Spec: LIB-28, LIB-29
 /**
  * Adds the blog post at the address `input` names to the library, or finds
- * it there already. `onStep` hears how it goes. Returns the item's id.
+ * it there already; a PDF there is added as a file. `onStep` hears how it
+ * goes. Returns the item's id.
  */
 export async function importWebPage(input: string, onStep: (step: string) => void = () => undefined): Promise<string> {
   const address = webAddress(input);
@@ -161,14 +162,27 @@ export async function importWebPage(input: string, onStep: (step: string) => voi
     let article: Article | null = null;
     let at = address;
     let problem: unknown = null;
+    let page: Awaited<ReturnType<typeof webGet>> | null = null;
     try {
-      const page = await webGet(address);
+      page = await webGet(address);
       at = page.url;
       if (page.status >= 400) throw new Error(`${address} answered ${page.status}.`);
-      if (!isPage(page.type)) throw new Error(`${address} isn't a web page (it's ${page.type.split(";")[0] ?? "something else"}).`);
-      article = await readArticle(decode(page.bytes, page.type), page.url);
     } catch (e) {
+      // A site that turns away plain fetches may still show itself to a browser: rendering is tried below.
       problem = e;
+      page = null;
+    }
+    if (page) {
+      // Spec: LIB-29
+      // A PDF is added as the file would be.
+      if (isPdf(page.type, page.bytes)) {
+        onStep("Adding the PDF…");
+        const copy = new Uint8Array(page.bytes.length);
+        copy.set(page.bytes);
+        return addFile(new File([copy], pdfName(page.url), { type: "application/pdf" }));
+      }
+      if (!isPage(page.type)) throw new Error(`${address} isn't a web page or a PDF (it's ${page.type.split(";")[0] ?? "something else"}).`);
+      article = await readArticle(decode(page.bytes, page.type), page.url);
     }
     // A page that builds itself reads as an empty shell: render it and read it again.
     if (!article || article.text.length < MIN_ARTICLE_TEXT) {

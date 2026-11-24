@@ -257,6 +257,14 @@
         "#LIB-25",
         "#LIB-27"
       ]
+    },
+    {
+      "id": "LIB-29",
+      "text": "An address the author adds that serves a PDF adds that PDF, as adding the file would.",
+      "related": [
+        "#LIB-2",
+        "#LIB-28"
+      ]
     }
   ],
   "values": [

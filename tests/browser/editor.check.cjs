@@ -788,6 +788,15 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(2500);
     const toolMsgs = JSON.stringify(((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(before2)[1]?.messages ?? []).filter((m) => m.role === "tool"));
     check("the assistant sees the section in view, and reads a section with its maths as LaTeX", toolMsgs.includes("section_in_view") && toolMsgs.includes("S2.SS1") && toolMsgs.includes("softmax}(QK^{T})V"), toolMsgs.slice(0, 300));
+
+    // Spec: AI-7
+    await chat([{ text: "Attention weighs every word against every other, and", cut: true }]);
+    await page.locator(".assistant textarea").fill("And then?");
+    await page.locator(".assistant textarea").press("Enter");
+    await page.waitForTimeout(2000);
+    const lastAsk = (await (await fetch(`${FAKE}/fake-requests`)).json()).at(-1);
+    check("the assistant asks for at most its share of tokens", lastAsk?.max_tokens === 16000, JSON.stringify(lastAsk?.max_tokens));
+    check("and an answer cut off there says so", (await page.locator(".assistant").innerText()).includes("Cut off: the answer reached the most it may run to"));
     await page.getByRole("button", { name: "Close the assistant" }).click();
 
     // Spec: LIB-23
@@ -867,6 +876,19 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.waitForTimeout(1500);
     check("an address that can't be reached says so", (await page.locator(".library-problem").innerText()).includes("couldn't fetch https://nowhere.example.net/post"), await page.locator(".library-problem").innerText());
+
+    // Spec: LIB-29
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or web address").fill("https://papers.example.com/files/on-loops.pdf");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(2000);
+    const fromPdf = (await q("SELECT i.kind, i.filename, length(f.data) AS pdf FROM library_items i LEFT JOIN library_files f ON f.item_id = i.id WHERE i.filename = 'on-loops.pdf'"))[0];
+    check("an address that serves a PDF adds that PDF, as adding the file would", fromPdf?.pdf > 1000 && (fromPdf?.kind === "paper" || fromPdf?.kind === "book"), JSON.stringify(fromPdf));
+    // Spec: AI-7
+    const detailsAsk = (await (await fetch(`${FAKE}/fake-requests`)).json()).at(-1);
+    check("reading its details asks for at most their share of tokens", detailsAsk?.max_tokens === 4000, JSON.stringify(detailsAsk?.max_tokens));
 
     // Spec: LIB-25
     await page.setViewportSize({ width: 390, height: 800 });
