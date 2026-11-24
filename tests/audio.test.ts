@@ -1,6 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { chapterAt, CHARS_PER_SECOND, clock, cut, isBibliography, MAX_PASSAGE, parseSummary, passages, pieceId, slotAt, startOf, summaryPrompt, timeline, timeOfFragment, VOICES } from "../src/lib/audioModel";
+import type { TocEntry } from "../src/lib/schemas";
+import {
+  beginningEntry,
+  chapterAt,
+  CHARS_PER_SECOND,
+  clock,
+  cut,
+  isBibliography,
+  listenEntries,
+  MAX_PASSAGE,
+  parseSummary,
+  passages,
+  pieceId,
+  slotAt,
+  startOf,
+  summaryPrompt,
+  timeline,
+  timeOfFragment,
+  titleWords,
+  VOICES,
+} from "../src/lib/audioModel";
 
 /** What the script model is told for a verbatim recording: Rust's prompt (src-tauri/src/audio/verbatim.md). */
 const VERBATIM_PROMPT = readFileSync(new URL("../src-tauri/src/audio/verbatim.md", import.meta.url), "utf8");
@@ -103,11 +123,14 @@ describe("a recording made as it's listened to", () => {
   // Spec: AUD-18
   test("each chapter says how much of it is made", () => {
     const none = timeline("rec", script, new Map());
-    expect(none.made).toEqual([{ chapter: 0, made: 0 }, { chapter: 1, made: 0 }]);
+    expect(none.made).toEqual([
+      { chapter: 0, key: null, made: 0 },
+      { chapter: 1, key: null, made: 0 },
+    ]);
     const some = timeline("rec", script, new Map([["rec.0.0.0", 4], ["rec.1.0.0", 1]]));
     expect(some.made[0]?.made).toBeGreaterThan(0);
     expect(some.made[0]?.made).toBeLessThan(1);
-    expect(some.made[1]).toEqual({ chapter: 1, made: 1 });
+    expect(some.made[1]).toEqual({ chapter: 1, key: null, made: 1 });
   });
 
   test("before any is made, its text gives its length", () => {
@@ -128,5 +151,62 @@ describe("a recording made as it's listened to", () => {
   test("a recording made before reads as one written chunk a chapter", () => {
     const tl = timeline("old", { chapters: [{ title: "A", paragraphs: ["One.", "Two."] }] }, new Map());
     expect(tl.slots.map((s) => s.id)).toEqual(["old.0.0.0", "old.0.0.1"]);
+  });
+});
+
+// Spec: AUD-2, AUD-18
+describe("listening from an item's contents", () => {
+  const entry = (title: string, extra: { anchor?: string; page?: number | null } = {}, children: TocEntry[] = []): TocEntry => ({
+    title,
+    page: extra.page ?? null,
+    ...(extra.anchor ? { anchor: extra.anchor } : {}),
+    children,
+  });
+  const html = [entry("1 Introduction", { anchor: "S1" }), entry("2 Model", { anchor: "S2" }, [entry("2.1 Attention", { anchor: "S2.SS1" })]), entry("References", { anchor: "bib" }, [entry("Further", { anchor: "bib2" })])];
+
+  test("before there's a reading, every section but the bibliography can be listened from", () => {
+    expect(listenEntries(html, null, null)).toEqual([
+      { key: "html:S1", made: null },
+      { key: "html:S2", made: null },
+      { key: "html:S2.SS1", made: null },
+      null,
+      null,
+    ]);
+    expect(beginningEntry(null, null)).toEqual({ key: "front", made: null });
+  });
+
+  test("with a reading, a section is its chapter, by key, with how much of it is made", () => {
+    const script = {
+      chapters: [
+        { title: "Attention", key: "front", chunks: [] },
+        { title: "1 Introduction", key: "html:S1", chunks: [] },
+        { title: "2 Model", key: "html:S2", chunks: [] },
+        { title: "2.1 Attention", key: "html:S2.SS1", chunks: [] },
+      ],
+    };
+    const made = new Map([
+      [0, 1],
+      [1, 0.5],
+    ]);
+    expect(listenEntries(html, script, made)).toEqual([{ key: "html:S1", made: 0.5 }, { key: "html:S2", made: 0 }, { key: "html:S2.SS1", made: 0 }, null, null]);
+    expect(beginningEntry(script, made)).toEqual({ key: "front", made: 1 });
+    expect(beginningEntry({ chapters: [] }, made)).toBeNull();
+  });
+
+  test("a PDF's contents beside a reading of the HTML version match by title", () => {
+    const pdf = [entry("Introduction", { page: 1 }), entry("2.1. Attention", { page: 3 }), entry("Acknowledgements", { page: 9 })];
+    const script = { chapters: [{ title: "1 Introduction", key: "html:S1", chunks: [] }, { title: "2.1 Attention", key: "html:S2.SS1", chunks: [] }] };
+    expect(listenEntries(pdf, script, new Map())).toEqual([{ key: "html:S1", made: 0 }, { key: "html:S2.SS1", made: 0 }, null]);
+    // A reading of the PDF: its keys count entries with a page.
+    expect(listenEntries([entry("Contents"), ...pdf], null, null).map((e) => e?.key ?? null)).toEqual([null, "toc:0", "toc:1", "toc:2"]);
+  });
+
+  test("a title's numbering isn't part of it", () => {
+    expect(titleWords("2.1 Attention")).toBe("attention");
+    expect(titleWords("2.1. Attention")).toBe("attention");
+    expect(titleWords("A.1 Proofs")).toBe("proofs");
+    expect(titleWords("IV. Results")).toBe("results");
+    expect(titleWords("A short note")).toBe("a short note");
+    expect(titleWords("Hybrid KV Cache (Global Sharing)")).toBe("hybrid kv cache global sharing");
   });
 });

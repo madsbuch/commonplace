@@ -25,6 +25,7 @@ import {
   summaryPrompt,
   SUMMARY_FORMAT,
   timeline,
+  titleWords,
 } from "./audioModel";
 import { execute, getSetting, nowIso, select, setSetting } from "./db";
 import { derivedId, newId } from "./ids";
@@ -164,11 +165,12 @@ export async function makeChapter(id: string, chapter: number): Promise<void> {
 }
 
 // Spec: AUD-2
-/** Where a section of an item starts in its reading, in seconds; null if it isn't one of its chapters. */
-export async function sectionStart(id: string, sectionKey: string): Promise<number | null> {
+/** Where a section of an item starts in its reading, in seconds, by its key or else its title; null if it isn't one of its chapters. */
+export async function sectionStart(id: string, sectionKey: string, title?: string): Promise<number | null> {
   const rec = await getRecording(id);
   if (!rec?.script) return null;
-  const c = rec.script.chapters.findIndex((ch) => ch.key === sectionKey);
+  let c = rec.script.chapters.findIndex((ch) => ch.key === sectionKey);
+  if (c < 0 && title !== undefined) c = rec.script.chapters.findIndex((ch) => titleWords(ch.title) === titleWords(title));
   if (c < 0) return null;
   return timeline(id, rec.script, await recordingPieces(id)).slots.find((s) => s.chapter === c)?.start ?? null;
 }

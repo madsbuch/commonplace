@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { z } from "zod";
-import type { RecordingChapter, Script } from "./schemas";
+import type { RecordingChapter, Script, TocEntry } from "./schemas";
 
 // Spec: AUD-5
 /** `audio.speech-model` and `audio.voice` in the spec. */
@@ -212,8 +212,8 @@ export interface Slot {
 export interface Timeline {
   slots: Slot[];
   chapters: RecordingChapter[];
-  /** For each of `chapters`: the script's chapter it is, and how much of it is made, 0 to 1 (AUD-18). */
-  made: { chapter: number; made: number }[];
+  /** For each of `chapters`: the script's chapter it is (and its section's key), and how much of it is made, 0 to 1 (AUD-18). */
+  made: { chapter: number; key: string | null; made: number }[];
   /** The whole length, as likely as it can be said. */
   duration: number;
   /** How much of it is made. */
@@ -278,7 +278,7 @@ export function timeline(recordingId: string, script: Script, made: ReadonlyMap<
     if (own.length === 0) return [];
     const all = own.reduce((n, s) => n + s.seconds, 0);
     const done = own.reduce((n, s) => n + (s.made ? s.seconds : 0), 0);
-    return [{ chapter: c, made: own.every((s) => s.made) ? 1 : all > 0 ? Math.min(0.99, done / all) : 0 }];
+    return [{ chapter: c, key: script.chapters[c]?.key ?? null, made: own.every((s) => s.made) ? 1 : all > 0 ? Math.min(0.99, done / all) : 0 }];
   });
   return { slots, chapters, made: madeOf, duration: at, madeSeconds };
 }
@@ -297,4 +297,91 @@ export function slotAt(tl: Timeline, t: number): { index: number; offset: number
 /** When a piece starts in the recording, if it's in it. */
 export function startOf(tl: Timeline, id: string): number | null {
   return tl.slots.find((s) => s.id === id)?.start ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Listening from an item's contents (AUD-2, AUD-18)
+// ---------------------------------------------------------------------------
+
+/** Contents in reading order, as the contents panel shows them. */
+export function flatContents(toc: readonly TocEntry[], depth = 0, out: { entry: TocEntry; depth: number }[] = []): { entry: TocEntry; depth: number }[] {
+  for (const entry of toc) {
+    out.push({ entry, depth });
+    flatContents(entry.children, depth + 1, out);
+  }
+  return out;
+}
+
+/** A title's words without its numbering, to match a section by: "2.1 Attention" and "Attention" are one. */
+export function titleWords(title: string): string {
+  return title
+    .trim()
+    .replace(/^(?:\d+(?:\.\d+)*\.?|[A-Z]\.\d+(?:\.\d+)*\.?|[A-Z]\.|[IVX]+\.)\s+/, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** What an entry of the contents is in an item's reading: its chapter's key, and how much of it is made (null before there's a reading). */
+export interface ListenEntry {
+  key: string;
+  made: number | null;
+}
+
+/** A section's key as a reading's chapters name it: `html:<anchor>`, or `toc:<i>` among the contents' entries with a page. */
+function keysOf(flat: readonly { entry: TocEntry }[]): (string | null)[] {
+  let page = -1;
+  return flat.map(({ entry }) => {
+    if (entry.anchor) return `html:${entry.anchor}`;
+    if (entry.page !== null) return `toc:${++page}`;
+    return null;
+  });
+}
+
+// Spec: AUD-2, AUD-18
+/**
+ * For each entry of the contents, in reading order: what it is in the
+ * item's reading, or null where it isn't read aloud (the bibliography and
+ * what's in it; an entry that leads nowhere). With a reading, an entry is
+ * its chapter by key, or else by title (a PDF's contents beside a reading of
+ * the HTML version); `made` is chapter index → how much of it is made.
+ */
+export function listenEntries(toc: readonly TocEntry[], script: Script | null, made: ReadonlyMap<number, number> | null): (ListenEntry | null)[] {
+  const flat = flatContents(toc);
+  const keys = keysOf(flat);
+  if (!script) {
+    let skipping: number | null = null;
+    return flat.map(({ entry, depth }, i) => {
+      if (skipping !== null && depth > skipping) return null;
+      skipping = null;
+      // Spec: AUD-3
+      if (isBibliography(entry.title)) {
+        skipping = depth;
+        return null;
+      }
+      const key = keys[i];
+      return key ? { key, made: null } : null;
+    });
+  }
+  const byKey = new Map<string, number>();
+  const byTitle = new Map<string, number>();
+  script.chapters.forEach((c, i) => {
+    if (c.key) byKey.set(c.key, i);
+    if (!byTitle.has(titleWords(c.title))) byTitle.set(titleWords(c.title), i);
+  });
+  return flat.map(({ entry }, i) => {
+    const key = keys[i];
+    const c = (key ? byKey.get(key) : undefined) ?? byTitle.get(titleWords(entry.title));
+    const chapter = c === undefined ? undefined : script.chapters[c];
+    if (c === undefined || !chapter) return null;
+    return { key: chapter.key ?? key ?? `chapter:${c}`, made: made?.get(c) ?? 0 };
+  });
+}
+
+// Spec: AUD-2
+/** What comes before an item's first section, in its reading (its key is `front`); null when the reading has none. */
+export function beginningEntry(script: Script | null, made: ReadonlyMap<number, number> | null): ListenEntry | null {
+  if (!script) return { key: "front", made: null };
+  const c = script.chapters.findIndex((ch) => ch.key === "front");
+  return c < 0 ? null : { key: "front", made: made?.get(c) ?? 0 };
 }

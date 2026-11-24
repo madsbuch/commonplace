@@ -254,7 +254,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       tocItem?.toc,
     );
     if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
-    check("the contents show beside the PDF", (await page.locator(".toc-entry").count()) === 6);
+    check("the contents show beside the PDF, its beginning first for listening", (await page.locator(".toc-entry").count()) === 7 && (await page.locator(".toc-entry").first().innerText()).startsWith("Beginning"));
     await page.locator(".toc-entry", { hasText: "Chapter 2: Decidability" }).click();
     await page.waitForTimeout(800);
     check("choosing an entry goes to its page", (await page.locator(".pdf-toolbar").innerText()).includes("4 / 6"));
@@ -938,13 +938,13 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       body: JSON.stringify({ answer: { paragraphs: ["Two point one. Attention.", "Scaled dot-product attention: softmax of Q K transpose, times V.", "Queries meet keys.", "Values are weighed."] } }),
     });
     const sentBefore = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
-    await page.goto(`${APP}/library/${arx?.id}`);
-    await page.waitForTimeout(1200);
-    await page.getByRole("button", { name: "More for this item" }).click();
-    await page.getByRole("menuitem", { name: "Listen…" }).click();
-    await page.getByLabel("Start at").selectOption({ label: "\u20032.1 Attention" });
-    await page.getByRole("button", { name: "Listen", exact: true }).click();
-    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    // Listening from the paper's contents, beside its text.
+    await page.goto(`${APP}/library/${arx?.id}?view=text`);
+    await page.waitForTimeout(1500);
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    const beforeAny = await page.locator(".toc").innerText();
+    check("the contents offer listening from each section read aloud, and from the beginning, but not from the bibliography", (await page.getByRole("button", { name: "Listen from “2.1 Attention”" }).count()) === 1 && (await page.getByRole("button", { name: "Listen from “Beginning”" }).count()) === 1 && (await page.getByRole("button", { name: "Listen from “References”" }).count()) === 0, beforeAny);
+    await page.getByRole("button", { name: "Listen from “2.1 Attention”" }).click();
     await page.waitForTimeout(2500);
     const rec = (await q("SELECT id, kind, section, status, script, voice, speech_model FROM recordings"))[0];
     const recScript = JSON.parse(rec?.script ?? "{}");
@@ -959,10 +959,34 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const firstPieces = await piecesAt();
     check("only what's ahead of the listener is made: a passage a piece, Opus in WebM, kept to sync", firstPieces.length === 2 && firstPieces.every((p) => p.head === "1A45DFA3"), JSON.stringify(firstPieces));
 
+    // Spec: AUD-2, AUD-19
+    check(
+      "it plays from the section, without leaving the paper, the section heard marked in the contents",
+      page.url().includes(`/library/${arx?.id}`) && (await page.locator(".mini-player-toggle").getAttribute("aria-label")) === "Pause" && (await page.locator(".toc-row.hearing").innerText()).includes("2.1 Attention"),
+      page.url(),
+    );
+    await page.locator(".html-scroll, .html-view").first().evaluate((el) => {
+      const s = el.querySelector(".html-pages") ?? el;
+      s.scrollTop = 0;
+    });
+    await page.getByRole("button", { name: "Follow" }).click();
+    await page.waitForTimeout(800);
+    if (process.env.CHECK_SHOTS) await page.locator(".toc-panel").screenshot({ path: join(process.env.CHECK_SHOTS, "contents-listening.png") });
+    check("asked to, the text follows the section heard", (await page.getByRole("button", { name: "Follow" }).getAttribute("aria-pressed")) === "true" && page.url().endsWith("#S2.SS1"), page.url());
+    await page.locator(".html-view").hover();
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(400);
+    check("until the author scrolls it", (await page.getByRole("button", { name: "Follow" }).getAttribute("aria-pressed")) === "false");
+    // To the player, by what's playing.
+    await page.locator(".mini-player-text").click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(800);
+    // From the section's start again, on the player's own contents.
+    await page.locator(".toc-row", { hasText: "2.1 Attention" }).locator(".toc-entry").click();
+    await page.waitForTimeout(600);
+
     // Spec: AUD-8, AUD-9, AUD-12
-    await page.getByRole("button", { name: "Play" }).click();
-    await page.waitForTimeout(1600);
-    check("the player plays it, from the section", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && (await page.locator(".recording-chapters button.active").innerText()).includes("2.1 Attention") && /#t=\d+$/.test(page.url()), page.url());
+    check("the player plays it, from the section", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && (await page.locator(".toc-row.hearing").innerText()).includes("2.1 Attention") && /#t=\d+$/.test(page.url()), page.url());
     await page.getByRole("radio", { name: "1.5×" }).click();
     check("at a speed chosen", (await page.getByRole("radio", { name: "1.5×" }).getAttribute("aria-checked")) === "true");
     // Spec: AUD-6
@@ -976,7 +1000,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("where it was left is kept, as a moment of a piece", listened[0]?.piece?.startsWith(`${rec?.id}.${attention}.0.`) && listened[0]?.position >= 0, JSON.stringify(listened));
     // Spec: AUD-18
     const modelAt = (recScript.chapters ?? []).findIndex((c) => c.key === "html:S2");
-    check("a chapter all made says so", (await page.locator(".recording-chapters li", { hasText: "2.1 Attention" }).getByRole("img", { name: "“2.1 Attention” is made" }).count()) === 1);
+    check("a chapter all made says so", (await page.locator(".toc-row", { hasText: "2.1 Attention" }).getByRole("img", { name: "“2.1 Attention” is made" }).count()) === 1);
     await page.getByRole("button", { name: "Make “2 Model” now" }).click();
     await page.waitForTimeout(1500);
     check(
@@ -985,7 +1009,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
       String(modelAt),
     );
     if (process.env.CHECK_SHOTS) await page.locator(".recording-screen").screenshot({ path: join(process.env.CHECK_SHOTS, "chapters-made.png") });
-    await page.locator(".recording-chapters button").first().click();
+    await page.locator(".toc-row .toc-entry").first().click();
     await page.waitForTimeout(800);
     check("a chapter goes to its start", (await page.locator(".player-times span").first().innerText()) === "0:00");
     await page.goto(`${APP}/audio/${rec?.id}#t=2`);
@@ -993,18 +1017,25 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     check("an address with a moment opens the recording there", (await page.locator(".player-times span").first().innerText()) === "0:02", await page.locator(".player-times span").first().innerText());
 
     // Spec: AUD-2
-    // Listening again, from its beginning, is the same reading.
-    await page.goto(`${APP}/library/${arx?.id}`);
-    await page.waitForTimeout(1200);
-    await page.getByRole("button", { name: "More for this item" }).click();
-    await page.getByRole("menuitem", { name: "Listen…" }).click();
-    await page.waitForTimeout(500);
-    const startAt = await page.getByLabel("Start at").innerText();
-    await page.getByLabel("Start at").selectOption({ label: "The beginning of the paper" });
-    await page.getByRole("button", { name: "Listen", exact: true }).click();
-    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    // Listening again, where it was left (from the paper's menu) or from its beginning, is the same reading.
+    await page.goto(`${APP}/library/${arx?.id}?view=text`);
     await page.waitForTimeout(1500);
-    check("listening again, from where it was left or its beginning, is the same reading", startAt.includes("Where you left off") && page.url().includes(rec?.id) && (await q("SELECT count(*) AS n FROM recordings WHERE kind = 'verbatim'"))[0].n === 1 && (await page.locator(".player-times span").first().innerText()) === "0:00", page.url());
+    await page.getByRole("button", { name: "More for this item" }).click();
+    await page.getByRole("menuitem", { name: "Listen", exact: true }).click();
+    await page.waitForTimeout(1500);
+    const resumed = (await page.locator(".mini-player-toggle").getAttribute("aria-label")) === "Pause";
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    await page.getByRole("button", { name: "Listen from “Beginning”" }).click();
+    await page.waitForTimeout(1200);
+    await page.locator(".mini-player-text").click();
+    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
+    await page.waitForTimeout(600);
+    check(
+      "listening again, where it was left or from its beginning, is the same reading",
+      resumed && page.url().includes(rec?.id) && (await q("SELECT count(*) AS n FROM recordings WHERE kind = 'verbatim'"))[0].n === 1 && (await page.locator(".player-times span").first().innerText()).startsWith("0:0"),
+      page.url(),
+    );
+    await page.getByRole("button", { name: "Pause" }).click();
 
     // Spec: AUD-14
     // A section recorded before the paper had one reading becomes part of it when the app starts.
@@ -1052,11 +1083,10 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.goto(`${APP}/library/${post?.id}`);
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "More for this item" }).click();
-    await page.getByRole("menuitem", { name: "Listen…" }).click();
-    await page.getByRole("button", { name: "Listen", exact: true }).click();
-    await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
-    await page.waitForTimeout(2000);
-    const postReading = page.url().split("/audio/")[1]?.split(/[?#]/)[0];
+    await page.getByRole("menuitem", { name: "Listen", exact: true }).click();
+    await page.waitForTimeout(2500);
+    await page.locator(".mini-player-toggle").click();
+    const postReading = (await q(`SELECT id FROM recordings WHERE kind = 'verbatim' AND items = '["${post?.id}"]'`))[0]?.id;
     const ps = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${postReading}'`))[0]?.script ?? "{}");
     const src = (c) => (c?.chunks ?? []).map((k) => k.source).join(" ");
     check(
@@ -1086,7 +1116,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     const parked = (await q(`SELECT count(*) AS n FROM recording_pieces WHERE recording_id = '${postReading}' AND id LIKE '%.parked.%'`))[0].n;
     check(
       "a reading follows its item's text again, what was made of it kept aside to use again",
-      (followed.chapters ?? []).map((c) => c.title).join("|") === "On Compilers|Front ends|Back ends" && src(followed.chapters?.[0]) === src(ps.chapters?.[0]) && madeBefore === 2 && parked === 2,
+      (followed.chapters ?? []).map((c) => c.title).join("|") === "On Compilers|Front ends|Back ends" && src(followed.chapters?.[0]) === src(ps.chapters?.[0]) && madeBefore >= 2 && parked === madeBefore,
       JSON.stringify({ madeBefore, parked, titles: (followed.chapters ?? []).map((c) => c.title) }),
     );
 

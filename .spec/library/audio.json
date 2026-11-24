@@ -19,7 +19,8 @@
         "#AUD-10",
         "#AUD-15",
         "#AUD-17",
-        "#AUD-18"
+        "#AUD-18",
+        "#AUD-19"
       ]
     },
     {
@@ -49,16 +50,22 @@
     },
     {
       "id": "AUD-2",
-      "text": "Each item has one reading, verbatim, made as it's listened to. The author starts it from the item: where it was left, at its beginning, or at any section of its contents, down to the smallest, and it plays on into the sections after. Its sections are its chapters.",
+      "text": "Each item has one reading, verbatim, made as it's listened to. The author listens from the item's contents, at any section down to the smallest or at its beginning, and it plays on into the sections after; or from the item's menu, where it was left. Its sections are its chapters; sections not read aloud, such as the bibliography, offer no listening.",
       "history": [
         {
           "version": 1,
           "text": "The author can record an item verbatim, whole or one of its sections from its contents, down to the smallest; the sections within a recording are its chapters.",
           "reason": "A reading belongs to the work: a section and the whole paper were recordings of their own, listed apart and made twice.",
           "date": "2026-11-24"
+        },
+        {
+          "version": 2,
+          "text": "Each item has one reading, verbatim, made as it's listened to. The author starts it from the item: where it was left, at its beginning, or at any section of its contents, down to the smallest, and it plays on into the sections after. Its sections are its chapters.",
+          "reason": "A reading's chapters are the item's sections: the contents already list them, so listening belongs there rather than in a list of its own.",
+          "date": "2026-11-24"
         }
       ],
-      "version": 2
+      "version": 3
     },
     {
       "id": "AUD-3",
@@ -193,10 +200,27 @@
     },
     {
       "id": "AUD-18",
-      "text": "The player's chapters show how much of each is made, and the author can have a chapter made now, ahead of listening to it.",
+      "text": "An item's contents, and its reading's on the player, show how much of each section is made, and the author can have a section made now, ahead of listening to it.",
       "related": [
         "#AUD-6",
         "#AUD-8"
+      ],
+      "history": [
+        {
+          "version": 1,
+          "text": "The player's chapters show how much of each is made, and the author can have a chapter made now, ahead of listening to it.",
+          "reason": "A reading's chapters are the item's sections: the contents already list them, so listening belongs there rather than in a list of its own.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
+    },
+    {
+      "id": "AUD-19",
+      "text": "While an item's reading plays, its contents mark the section being heard. If the author asks, the text follows: the section being heard is kept in view, until the author scrolls it.",
+      "related": [
+        "#AUD-2",
+        "#LIB-15"
       ]
     }
   ],

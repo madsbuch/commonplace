@@ -106,12 +106,10 @@ export const SparkIcon = () => (
     <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />
   </Icon>
 );
-// Spec: AUD-18
-/** Making a chapter now: an arrow down onto a line. */
-export const MakeNowIcon = () => (
-  <Icon size={16}>
-    <path d="M12 4v11" />
-    <path d="m7 10 5 5 5-5" />
-    <path d="M5 20h14" />
-  </Icon>
+// Spec: AUD-2
+/** Listening from a section: a small play mark. */
+export const ListenIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z" />
+  </svg>
 );

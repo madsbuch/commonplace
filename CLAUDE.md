@@ -463,9 +463,10 @@ Recordings of library items (`recordings`, synced): each item's one
 reading, verbatim (AUD-2), and summaries of several, one narrator, 5/15/30
 minutes, recordings of their own. A reading's id is derived from its item's
 (`readingId`: `derivedId("recordings", "reading:<item>")`), so every device
-starts the same one. It's started from the item (⋯ → Listen…,
-`ListenDialog`): where it was left, its beginning, or a section (`#t=` its
-chapter's start, `sectionStart`), and it plays on; it keeps the voice it
+starts the same one. It's listened to from the item's contents
+(`src/lib/listening.ts`, `listenFrom`): a ▶ on each section (`#t=` its
+chapter's start, `sectionStart`) and a Beginning row, or ⋯ → Listen, where
+it was left; it plays on. It keeps the voice it
 began in, and "Read in another voice…" (AUD-15, `readInVoice`) drops its
 pieces and keeps its text and where it was left. A recording is made as it's
 listened to (AUD-6), `audio.lead` (3 min) ahead of the listener, on whichever
@@ -493,7 +494,7 @@ one file stay as they are.
   (`key`: the section, `html:<anchor>`, `toc:<i>` or `front`); recordings
   made before hold `{ title, paragraphs }` chapters, read as one written
   chunk each. Status: `writing` → `listening` (or `making`) → `ready`. A
-  reading follows its item's text (AUD-17, `refreshReading`: at Listen…, and
+  reading follows its item's text (AUD-17, `refreshReading`: when listening starts, and
   when the app starts for readings of HTML versions): prepared afresh
   (`scriptOf`, keeping chunks whose source is unchanged), and if its
   chapters or chunks differ Rust lays the reading over it (`audio_reshape` →
@@ -548,11 +549,20 @@ one file stay as they are.
   saved every 5 s and on pause (`listening`: seconds into its `piece`; synced),
   and `#t=<seconds>` in the recording's address. At a part not yet made it
   waits (`waiting`, "Making this part…") and goes on when the piece arrives.
-  Its chapters show how much of each is made (AUD-18, `Timeline.made`: a bar
-  under the chapter, a ✓ when all of it is) and a chapter not yet made can be
-  made now (`makeChapter` → `audio_make_chapter`: the worker's target holds
-  chapters to make, each after what's ahead of the listener,
-  `plan::next_in_chapter`).
+  Its chapters show how much of each is made (AUD-18, `Timeline.made`, each
+  with its section's key) and a chapter not yet made can be made now
+  (`makeChapter` → `audio_make_chapter`: the worker's target holds chapters
+  to make, each after what's ahead of the listener, `plan::next_in_chapter`).
+- Listening lives in the item's Contents (`Contents.tsx`'s `listen`):
+  `listenEntries` (`audioModel.ts`) matches each entry to its chapter by key
+  (`html:<anchor>`, `toc:<i>`), else by title; before there's a reading, the
+  bibliography offers none. Each row has a `MadeRing` (how much is made, a
+  ✓ when all; pressed, it makes the section now) and a ▶; the section being
+  heard is marked (AUD-19). "Follow" in the contents' head (per device,
+  localStorage `follow-audio`) keeps the heard section in view, the HTML's
+  anchor or the PDF's page, until the author scrolls. The recording screen
+  shows a reading's chapters as the same contents (`ReadingContents`), with
+  times; a summary's as a list.
   On a computer, two audio elements on Blobs (`audio_piece`, base64), the
   next piece loaded while one plays; Media Session for media keys.
   `MiniPlayer` shows what's playing on other screens.

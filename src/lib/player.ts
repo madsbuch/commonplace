@@ -42,7 +42,7 @@ export interface PlayerState {
   /** How much of it is made, in seconds: null for a recording kept as one file. */
   made: number | null;
   /** For each of `chapters`: the script's chapter it is, and how much of it is made (AUD-18); null for one file. */
-  chapterMade: { chapter: number; made: number }[] | null;
+  chapterMade: Timeline["made"] | null;
   error: string | null;
 }
 

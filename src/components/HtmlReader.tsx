@@ -43,7 +43,8 @@ export function HtmlReader(props: {
   const current = useRef<string | null>(null);
 
   const find = (anchor: string): Element | null => content.current?.querySelector(`[id="${CSS.escape(anchor)}"]`) ?? null;
-  const goTo = (anchor: string) => find(anchor)?.scrollIntoView({ block: "start" });
+  // An empty anchor is the beginning.
+  const goTo = (anchor: string) => (anchor === "" ? scroller.current?.scrollTo({ top: 0 }) : find(anchor)?.scrollIntoView({ block: "start" }));
 
   // The contents, and the place to open at, once the text is laid out.
   useLayoutEffect(() => {

@@ -2500,57 +2500,88 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* Spec: AUD-18 — how much of a chapter is made, and making one now. */
+/* Spec: AUD-18 — a summary's chapters: how much of each is made, and making one now. */
 .recording-chapters li {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
 }
 .recording-chapters li > button:first-child {
-  position: relative;
   flex: 1;
   min-width: 0;
   border-bottom: none;
 }
-.chapter-made {
-  position: absolute;
-  left: 10px;
-  bottom: 0;
-  height: 2px;
-  max-width: calc(100% - 20px);
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--accent) 55%, transparent);
-}
 .recording-chapters li > .recording-chapter-pending {
   border-bottom: none;
 }
-.recording-chapters li > .chapter-make,
-.recording-chapters li > .chapter-state {
+.recording-contents .toc {
+  padding: 0;
+  overflow: visible;
+}
+/* Spec: AUD-2, AUD-18, AUD-19 — listening from the contents. */
+.toc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 6px;
+}
+.toc-row > .toc-entry {
+  flex: 1;
+  min-width: 0;
+}
+.toc-row.hearing {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.toc-row.hearing > .toc-entry .toc-title {
+  color: var(--accent);
+}
+.made-ring,
+.toc-listen {
   flex: none;
-  width: 40px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
 }
-.recording-chapters li > .chapter-make:hover:not(:disabled) {
+.made-ring.made {
   color: var(--accent);
+  font-size: 13px;
 }
-.recording-chapters li > .chapter-make.making {
+.made-ring:not(.made):hover:not(:disabled),
+.toc-listen:hover:not(:disabled) {
   color: var(--accent);
-  animation: chapter-making 1.2s ease-in-out infinite;
+  background: var(--hover);
 }
-@keyframes chapter-making {
+.made-ring.making,
+.toc-listen.busy {
+  color: var(--accent);
+  animation: made-ring-making 1.2s ease-in-out infinite;
+}
+@keyframes made-ring-making {
   50% {
     opacity: 0.35;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .recording-chapters li > .chapter-make.making {
+  .made-ring.making,
+  .toc-listen.busy {
     animation: none;
   }
+}
+.toc-head .toc-follow {
+  margin-left: auto;
+  margin-right: 4px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+.toc-head .toc-follow[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 /* What's playing, at the bottom of every other screen. */
 .mini-player {

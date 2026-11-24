@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreMenu } from "../components/MoreMenu";
-import { MakeNowIcon, PauseIcon, PlayIcon } from "../components/Icons";
+import { PauseIcon, PlayIcon } from "../components/Icons";
+import { Contents } from "../components/Contents";
+import { MadeRing } from "../components/MadeRing";
+import { listenEntries } from "../lib/audioModel";
+import { useContents } from "../lib/listening";
 import { replaceFragment } from "../lib/address";
 import { AUDIO_TABLES, getRecording, hasAudio, makeAll, makeChapter, readInVoice, removeRecording, retryRecording } from "../lib/audio";
 import { chapterAt, chunksOf, clock, SPEEDS, timeOfFragment, VOICES } from "../lib/audioModel";
 import { getItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 import { chapterStep, load, seek, setSpeed, skip, toggle, unload, usePlayer } from "../lib/player";
-import type { Provenance, Recording } from "../lib/schemas";
+import type { Provenance, Recording, TocEntry } from "../lib/schemas";
 import { recordingState } from "./AudioPage";
 
 // Spec: AUD-15
@@ -96,6 +100,51 @@ function WhereItCameFrom(props: { rec: Recording; provenance: Provenance }) {
   );
 }
 
+// Spec: AUD-2, AUD-18, AUD-19
+/** A reading's chapters, as its item's contents: how much of each is made, where each starts, the one being heard. */
+function ReadingContents(props: { rec: Recording; toc: readonly TocEntry[] }) {
+  const p = usePlayer();
+  const [making, setMaking] = useState<ReadonlySet<string>>(new Set());
+  const marks = p.chapterMade ?? [];
+  const made = new Map(marks.map((m) => [m.chapter, m.made]));
+  const times = new Map<string, number>();
+  marks.forEach((m, i) => {
+    const start = p.chapters[i]?.start;
+    if (m.key && start !== undefined) times.set(m.key, start);
+  });
+  const script = props.rec.script;
+  const front = script?.chapters.findIndex((c) => c.key === "front") ?? -1;
+  const heard = marks[chapterAt(p.chapters, p.position)]?.key ?? null;
+  const onMake = (key: string) => {
+    const c = script?.chapters.findIndex((ch) => ch.key === key) ?? -1;
+    if (c < 0) return;
+    setMaking((s) => new Set([...s, key]));
+    void makeChapter(props.rec.id, c);
+  };
+  return (
+    <div className="recording-contents" aria-label="Chapters">
+      <Contents
+        toc={props.toc}
+        anchor={null}
+        listen={{
+          entries: listenEntries(props.toc, script, made),
+          beginning: front >= 0 ? { key: "front", made: made.get(front) ?? 0 } : null,
+          hearing: heard,
+          busy: null,
+          making,
+          onMake,
+          onBeginning: () => seek(0),
+          times,
+        }}
+        onPick={(_, at) => {
+          const t = at ? times.get(at.key) : undefined;
+          if (t !== undefined) seek(t);
+        }}
+      />
+    </div>
+  );
+}
+
 // Spec: AUD-8, AUD-9, AUD-12
 /** One recording: its sources, how it's coming along, and the player with its chapters. */
 export default function RecordingPage() {
@@ -111,6 +160,10 @@ export default function RecordingPage() {
   // Chapters asked to be made now, until they are.
   const [asked, setAsked] = useState<ReadonlySet<number>>(new Set());
   const p = usePlayer();
+  // Spec: AUD-2
+  // A reading's chapters are its item's sections: its contents, as the item shows them.
+  const isReading = rec !== null && rec !== "missing" && rec.kind === "verbatim" && rec.durationSeconds === null;
+  const itemToc = useContents(isReading ? (rec.items[0] ?? null) : null);
 
   useEffect(() => {
     let live = true;
@@ -277,42 +330,34 @@ export default function RecordingPage() {
         </div>
       )}
 
-      {chapters.length > 0 ? (
+      {isReading && rec.script && mine && p.chapterMade ? (
+        // Spec: AUD-2, AUD-18, AUD-19
+        <ReadingContents rec={rec} toc={itemToc} />
+      ) : chapters.length > 0 ? (
         <ol className="recording-chapters" aria-label="Chapters">
           {chapters.map((c, i) => {
             // Spec: AUD-18
             const made = mine ? p.chapterMade?.[i] : undefined;
-            const making = made !== undefined && made.made < 1 && asked.has(made.chapter);
             return (
               <li key={i}>
                 <button
                   type="button"
                   className={mine && i === current ? "active" : undefined}
-                  title={made ? (made.made >= 1 ? "Made" : `${Math.round(made.made * 100)}% made`) : undefined}
                   onClick={() => (mine ? seek(c.start) : undefined)}
                 >
                   <span>{c.title}</span>
                   <span className="muted">{clock(c.start)}</span>
-                  {made ? <span className="chapter-made" style={{ width: `${Math.round(made.made * 100)}%` }} aria-hidden /> : null}
                 </button>
-                {made && made.made >= 1 ? (
-                  <span className="chapter-state" role="img" aria-label={`“${c.title}” is made`}>
-                    ✓
-                  </span>
-                ) : made && !oneFile ? (
-                  <button
-                    type="button"
-                    className={making ? "chapter-make making" : "chapter-make"}
-                    aria-label={making ? `Making “${c.title}”` : `Make “${c.title}” now`}
-                    title={making ? "Making it…" : "Make it now"}
-                    disabled={making}
-                    onClick={() => {
+                {made && !oneFile ? (
+                  <MadeRing
+                    title={c.title}
+                    made={made.made}
+                    making={made.made < 1 && asked.has(made.chapter)}
+                    onMake={() => {
                       setAsked((s) => new Set([...s, made.chapter]));
                       void makeChapter(rec.id, made.chapter);
                     }}
-                  >
-                    <MakeNowIcon />
-                  </button>
+                  />
                 ) : null}
               </li>
             );

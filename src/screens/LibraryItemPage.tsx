@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { pageOfFragment, useQueryParam } from "../lib/address";
 import { AuthorsEditor } from "../components/AuthorsEditor";
@@ -6,7 +6,6 @@ import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
 import { MoreMenu } from "../components/MoreMenu";
-import { ListenDialog } from "../components/ListenDialog";
 import { refetchArxivHtml } from "../lib/arxiv";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
@@ -14,8 +13,17 @@ import { readDetails, useDetailsStatus } from "../lib/libraryDetails";
 import { getItem, hasFile, hasHtml, isKind, KIND_NAMES, KINDS, LIBRARY_TABLES, readFile, readHtml, removeItem, saveToc, updateItem, type LibraryItem } from "../lib/library";
 import type { TocEntry } from "../lib/schemas";
 import { useTablesVersion } from "../lib/live";
+import { beginningEntry, chapterAt, flatContents, listenEntries } from "../lib/audioModel";
+import { listenFrom, makeSection, useReading } from "../lib/listening";
+import { usePlayer } from "../lib/player";
+import { errorMessage } from "../lib/openrouter";
+import { note } from "../lib/diagnostics";
 import { hostOf } from "../lib/webModel";
 import { openUrl } from "@tauri-apps/plugin-opener";
+
+
+/** Whether the text follows the section being heard (AUD-19), per device. */
+const FOLLOW_KEY = "follow-audio";
 
 /** The details form: saved when a field is left. */
 function Details(props: { item: LibraryItem }) {
@@ -132,7 +140,6 @@ export default function LibraryItemPage() {
   const [fileHere, setFileHere] = useState<boolean | null>(null);
   const [htmlHere, setHtmlHere] = useState<boolean | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [recording, setRecording] = useState(false);
   const [showContents, setShowContents] = useState(contentsWanted);
   const [page, setPage] = useState(1);
   const [jump, setJump] = useState<{ itemId: string; page: number; seq: number } | null>(null);
@@ -199,7 +206,77 @@ export default function LibraryItemPage() {
     },
     [id, needsToc],
   );
-  const toc = view === "text" ? htmlToc : item !== null && item !== "missing" ? (item.toc ?? []) : [];
+  const pdfToc = item !== null && item !== "missing" ? item.toc : null;
+  const toc = useMemo(() => (view === "text" ? htmlToc : (pdfToc ?? [])), [view, htmlToc, pdfToc]);
+
+  // Spec: AUD-2, AUD-18, AUD-19
+  // Listening from the contents: what each section is in the item's reading, the one being heard, and following it.
+  const reading = useReading(id);
+  const player = usePlayer();
+  const script = reading.rec?.durationSeconds === null ? reading.rec.script : null;
+  const entries = useMemo(() => listenEntries(toc, script, reading.made), [toc, script, reading.made]);
+  const heard = reading.rec !== null && player.recordingId === reading.rec.id ? (player.chapterMade?.[chapterAt(player.chapters, player.position)]?.key ?? null) : null;
+  const [starting, setStarting] = useState<string | null>(null);
+  const [making, setMaking] = useState<ReadonlySet<string>>(new Set());
+  const [follow, setFollow] = useState(() => {
+    try {
+      return localStorage.getItem(FOLLOW_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const chooseFollow = (on: boolean) => {
+    setFollow(on);
+    try {
+      localStorage.setItem(FOLLOW_KEY, on ? "1" : "0");
+    } catch {
+      // A convenience only.
+    }
+  };
+  // Spec: AUD-19
+  // Following, the text goes to the section heard as it changes; scrolling it stops that.
+  const following = follow && heard !== null && (player.playing || player.waiting);
+  useEffect(() => {
+    if (!following || heard === null) return;
+    if (heard === "front") {
+      if (view === "text") setHtmlJump((j) => ({ itemId: id, anchor: "", seq: (j?.seq ?? 0) + 1 }));
+      else setJump((j) => ({ itemId: id, page: 1, seq: (j?.seq ?? 0) + 1 }));
+      return;
+    }
+    const at = entries.findIndex((e) => e?.key === heard);
+    const f = flatContents(toc)[at];
+    if (!f) return;
+    const anchor = f.entry.anchor;
+    const p = f.entry.page;
+    if (view === "text" && anchor) setHtmlJump((j) => ({ itemId: id, anchor, seq: (j?.seq ?? 0) + 1 }));
+    else if (p !== null) setJump((j) => ({ itemId: id, page: p, seq: (j?.seq ?? 0) + 1 }));
+    // Each section heard is gone to once; the contents and view settle in between.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heard, following]);
+  const stopFollowing = () => {
+    if (follow) setFollow(false);
+  };
+  const listening = {
+    entries,
+    beginning: beginningEntry(script, reading.made),
+    hearing: heard,
+    busy: starting,
+    making,
+    onListen: (key: string, title: string) => {
+      setStarting(key);
+      void listenFrom(id, { key, title })
+        .catch((e: unknown) => note("error", "audio", `Listening from “${title}” failed: ${errorMessage(e)}`))
+        .finally(() => setStarting(null));
+    },
+    onMake: (key: string, title: string) => {
+      setMaking((s) => new Set([...s, key]));
+      void makeSection(id, key, title).catch((e: unknown) => note("error", "audio", `Making “${title}” failed: ${errorMessage(e)}`));
+    },
+    onBeginning: () => {
+      if (view === "text") setHtmlJump((j) => ({ itemId: id, anchor: "", seq: (j?.seq ?? 0) + 1 }));
+      else setJump((j) => ({ itemId: id, page: 1, seq: (j?.seq ?? 0) + 1 }));
+    },
+  };
   const toggleContents = () =>
     setShowContents((s) => {
       rememberContents(!s);
@@ -211,12 +288,19 @@ export default function LibraryItemPage() {
     <aside className="toc-panel" aria-label="Contents">
       <div className="toc-head">
         <strong>Contents</strong>
+        {/* Spec: AUD-19 */}
+        {heard !== null ? (
+          <button type="button" className="toc-follow" aria-pressed={follow} title="Keep the section being heard in view" onClick={() => chooseFollow(!follow)}>
+            Follow
+          </button>
+        ) : null}
         <button type="button" className="assistant-ghost" aria-label="Close the contents" onClick={toggleContents}>
           ×
         </button>
       </div>
       <Contents
         toc={toc}
+        listen={listening}
         {...(view === "text" ? { anchor: section } : { page })}
         onPick={(entry) => {
           if (view === "text" && entry.anchor) {
@@ -281,8 +365,11 @@ export default function LibraryItemPage() {
             label="More for this item"
             actions={[
               // Spec: AUD-2
-              // Spec: AUD-2
-              { label: "Listen…", onClick: () => setRecording(true) },
+              // Where it was left (its beginning, the first time); a section, from the contents.
+              {
+                label: "Listen",
+                onClick: () => void listenFrom(item.id, null).catch((e: unknown) => note("error", "audio", `Listening to “${item.title}” failed: ${errorMessage(e)}`)),
+              },
               // Spec: LIB-27
               ...(item.arxivId ? [{ label: "Fetch the text again from arXiv", onClick: () => void refetchArxivHtml(item.id).catch(() => undefined) }] : []),
               {
@@ -333,7 +420,7 @@ export default function LibraryItemPage() {
         html?.id === id ? (
           <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
             {showContents && toc.length > 0 ? contentsPanel : null}
-            <div className="html-view">
+            <div className="html-view" onWheelCapture={stopFollowing} onTouchMoveCapture={stopFollowing} onKeyDownCapture={stopFollowing}>
               {contentsToggle || viewSwitch ? (
                 <div className="pdf-toolbar">
                   {contentsToggle}
@@ -355,7 +442,7 @@ export default function LibraryItemPage() {
       ) : fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (
-        <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
+        <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"} onWheelCapture={stopFollowing} onTouchMoveCapture={stopFollowing}>
           {/* Spec: LIB-15 */}
           {showContents && toc.length > 0 ? contentsPanel : null}
           <PdfViewer
@@ -377,7 +464,6 @@ export default function LibraryItemPage() {
           />
         </div>
       ) : null}
-      {recording ? <ListenDialog item={item} onClose={() => setRecording(false)} /> : null}
     </div>
   );
 }
