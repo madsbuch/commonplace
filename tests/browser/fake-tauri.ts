@@ -385,7 +385,6 @@ if (import.meta.main) {
           const at = typeof args["piece"] === "string" ? args["piece"].split(".").slice(-3).map(Number) : [0, 0, 0];
           const prompt = readFileSync(new URL("src-tauri/src/audio/verbatim.md", root), "utf8");
           const webm = new Uint8Array(readFileSync(new URL("tests/browser/fixtures/speech.webm", root)));
-          const order: [number, number, number, string][] = [];
           // Spec: AUD-14
           // Chunks another recording wrote already, by their source.
           const elsewhere = new Map<string, string[]>();
@@ -393,37 +392,96 @@ if (import.meta.main) {
             const s = ScriptSchema.safeParse(parseJson(other.script));
             if (s.success) for (const ch of s.data.chapters) for (const k of ch.chunks ?? []) if (k.source !== undefined && k.passages) elsewhere.set(k.source, k.passages);
           }
-          script.chapters.forEach((ch, c) =>
-            (ch.chunks ?? []).forEach((k, i) => {
-              const before = k.source === undefined ? undefined : elsewhere.get(k.source);
-              if (k.passages === null && before) k.passages = before;
-              if (k.passages === null) {
-                chatRequests.push({ model: "anthropic/claude-haiku-5.5", messages: [{ role: "system", content: prompt }, { role: "user", content: k.source ?? "" }], max_tokens: 16000 });
-                const answer = z.object({ paragraphs: z.array(z.string()) }).safeParse(modelAnswer);
-                k.passages = answer.success ? answer.data.paragraphs : [];
-              }
-              k.passages.forEach((p, n) => order.push([c, i, n, p]));
-            }),
-          );
+          const write = (k: { source?: string; passages: string[] | null; model?: string }) => {
+            const before = k.source === undefined ? undefined : elsewhere.get(k.source);
+            if (before) {
+              k.passages = before;
+              return;
+            }
+            chatRequests.push({ model: "anthropic/claude-haiku-5.5", messages: [{ role: "system", content: prompt }, { role: "user", content: k.source ?? "" }], max_tokens: 16000 });
+            const answer = z.object({ paragraphs: z.array(z.string()) }).safeParse(modelAnswer);
+            k.passages = answer.success ? answer.data.paragraphs : [];
+            k.model = "anthropic/claude-haiku-5.5";
+          };
+          type Place = { c: number; k: number; n: number | null; text: string };
+          const places = (): Place[] =>
+            script.chapters.flatMap((ch, c) =>
+              (ch.chunks ?? []).flatMap((k, i): Place[] => (k.passages === null ? [{ c, k: i, n: null, text: "" }] : k.passages.map((text, n) => ({ c, k: i, n, text })))),
+            );
+          let order = places();
+          const from = Math.max(0, order.findIndex((p) => p.c === at[0] && p.k === at[1] && (p.n === null || p.n === at[2])));
+          // Written as it's reached: from the listener on, until the fake's lead (two passages) is written; all of it, at once.
+          let ahead = 0;
+          for (let i = all ? 0 : from; i < order.length && (all || ahead < 2); ) {
+            const p = order[i];
+            if (p && p.n === null) {
+              const chunk = script.chapters[p.c]?.chunks?.[p.k];
+              if (chunk) write(chunk);
+              order = places();
+              continue;
+            }
+            ahead += 1;
+            i += 1;
+          }
           db.query("UPDATE recordings SET script = ? WHERE id = ?").run(JSON.stringify(script), id);
-          const from = Math.max(0, order.findIndex(([c, k, n]) => c === at[0] && k === at[1] && n === at[2]));
-          const wanted = all ? order : order.slice(from, from + 2);
-          for (const [c, k, n] of wanted) {
-            const text = order.find(([oc, ok, on]) => oc === c && ok === k && on === n)?.[3] ?? "";
+          const spoken = order.filter((p) => p.n !== null);
+          const start = Math.max(0, spoken.findIndex((p) => p.c === at[0] && p.k === at[1] && (p.n === at[2] || at[2] === 0)));
+          for (const p of all ? spoken : spoken.slice(start, start + 2)) {
             db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, 3, ?, ?, ?)").run(
-              `${id}.${c}.${k}.${n}`,
+              `${id}.${p.c}.${p.k}.${p.n ?? 0}`,
               id,
-              c,
-              k,
-              n,
+              p.c,
+              p.k,
+              p.n ?? 0,
               webm,
               new Date().toISOString(),
-              `${row.speech_model}|${row.voice}|${text}`,
+              `${row.speech_model}|${row.voice}|${p.text}`,
             );
           }
           const made = z.object({ n: z.number() }).parse(db.query("SELECT count(*) AS n FROM recording_pieces WHERE recording_id = ?").get(id)).n;
-          const done = made >= order.length;
+          const done = order.every((p) => p.n !== null) && made >= order.length;
           db.query("UPDATE recordings SET status = ?, progress = ? WHERE id = ?").run(done ? "ready" : all ? "making" : row.status, order.length ? made / order.length : 1, id);
+          return Response.json({ ok: null }, { headers: cors });
+        }
+        // Spec: AUD-14
+        // Rust's take_in: an item's earlier recordings' chunks and pieces into its reading, then they go.
+        if (cmd === "audio_adopt") {
+          const reading = String(args["reading"]);
+          const old = z.array(z.string()).parse(args["old"]).filter((o) => o !== reading);
+          const rr = z.object({ script: z.string(), voice: z.string(), speech_model: z.string() }).parse(db.query("SELECT script, voice, speech_model FROM recordings WHERE id = ?").get(reading));
+          const script = ScriptSchema.parse(parseJson(rr.script));
+          const written = new Map<string, string[]>();
+          for (const o of old) {
+            const r = z.object({ script: z.string().nullable() }).optional().parse(db.query("SELECT script FROM recordings WHERE id = ?").get(o) ?? undefined);
+            const s = r?.script ? ScriptSchema.safeParse(parseJson(r.script)) : null;
+            if (s?.success) for (const ch of s.data.chapters) for (const k of ch.chunks ?? []) if (k.source !== undefined && k.passages) written.set(k.source, k.passages);
+          }
+          script.chapters.forEach((ch) => (ch.chunks ?? []).forEach((k) => {
+            const before = k.source === undefined ? undefined : written.get(k.source);
+            if (k.passages === null && before) k.passages = before;
+          }));
+          db.query("UPDATE recordings SET script = ? WHERE id = ?").run(JSON.stringify(script), reading);
+          script.chapters.forEach((ch, c) =>
+            (ch.chunks ?? []).forEach((k, i) =>
+              (k.passages ?? []).forEach((text, n) => {
+                const piece = z.object({ data: z.instanceof(Uint8Array) }).optional().parse(
+                  db.query("SELECT data FROM recording_pieces WHERE speech_key = ? LIMIT 1").get(`${rr.speech_model}|${rr.voice}|${text}`) ?? undefined,
+                );
+                if (piece)
+                  db.query("INSERT OR IGNORE INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) VALUES (?, ?, ?, ?, ?, 3, ?, ?, ?)").run(
+                    `${reading}.${c}.${i}.${n}`,
+                    reading,
+                    c,
+                    i,
+                    n,
+                    piece.data,
+                    new Date().toISOString(),
+                    `${rr.speech_model}|${rr.voice}|${text}`,
+                  );
+              }),
+            ),
+          );
+          for (const o of old) for (const sql of ["DELETE FROM recording_pieces WHERE recording_id = ?", "DELETE FROM listening WHERE recording_id = ?", "DELETE FROM recordings WHERE id = ?"]) db.query(sql).run(o);
           return Response.json({ ok: null }, { headers: cors });
         }
         if (cmd === "audio_piece") {

@@ -459,12 +459,26 @@ read and show verdicts.
 
 ## The audio library
 
-Recordings of library items (`recordings`, synced): verbatim (a whole item,
-or a section and those within it, `section` = `html:<anchor>` or `toc:<i>`)
-or a summary of several, one narrator, 5/15/30 minutes. A recording is made
-as it's listened to (AUD-6), `audio.lead` (3 min) ahead of the listener, on
-whichever device plays it, or all of it at once when asked (AUD-13, on the
-device that asked: `device`).
+Recordings of library items (`recordings`, synced): each item's one
+reading, verbatim (AUD-2), and summaries of several, one narrator, 5/15/30
+minutes, recordings of their own. A reading's id is derived from its item's
+(`readingId`: `derivedId("recordings", "reading:<item>")`), so every device
+starts the same one. It's started from the item (⋯ → Listen…,
+`ListenDialog`): where it was left, its beginning, or a section (`#t=` its
+chapter's start, `sectionStart`), and it plays on; it keeps the voice it
+began in, and "Read in another voice…" (AUD-15, `readInVoice`) drops its
+pieces and keeps its text and where it was left. A recording is made as it's
+listened to (AUD-6), `audio.lead` (3 min) ahead of the listener, on whichever
+device plays it, or all of it at once when asked (AUD-13, on the device that
+asked: `device`). A summary keeps its script and `provenance` (AUD-16: its
+works and which of their texts, the script model and its instructions, its
+length, the speech model and voice, when and where), shown folded away on
+its screen (`WhereItCameFrom`); a reading's chunks keep the `model` that
+wrote them. An item's recordings from before it had one reading (a section,
+the whole of it, made a piece at a time) are taken into its reading when the
+app starts (`adoptEarlier` → `audio_adopt` → Rust's `take_in`: their chunks
+by source, their pieces by `speech_key`), then deleted; ones made at once as
+one file stay as they are.
 
 - The app prepares the script (`src/lib/audio.ts`, `prepareScript`; pure
   parts in `audioModel.ts`): an item's sections from its HTML version (each
@@ -472,7 +486,8 @@ device that asked: `device`).
   out), or from its PDF by its contents' pages and titles, cut into chunks
   (`MAX_SCRIPT_CHUNK`) with `passages: null`; a summary is written whole here
   (one call, `audio_script` in the ledger). The script's shape is
-  `{ chapters: [{ title, chunks: [{ source?, passages }] }] }`; recordings
+  `{ chapters: [{ title, key, chunks: [{ source?, passages, model? }] }] }`
+  (`key`: the section, `html:<anchor>`, `toc:<i>` or `front`); recordings
   made before hold `{ title, paragraphs }` chapters, read as one written
   chunk each. Status: `writing` → `listening` (or `making`) → `ready`.
 - Rust makes it (`src-tauri/src/audio/`): `plan.rs` is pure (slots in order,
@@ -507,11 +522,12 @@ device that asked: `device`).
   they have `duration_seconds` and `chapters`, and they play as one.
 - `tests/browser/fixtures/speech.webm` is our encoder's output
   (`WRITE_SPEECH_FIXTURE=… cargo test speech_in_opus`). The fake Tauri layer
-  makes pieces with it as Rust would (`audio_listen`: the chunk reached is
-  "written", its request recorded, unless another recording wrote its source
-  already, and the piece listened at and the one after are made, with their
-  `speech_key`; `audio_make_all`: all), so the browser checks play real WebM
-  Opus, wait for what isn't made, go on, and reuse a section's text.
+  makes pieces with it as Rust would (`audio_listen`: from the listener on,
+  each chunk reached is "written", its request recorded, unless another
+  recording wrote its source already, until two passages are, and those are
+  made, with their `speech_key`; `audio_make_all`: all; `audio_adopt`, as
+  `take_in`), so the browser checks play real WebM Opus from a section, wait
+  for what isn't made, go on, and take in a section recorded before.
 - One player for the app (`src/lib/player.ts`): a recording's timeline
   (`timeline` in `audioModel.ts`: pieces made count as they are, the rest at
   the pace of what's made), chapters, speed (per device), where it was left

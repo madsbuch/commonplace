@@ -108,7 +108,8 @@ export default function AudioPage() {
           {/* Spec: APP-9 */}
           <InfoButton title="The audio library">
             <p>Papers and books read aloud: a whole paper or one of its sections, word for word, with formulas said as a mathematician would say them; or a spoken summary of several.</p>
-            <p>Record one from a paper's menu (⋯) in the library. A recording is made as you listen, a few minutes ahead of where you are, so it starts at once and you pay only for what you hear; skipping ahead waits a moment while that part is made. What's made syncs to your other devices, and a recording's menu can make all of it at once, to listen offline.</p>
+            <p>Each paper has one reading: listen from its menu (⋯) in the library, where you left off, from its beginning, or from any section, and it plays on. It's made as you listen, a few minutes ahead of where you are, so it starts at once and you pay only for what you hear; skipping ahead waits a moment while that part is made. What's made syncs to your other devices, and a recording's menu can make all of it at once, to listen offline.</p>
+            <p>Summaries are recordings of their own, kept with their script and where they came from.</p>
           </InfoButton>
         </div>
         <button type="button" className="button-primary" onClick={() => setSummarizing(true)}>
@@ -122,7 +123,7 @@ export default function AudioPage() {
             <Link to={`/audio/${r.id}`} className="library-row">
               <span className="library-title">{r.title}</span>
               <span className="library-meta muted">
-                {r.kind === "summary" ? `Summary · ${r.minutes ?? ""} min` : "Read aloud"} · {recordingState(r)}
+                {r.kind === "summary" ? `Summary · ${r.minutes ?? ""} min` : r.durationSeconds !== null ? "Read aloud" : "Reading"} · {recordingState(r)}
               </span>
             </Link>
           </li>

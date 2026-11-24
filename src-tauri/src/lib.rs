@@ -107,6 +107,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011_piece_speech_key.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "recording_provenance",
+            sql: include_str!("../migrations/0012_recording_provenance.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -188,6 +194,13 @@ fn audio_listen(app: tauri::AppHandle, id: String, piece: Option<String>) {
 #[tauri::command]
 async fn audio_make_all(app: tauri::AppHandle, id: String) -> Result<(), String> {
     audio_service(&app).make_all(&app, &id).await
+}
+
+// Spec: AUD-14
+/// An item's recordings from before it had one reading become part of its reading, and go.
+#[tauri::command]
+async fn audio_adopt(app: tauri::AppHandle, reading: String, old: Vec<String>) -> Result<(), String> {
+    audio_service(&app).adopt(&app, &reading, &old).await
 }
 
 // Spec: APP-12
@@ -555,6 +568,7 @@ pub fn run() {
             library_read_file,
             audio_listen,
             audio_make_all,
+            audio_adopt,
             audio_forget,
             audio_piece,
             audio_read,

@@ -6,7 +6,7 @@ import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
 import { MoreMenu } from "../components/MoreMenu";
-import { RecordDialog } from "../components/RecordDialog";
+import { ListenDialog } from "../components/ListenDialog";
 import { refetchArxivHtml } from "../lib/arxiv";
 import { PdfViewer } from "../components/PdfViewer";
 import { pdfOutline, type PdfDocument } from "../lib/pdf";
@@ -281,7 +281,8 @@ export default function LibraryItemPage() {
             label="More for this item"
             actions={[
               // Spec: AUD-2
-              { label: "Record aloud…", onClick: () => setRecording(true) },
+              // Spec: AUD-2
+              { label: "Listen…", onClick: () => setRecording(true) },
               // Spec: LIB-27
               ...(item.arxivId ? [{ label: "Fetch the text again from arXiv", onClick: () => void refetchArxivHtml(item.id).catch(() => undefined) }] : []),
               {
@@ -376,7 +377,7 @@ export default function LibraryItemPage() {
           />
         </div>
       ) : null}
-      {recording ? <RecordDialog item={item} onClose={() => setRecording(false)} /> : null}
+      {recording ? <ListenDialog item={item} onClose={() => setRecording(false)} /> : null}
     </div>
   );
 }

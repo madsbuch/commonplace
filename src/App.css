@@ -2369,6 +2369,38 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   margin-top: -8px;
   font-size: 14px;
 }
+/* Spec: AUD-16 — where a summary came from, folded away. */
+.recording-provenance {
+  margin: 0 0 16px;
+  font-size: 0.92rem;
+}
+.recording-provenance > summary,
+.recording-provenance details > summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.recording-provenance ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.recording-provenance details {
+  margin: 6px 0 0;
+}
+.recording-instructions {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  background: var(--hover);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+.recording-script h3 {
+  font-size: 1rem;
+  margin: 12px 0 4px;
+}
+.recording-script p {
+  margin: 0 0 6px;
+  font-family: var(--font-book);
+}
 .recording-progress {
   margin: 16px 0;
 }

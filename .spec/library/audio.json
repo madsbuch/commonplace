@@ -3,7 +3,7 @@
   "title": "Audio library",
   "summary": "Recordings of papers and books, verbatim or summarized, to listen to anywhere.",
   "order": 3,
-  "description": "Papers read aloud: verbatim, a whole paper or any of its sections, or a summary of several. Recordings are made as they're listened to, on whichever device plays them, and what's made syncs to all of them for listening offline, on a phone with the screen off.",
+  "description": "Papers read aloud, and summaries of several. Each work has one reading, verbatim, started from the work at any of its sections and made as it's listened to, on whichever device plays it; summaries are recordings of their own, kept with where they came from. What's made syncs to every device for listening offline, on a phone with the screen off.",
   "stories": [
     {
       "id": "US-22",
@@ -16,7 +16,8 @@
         "#AUD-3",
         "#AUD-6",
         "#AUD-7",
-        "#AUD-10"
+        "#AUD-10",
+        "#AUD-15"
       ]
     },
     {
@@ -25,18 +26,37 @@
       "want": "a spoken summary of one or more papers",
       "soThat": "I know what they say before I read them closely",
       "requirements": [
-        "#AUD-4"
+        "#AUD-4",
+        "#AUD-16"
       ]
     }
   ],
   "requirements": [
     {
       "id": "AUD-1",
-      "text": "The audio library holds recordings of the library's papers and books, newest first; each opens in a player."
+      "text": "The audio library holds the library's readings and its summaries, newest first; each opens in a player. An item's reading is also started from the item.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The audio library holds recordings of the library's papers and books, newest first; each opens in a player.",
+          "reason": "A reading belongs to the work: a section and the whole paper were recordings of their own, listed apart and made twice.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-2",
-      "text": "The author can record an item verbatim, whole or one of its sections from its contents, down to the smallest; the sections within a recording are its chapters."
+      "text": "Each item has one reading, verbatim, made as it's listened to. The author starts it from the item: where it was left, at its beginning, or at any section of its contents, down to the smallest, and it plays on into the sections after. Its sections are its chapters.",
+      "history": [
+        {
+          "version": 1,
+          "text": "The author can record an item verbatim, whole or one of its sections from its contents, down to the smallest; the sections within a recording are its chapters.",
+          "reason": "A reading belongs to the work: a section and the whole paper were recordings of their own, listed apart and made twice.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
     },
     {
       "id": "AUD-3",
@@ -132,9 +152,33 @@
     },
     {
       "id": "AUD-14",
-      "text": "What one recording has made is used again by another, not made twice: recording a section and then the whole paper, the section's text isn't prepared again, and a passage already spoken in the same voice isn't spoken again.",
+      "text": "Nothing already made is made again: a passage spoken in a voice is used again wherever it recurs, and an item's recordings from before it had one reading become part of its reading.",
       "related": [
         "#AUD-6"
+      ],
+      "history": [
+        {
+          "version": 1,
+          "text": "What one recording has made is used again by another, not made twice: recording a section and then the whole paper, the section's text isn't prepared again, and a passage already spoken in the same voice isn't spoken again.",
+          "reason": "A reading belongs to the work: a section and the whole paper were recordings of their own, listed apart and made twice.",
+          "date": "2026-11-24"
+        }
+      ],
+      "version": 2
+    },
+    {
+      "id": "AUD-15",
+      "text": "A reading is in the voice it was started in. Read in another voice, it starts afresh: what was spoken in the old voice goes, and its prepared text stays.",
+      "related": [
+        "#AUD-2",
+        "#AUD-5"
+      ]
+    },
+    {
+      "id": "AUD-16",
+      "text": "A summary is kept with its script and where it came from: the works and which of their texts it read, the script model and what it was told, its length, the speech model and voice, and when and on which device it was made. Its recording shows them. A reading keeps, for each part of its text, the model that prepared it.",
+      "related": [
+        "#AUD-4"
       ]
     }
   ],

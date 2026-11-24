@@ -3,13 +3,98 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { MoreMenu } from "../components/MoreMenu";
 import { PauseIcon, PlayIcon } from "../components/Icons";
 import { replaceFragment } from "../lib/address";
-import { AUDIO_TABLES, getRecording, hasAudio, makeAll, removeRecording, retryRecording } from "../lib/audio";
-import { chapterAt, clock, SPEEDS, timeOfFragment } from "../lib/audioModel";
+import { AUDIO_TABLES, getRecording, hasAudio, makeAll, readInVoice, removeRecording, retryRecording } from "../lib/audio";
+import { chapterAt, chunksOf, clock, SPEEDS, timeOfFragment, VOICES } from "../lib/audioModel";
 import { getItem } from "../lib/library";
 import { useTablesVersion } from "../lib/live";
 import { chapterStep, load, seek, setSpeed, skip, toggle, unload, usePlayer } from "../lib/player";
-import type { Recording } from "../lib/schemas";
+import type { Provenance, Recording } from "../lib/schemas";
 import { recordingState } from "./AudioPage";
+
+// Spec: AUD-15
+/** Choosing another voice for a reading: it starts afresh in it. */
+function VoiceDialog(props: { rec: Recording; onClose: () => void }) {
+  const [voice, setVoice] = useState(props.rec.voice);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="dialog-backdrop" onClick={props.onClose}>
+      <div className="dialog" role="dialog" aria-label="Read in another voice" onClick={(e) => e.stopPropagation()}>
+        <h2>Read in another voice</h2>
+        <label className="record-field">
+          <span>Voice</span>
+          <select value={voice} onChange={(e) => setVoice(e.target.value)} aria-label="Voice">
+            {VOICES.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} ({v.character})
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">What's been spoken in {props.rec.voice} goes; the reading starts afresh in {voice}.</p>
+        <div className="dialog-actions">
+          <button type="button" onClick={props.onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="button-primary"
+            disabled={busy || voice === props.rec.voice}
+            onClick={() => {
+              setBusy(true);
+              unload(props.rec.id);
+              void readInVoice(props.rec.id, voice)
+                .then(() => getRecording(props.rec.id))
+                .then((r) => (r ? load(r) : undefined))
+                .finally(props.onClose);
+            }}
+          >
+            Read in {voice}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Spec: AUD-16
+/** Where a summary came from, and its script. */
+function WhereItCameFrom(props: { rec: Recording; provenance: Provenance }) {
+  const p = props.provenance;
+  return (
+    <details className="recording-provenance">
+      <summary>Where it came from</summary>
+      <ul>
+        {p.sources.map((s) => (
+          <li key={s.itemId}>
+            <Link to={`/library/${s.itemId}`}>{s.title}</Link>
+            {s.year ? ` (${s.year})` : ""}: {s.text === "html" ? "its HTML version" : "its PDF"}, {s.characters.toLocaleString("en")} characters read
+          </li>
+        ))}
+        <li>
+          Written by {p.scriptModel}
+          {p.minutes ? `, about ${p.minutes} minutes long` : ""}
+        </li>
+        <li>
+          Read by {p.voice} ({p.speechModel})
+        </li>
+        <li>Made {new Date(p.made).toLocaleString()}</li>
+      </ul>
+      <details>
+        <summary>What the script model was told</summary>
+        <pre className="recording-instructions">{p.instructions}</pre>
+      </details>
+      <details>
+        <summary>The script</summary>
+        {(props.rec.script?.chapters ?? []).map((c, i) => (
+          <section key={i} className="recording-script">
+            <h3>{c.title}</h3>
+            {chunksOf(c).flatMap((k, j) => (k.passages ?? []).map((text, n) => <p key={`${j}.${n}`}>{text}</p>))}
+          </section>
+        ))}
+      </details>
+    </details>
+  );
+}
 
 // Spec: AUD-8, AUD-9, AUD-12
 /** One recording: its sources, how it's coming along, and the player with its chapters. */
@@ -21,6 +106,7 @@ export default function RecordingPage() {
   const [rec, setRec] = useState<Recording | null | "missing">(null);
   const [here, setHere] = useState(false);
   const [sources, setSources] = useState<{ id: string; title: string }[]>([]);
+  const [revoicing, setRevoicing] = useState(false);
   const p = usePlayer();
 
   useEffect(() => {
@@ -89,6 +175,8 @@ export default function RecordingPage() {
               ...(rec.status === "failed" ? [{ label: "Try again", onClick: () => void retryRecording(rec) }] : []),
               // Spec: AUD-13
               ...(rec.status === "listening" ? [{ label: "Make it all now", onClick: () => void makeAll(rec.id) }] : []),
+              // Spec: AUD-15
+              ...(rec.kind === "verbatim" && !oneFile ? [{ label: "Read in another voice…", onClick: () => setRevoicing(true) }] : []),
               {
                 label: "Delete recording",
                 confirm: "Really delete this recording?",
@@ -104,14 +192,17 @@ export default function RecordingPage() {
       </div>
       <h1>{rec.title}</h1>
       <p className="muted recording-meta">
-        {rec.kind === "summary" ? `Summary · ${rec.minutes ?? ""} min · ` : "Read aloud · "}
+        {rec.kind === "summary" ? `Summary · ${rec.minutes ?? ""} min · ` : oneFile ? "Read aloud · " : "Reading · "}
         {sources.map((s, i) => (
           <span key={s.id}>
             {i > 0 ? ", " : ""}
             <Link to={`/library/${s.id}`}>{s.title}</Link>
           </span>
         ))}
+        {rec.kind === "verbatim" ? ` · read by ${rec.voice}` : null}
       </p>
+      {rec.provenance ? <WhereItCameFrom rec={rec} provenance={rec.provenance} /> : null}
+      {revoicing ? <VoiceDialog rec={rec} onClose={() => setRevoicing(false)} /> : null}
 
       {rec.status === "writing" || rec.status === "making" || rec.status === "speaking" || rec.status === "failed" || (rec.error && !oneFile) ? (
         <div className="recording-progress">

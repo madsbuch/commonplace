@@ -402,10 +402,11 @@ export const leanChecks = sqliteTable("lean_checks", {
 // The audio library (src/lib/audio.ts, src-tauri/src/audio/)
 // ---------------------------------------------------------------------------
 
-// Spec: AUD-1, AUD-2, AUD-4, AUD-6, AUD-13
+// Spec: AUD-1, AUD-2, AUD-4, AUD-6, AUD-13, AUD-16
 /**
- * A recording of library items: verbatim (an item, or one of its sections)
- * or a summary of several. "writing" while the app prepares its script's
+ * A recording of library items: an item's reading, verbatim (one per item,
+ * its id derived from the item's; recordings made before could be of a
+ * section, `section`), or a summary of several. "writing" while the app prepares its script's
  * sources (a summary's whole script); then "listening": made as it's
  * listened to, a passage at a time (`recording_pieces`), by whichever device
  * plays it; "making" while the device that asked (`device`) makes the rest
@@ -433,9 +434,11 @@ export const recordings = sqliteTable(
     progress: real("progress").notNull().default(0),
     error: text("error"),
     /**
-     * JSON: what's read, `{ chapters: [{ title, chunks: [{ source?, passages }] }] }`:
-     * a verbatim recording's chunks of source text, each's `passages` (what's
-     * spoken, a piece each) null until written; a summary's written whole.
+     * JSON: what's read, `{ chapters: [{ title, key?, chunks: [{ source?, passages, model? }] }] }`:
+     * a reading's chapters are its item's sections (`key`: `html:<anchor>`,
+     * `toc:<i>`, or `front` for what comes before them), its chunks of source
+     * text, each's `passages` (what's spoken, a piece each) null until written,
+     * with the model that wrote them; a summary's written whole.
      * Recordings made before hold `{ chapters: [{ title, paragraphs }] }`.
      */
     script: text("script"),
@@ -444,6 +447,13 @@ export const recordings = sqliteTable(
     durationSeconds: real("duration_seconds"),
     /** The device that started it, or asked for the rest at once (its sync device id). */
     device: text("device").notNull(),
+    /**
+     * JSON: where a summary came from (AUD-16): its works and which of their
+     * texts it read, the script model and what it was told, its length, the
+     * speech model and voice, when and on which device. Null for a reading
+     * (its chunks keep the model that wrote them).
+     */
+    provenance: text("provenance"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

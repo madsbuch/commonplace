@@ -347,10 +347,26 @@ export const LeanSetupEventSchema = z.object({
  * passages written of it (null until written; a piece each). Recordings made
  * before hold a chapter's passages as `paragraphs`.
  */
-export const ScriptChunkSchema = z.object({ source: z.string().optional(), passages: z.array(z.string()).nullable() });
+export const ScriptChunkSchema = z.object({ source: z.string().optional(), passages: z.array(z.string()).nullable(), model: z.string().optional() });
 export const ScriptSchema = z.object({
-  chapters: z.array(z.object({ title: z.string(), chunks: z.array(ScriptChunkSchema).optional(), paragraphs: z.array(z.string()).optional() })),
+  chapters: z.array(
+    z.object({ title: z.string(), key: z.string().optional(), chunks: z.array(ScriptChunkSchema).optional(), paragraphs: z.array(z.string()).optional() }),
+  ),
 });
+
+// Spec: AUD-16
+/** Where a summary came from: its works and which of their texts, the script model and what it was told, its voice. */
+export const ProvenanceSchema = z.object({
+  made: z.string(),
+  device: z.string(),
+  scriptModel: z.string(),
+  instructions: z.string(),
+  minutes: z.number().nullable(),
+  speechModel: z.string(),
+  voice: z.string(),
+  sources: z.array(z.object({ itemId: z.string(), title: z.string(), year: z.number().nullable(), text: z.enum(["html", "pdf"]), characters: z.number() })),
+});
+export type Provenance = z.infer<typeof ProvenanceSchema>;
 export type Script = z.infer<typeof ScriptSchema>;
 
 export const RecordingChapterSchema = z.object({ title: z.string(), start: z.number().nonnegative() });
@@ -373,6 +389,7 @@ const RecordingRowSchema = z.object({
   chapters: z.string().nullable(),
   duration_seconds: z.number().nullable(),
   device: z.string(),
+  provenance: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -401,6 +418,7 @@ export function parseRecording(row: unknown) {
     chapters: json(r.chapters, z.array(RecordingChapterSchema)) ?? [],
     durationSeconds: r.duration_seconds,
     device: r.device,
+    provenance: json(r.provenance ?? null, ProvenanceSchema),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

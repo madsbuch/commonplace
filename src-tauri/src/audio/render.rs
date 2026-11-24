@@ -327,6 +327,62 @@ async fn name_pieces(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
+// Spec: AUD-14
+/**
+ * Takes an item's recordings from before into its reading: their written
+ * chunks (by source) and spoken passages (by what they are), then deletes
+ * them, their pieces and where they were left. The reading's title.
+ */
+async fn take_in(pool: &SqlitePool, reading: &str, old: &[String]) -> Result<String> {
+    name_pieces(pool).await?;
+    let mut olds: Vec<Script> = Vec::new();
+    for id in old.iter().filter(|o| *o != reading) {
+        if let Some(s) = row(pool, id).await?.and_then(|r| r.script) {
+            olds.push(s);
+        }
+    }
+    let rec = row(pool, reading).await?.ok_or("the reading isn't there")?;
+    let mut script = rec.script.ok_or("the reading has no script yet")?;
+    let mut took = false;
+    for chunk in script.chapters.iter_mut().flat_map(|c| c.chunks.iter_mut().flatten()) {
+        if chunk.passages.is_some() {
+            continue;
+        }
+        let Some(source) = chunk.source.as_deref() else { continue };
+        if let Some((passages, by)) = plan::written_elsewhere(&olds, source) {
+            chunk.passages = Some(passages);
+            chunk.model = by;
+            took = true;
+        }
+    }
+    if took {
+        sqlx::query("UPDATE recordings SET script = ?, updated_at = ? WHERE id = ?")
+            .bind(serde_json::to_string(&script).map_err(|e| e.to_string())?)
+            .bind(crate::sync::now_iso())
+            .bind(reading)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    let made = made(pool, reading).await?;
+    for slot in plan::slots(&script) {
+        let Slot::Piece { key, text } = slot else { continue };
+        if made.contains_key(&key) {
+            continue;
+        }
+        let speech = speech_key(&rec.model, &rec.voice, &text);
+        if let Some((webm, seconds)) = spoken_before(pool, &speech).await? {
+            keep_piece(pool, reading, &key, seconds, webm, &speech).await?;
+        }
+    }
+    for id in old.iter().filter(|o| *o != reading) {
+        for sql in ["DELETE FROM recording_pieces WHERE recording_id = ?", "DELETE FROM listening WHERE recording_id = ?", "DELETE FROM recordings WHERE id = ?"] {
+            sqlx::query(sql).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(rec.title)
+}
+
 impl AudioService {
     fn target(&self, id: &str) -> Option<Target> {
         self.targets.lock().ok()?.get(id).cloned()
@@ -566,8 +622,8 @@ impl AudioService {
         let others: Vec<String> =
             sqlx::query_scalar("SELECT script FROM recordings WHERE id != ? AND script IS NOT NULL").bind(id).fetch_all(pool).await.map_err(|e| e.to_string())?;
         let others: Vec<Script> = others.iter().filter_map(|s| serde_json::from_str(s).ok()).collect();
-        if let Some(passages) = plan::written_elsewhere(&others, &source) {
-            return self.keep_passages(app, pool, id, chapter, chunk, passages).await;
+        if let Some((passages, by)) = plan::written_elsewhere(&others, &source) {
+            return self.keep_passages(app, pool, id, chapter, chunk, passages, by).await;
         }
         let (mut network, mut unusable) = (0usize, 0usize);
         let written = loop {
@@ -601,16 +657,19 @@ impl AudioService {
             .execute(pool)
             .await
             .map_err(|e| e.to_string())?;
-        self.keep_passages(app, pool, id, chapter, chunk, plan::passages(&written.paragraphs)).await
+        self.keep_passages(app, pool, id, chapter, chunk, plan::passages(&written.paragraphs), Some(model)).await
     }
 
-    /// Keeps a chunk's passages in `id`'s script.
-    async fn keep_passages(&self, app: &AppHandle, pool: &SqlitePool, id: &str, chapter: usize, chunk: usize, passages: Vec<String>) -> Result<()> {
+    // Spec: AUD-16
+    /// Keeps a chunk's passages in `id`'s script, with the model that wrote them.
+    #[allow(clippy::too_many_arguments)]
+    async fn keep_passages(&self, app: &AppHandle, pool: &SqlitePool, id: &str, chapter: usize, chunk: usize, passages: Vec<String>, model: Option<String>) -> Result<()> {
         // Read again and written back at once: nothing else of the script is lost.
         let _held = self.scripts.lock().await;
         let mut script = row(pool, id).await?.and_then(|r| r.script).ok_or("the recording went")?;
         if let Some(k) = script.chapters.get_mut(chapter).and_then(|c| c.chunks.as_mut()).and_then(|c| c.get_mut(chunk)) {
             k.passages = Some(passages);
+            k.model = model;
         }
         sqlx::query("UPDATE recordings SET script = ?, updated_at = ? WHERE id = ?")
             .bind(serde_json::to_string(&script).map_err(|e| e.to_string())?)
@@ -620,6 +679,26 @@ impl AudioService {
             .await
             .map_err(|e| e.to_string())?;
         let _ = app.emit("audio-changed", json!({ "id": id }));
+        Ok(())
+    }
+
+    // Spec: AUD-14
+    /**
+     * Makes an item's recordings from before it had one reading part of its
+     * reading: their written chunks and spoken passages are taken in, then
+     * they go (rows, pieces, where they were left, files).
+     */
+    pub async fn adopt(&self, app: &AppHandle, reading: &str, old: &[String]) -> Result<()> {
+        let pool = crate::db_pool(app).await?;
+        let title = {
+            let _held = self.scripts.lock().await;
+            take_in(&pool, reading, old).await?
+        };
+        for id in old.iter().filter(|o| *o != reading) {
+            self.forget(app, id);
+        }
+        diagnostics::report(app, Level::Info, "audio", &format!("{} recording(s) from before became part of the reading of “{title}”", old.len()));
+        let _ = app.emit("audio-changed", json!({ "id": reading }));
         Ok(())
     }
 
@@ -801,6 +880,41 @@ mod tests {
         keep_piece(&pool, "r2", &at, 2.5, vec![1, 2, 3], &once).await.unwrap();
         let copied: (String, f64) = sqlx::query_as("SELECT speech_key, seconds FROM recording_pieces WHERE id = 'r2.1.0.1'").fetch_one(&pool).await.unwrap();
         assert_eq!(copied, (once, 2.5));
+    }
+
+    // Spec: AUD-14
+    #[tokio::test]
+    async fn a_sections_recording_from_before_becomes_part_of_its_items_reading() {
+        let scratch = crate::test_db::Scratch::new();
+        let pool = crate::test_db::migrated_db(&scratch).await;
+        let add = |id: &'static str, script: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query("INSERT INTO recordings (id, kind, title, items, voice, speech_model, status, progress, script, device, created_at, updated_at) VALUES (?, 'verbatim', 'T', '[\"lib_1\"]', 'Charon', 'm', 'listening', 0, ?, 'd', 'x', 'x')")
+                    .bind(id)
+                    .bind(script)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+        };
+        add("old", r#"{"chapters":[{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":["2 Background","Once."],"model":"m1"}]}]}"#).await;
+        add("reading", r#"{"chapters":[{"title":"1 Intro","key":"html:S1","chunks":[{"source":"1 Intro\n\nHi.","passages":null}]},{"title":"2 Background","key":"html:S2","chunks":[{"source":"2 Background\n\nOnce.","passages":null}]}]}"#).await;
+        sqlx::query("INSERT INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at) VALUES ('old.0.0.1', 'old', 0, 0, 1, 2.5, x'0102', 'x')").execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO listening (recording_id, position, piece, updated_at) VALUES ('old', 1, 'old.0.0.1', 'x')").execute(&pool).await.unwrap();
+
+        take_in(&pool, "reading", &["old".to_string()]).await.unwrap();
+
+        let script: Script = serde_json::from_str(&row(&pool, "reading").await.unwrap().unwrap().script.map(|s| serde_json::to_string(&s).unwrap()).unwrap()).unwrap();
+        let chunk = &script.chapters[1].chunks.as_ref().unwrap()[0];
+        assert_eq!(chunk.passages.as_deref(), Some(&["2 Background".to_string(), "Once.".to_string()][..]));
+        assert_eq!(chunk.model.as_deref(), Some("m1"));
+        assert!(script.chapters[0].chunks.as_ref().unwrap()[0].passages.is_none());
+        let pieces: Vec<String> = sqlx::query_scalar("SELECT id FROM recording_pieces ORDER BY id").fetch_all(&pool).await.unwrap();
+        assert_eq!(pieces, vec!["reading.1.0.1"]);
+        let left: i64 = sqlx::query_scalar("SELECT count(*) FROM recordings WHERE id = 'old'").fetch_one(&pool).await.unwrap();
+        let listened: i64 = sqlx::query_scalar("SELECT count(*) FROM listening").fetch_one(&pool).await.unwrap();
+        assert_eq!((left, listened), (0, 0));
     }
 
     #[test]

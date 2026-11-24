@@ -24,13 +24,14 @@ import {
   passages,
   summaryPrompt,
   SUMMARY_FORMAT,
+  timeline,
 } from "./audioModel";
 import { execute, getSetting, nowIso, select, setSetting } from "./db";
-import { newId } from "./ids";
+import { derivedId, newId } from "./ids";
 import { bytesOf, getItem, readFile, readHtml, type LibraryItem } from "./library";
 import { notifyTablesChanged } from "./live";
 import { chatJson, errorMessage } from "./openrouter";
-import { AudioEventSchema, ListeningRowSchema, parseRecording, PieceRowSchema, type Recording, type Script, type TocEntry } from "./schemas";
+import { AudioEventSchema, ListeningRowSchema, parseRecording, PieceRowSchema, type Provenance, type Recording, type Script, type TocEntry } from "./schemas";
 import { getSyncStatus } from "./sync";
 
 export const AUDIO_TABLES = ["recordings", "recording_pieces", "recording_files", "listening"];
@@ -72,28 +73,66 @@ async function myDevice(): Promise<string> {
   }
 }
 
-async function create(kind: "verbatim" | "summary", title: string, items: string[], section: string | null, minutes: number | null): Promise<string> {
-  const id = newId("recordings");
+/** Adds a recording (unless it's there: an item's reading may be started on two devices at once). */
+async function create(id: string, kind: "verbatim" | "summary", title: string, items: string[], minutes: number | null, voice?: string): Promise<void> {
   const at = nowIso();
   await execute(
-    `INSERT INTO recordings (id, kind, title, items, section, minutes, voice, speech_model, status, progress, device, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'writing', 0, $9, $10, $10)`,
-    [id, kind, title, JSON.stringify(items), section, minutes, await getVoice(), await getSpeechModel(), await myDevice(), at],
+    `INSERT OR IGNORE INTO recordings (id, kind, title, items, section, minutes, voice, speech_model, status, progress, device, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, 'writing', 0, $8, $9, $9)`,
+    [id, kind, title, JSON.stringify(items), minutes, voice ?? (await getVoice()), await getSpeechModel(), await myDevice(), at],
   );
   notifyTablesChanged(AUDIO_TABLES);
-  void prepareScript(id);
+}
+
+// Spec: AUD-2
+/** An item's reading's id: derived from the item's, so every device makes the same one. */
+export function readingId(itemId: string): Promise<string> {
+  return derivedId("recordings", `reading:${itemId}`);
+}
+
+/** An item's reading, if it has one. */
+export async function getReading(itemId: string): Promise<Recording | null> {
+  return getRecording(await readingId(itemId));
+}
+
+// Spec: AUD-2, AUD-15
+/**
+ * An item's reading, started if it has none (in `voice`, else the voice
+ * chosen in Settings), its script prepared. Returns its id.
+ */
+export async function startReading(itemId: string, voice?: string): Promise<string> {
+  const item = await getItem(itemId);
+  if (!item) throw new Error("No such item in the library.");
+  const id = await readingId(itemId);
+  if (!(await getRecording(id))) await create(id, "verbatim", item.title, [itemId], null, voice);
+  const rec = await getRecording(id);
+  if (rec && rec.script === null) await prepareScript(id);
+  else if (rec?.status === "writing") await preparing.get(id);
   return id;
 }
 
 // Spec: AUD-2
-/**
- * Records an item verbatim: whole, or one section (`html:<anchor>` from its
- * HTML version, `toc:<index>` from its PDF's contents). Returns the recording's id.
- */
-export async function recordVerbatim(itemId: string, section: { key: string; title: string } | null): Promise<string> {
-  const item = await getItem(itemId);
-  if (!item) throw new Error("No such item in the library.");
-  return create("verbatim", section ? `${item.title}: ${section.title}` : item.title, [itemId], section?.key ?? null, null);
+/** Where a section of an item starts in its reading, in seconds; null if it isn't one of its chapters. */
+export async function sectionStart(id: string, sectionKey: string): Promise<number | null> {
+  const rec = await getRecording(id);
+  if (!rec?.script) return null;
+  const c = rec.script.chapters.findIndex((ch) => ch.key === sectionKey);
+  if (c < 0) return null;
+  return timeline(id, rec.script, await recordingPieces(id)).slots.find((s) => s.chapter === c)?.start ?? null;
+}
+
+// Spec: AUD-15
+/** Reads a reading in another voice: what was spoken goes; its prepared text, and where it was left, stay. */
+export async function readInVoice(id: string, voice: string): Promise<void> {
+  await invoke("audio_forget", { id }).catch(() => undefined);
+  await execute(`DELETE FROM recording_pieces WHERE recording_id = $1`, [id]);
+  await execute(`UPDATE recordings SET voice = $2, speech_model = $3, status = 'listening', progress = 0, error = NULL, updated_at = $4 WHERE id = $1`, [
+    id,
+    voice,
+    await getSpeechModel(),
+    nowIso(),
+  ]);
+  notifyTablesChanged(AUDIO_TABLES);
 }
 
 // Spec: AUD-4
@@ -101,7 +140,10 @@ export async function recordSummary(itemIds: string[], minutes: number): Promise
   const items = (await Promise.all(itemIds.map(getItem))).filter((i): i is LibraryItem => i !== null);
   if (items.length === 0) throw new Error("Choose a paper or book to summarize.");
   const title = items.length === 1 ? `Summary: ${items[0]?.title ?? ""}` : `Summary of ${items.length} works`;
-  return create("summary", title, items.map((i) => i.id), null, minutes);
+  const id = newId("recordings");
+  await create(id, "summary", title, items.map((i) => i.id), minutes);
+  void prepareScript(id);
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +153,8 @@ export async function recordSummary(itemIds: string[], minutes: number): Promise
 interface SourceChapter {
   title: string;
   text: string;
+  /** The item's section it is: `html:<anchor>`, `toc:<i>`, or `front`. */
+  key: string;
 }
 
 interface Flat {
@@ -177,12 +221,12 @@ async function htmlChapters(item: LibraryItem, section: string | null): Promise<
       // Spec: AUD-3
       withoutAuthors(front);
       const text = textOf(front);
-      if (text.trim()) chapters.push({ title: item.title, text });
+      if (text.trim()) chapters.push({ title: item.title, text, key: "front" });
     }
   }
   for (const f of scope(flat, from === -1 ? null : from)) {
     const el = f.entry.anchor ? root.querySelector(`[id="${CSS.escape(f.entry.anchor)}"]`) : null;
-    if (el) chapters.push({ title: f.entry.title, text: own(el) });
+    if (el && f.entry.anchor) chapters.push({ title: f.entry.title, text: own(el), key: `html:${f.entry.anchor}` });
   }
   return chapters;
 }
@@ -201,7 +245,7 @@ async function pdfChapters(item: LibraryItem, section: string | null): Promise<S
     pdf.close();
   }
   const flat = flatten(item.toc ?? []).filter((f) => f.entry.page !== null);
-  if (flat.length === 0) return [{ title: item.title, text: pages.join("\n\n") }];
+  if (flat.length === 0) return [{ title: item.title, text: pages.join("\n\n"), key: "front" }];
   const index = section?.startsWith("toc:") ? Number(section.slice(4)) : null;
   const chosen = scope(flat, index !== null && Number.isInteger(index) ? index : null);
   const squash = (s: string) => s.replace(/\s+/g, " ").toLowerCase();
@@ -227,23 +271,23 @@ async function pdfChapters(item: LibraryItem, section: string | null): Promise<S
     const front = first?.entry.page ? pages.slice(0, first.entry.page).join("\n\n") : "";
     const end = first ? squash(front).indexOf(squash(first.entry.title)) : -1;
     const text = end > 0 ? front.replace(/\s+/g, " ").slice(0, end) : "";
-    if (text.trim()) chapters.push({ title: item.title, text });
+    if (text.trim()) chapters.push({ title: item.title, text, key: "front" });
   }
-  for (const f of chosen) chapters.push({ title: f.entry.title, text: textOf(f) });
+  for (const f of chosen) chapters.push({ title: f.entry.title, text: textOf(f), key: `toc:${flat.indexOf(f)}` });
   return chapters;
 }
 
-/** An item's whole text, for a summary: its HTML version's, or its PDF's. */
-async function wholeText(item: LibraryItem, budget: number): Promise<string> {
+/** An item's whole text, for a summary: its HTML version's, or its PDF's; and which it was. */
+async function wholeText(item: LibraryItem, budget: number): Promise<{ text: string; from: "html" | "pdf" }> {
   const html = await readHtml(item.id);
   if (html !== null) {
     const { sanitizePaper, textOf, withoutAuthors } = await import("./paperHtml");
     const body = new DOMParser().parseFromString(sanitizePaper(html), "text/html").body;
     // Spec: AUD-4
     withoutAuthors(body);
-    return textOf(body).slice(0, budget);
+    return { text: textOf(body).slice(0, budget), from: "html" };
   }
-  return (await pdfChapters(item, null)).map((c) => `${c.title}\n\n${c.text}`).join("\n\n").slice(0, budget);
+  return { text: (await pdfChapters(item, null)).map((c) => `${c.title}\n\n${c.text}`).join("\n\n").slice(0, budget), from: "pdf" };
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +297,8 @@ async function wholeText(item: LibraryItem, budget: number): Promise<string> {
 /** What a summary can read of its sources in all, in characters. */
 const SUMMARY_BUDGET = 90_000;
 
-const preparing = new Set<string>();
+/** Scripts being prepared, to wait for. */
+const preparing = new Map<string, Promise<void>>();
 
 async function fail(id: string, message: string): Promise<void> {
   await execute(`UPDATE recordings SET status = 'failed', error = $2, updated_at = $3 WHERE id = $1`, [id, message, nowIso()]);
@@ -266,9 +311,15 @@ async function fail(id: string, message: string): Promise<void> {
  * sections, cut into chunks the script model writes as they're reached (in
  * Rust); a summary written whole, here. Then it's made as it's listened to.
  */
-export async function prepareScript(id: string): Promise<void> {
-  if (preparing.has(id)) return;
-  preparing.add(id);
+export function prepareScript(id: string): Promise<void> {
+  const running = preparing.get(id);
+  if (running) return running;
+  const p = prepare(id).finally(() => preparing.delete(id));
+  preparing.set(id, p);
+  return p;
+}
+
+async function prepare(id: string): Promise<void> {
   try {
     const rec = await getRecording(id);
     if (!rec) return;
@@ -282,14 +333,27 @@ export async function prepareScript(id: string): Promise<void> {
         const key = await getApiKey();
         if (!key) throw new Error("There's no OpenRouter key (Settings → AI and models).");
         const budget = Math.floor(SUMMARY_BUDGET / items.length);
-        const works = await Promise.all(
-          // Spec: AUD-4
-          // What they say, not who wrote them: no authors go to the model.
-          items.map(async (i, n) => `Work ${n + 1}: "${i.title}"${i.year ? ` (${i.year})` : ""}\n\n${await wholeText(i, budget)}`),
-        );
-        const raw = await chatJson(key, await getScriptModel(), [{ role: "system", content: summaryPrompt(rec.minutes ?? 15) }, { role: "user", content: works.join("\n\n---\n\n") }], SUMMARY_FORMAT, {
+        // Spec: AUD-4
+        // What they say, not who wrote them: no authors go to the model.
+        const texts = await Promise.all(items.map((i) => wholeText(i, budget)));
+        const works = items.map((i, n) => `Work ${n + 1}: "${i.title}"${i.year ? ` (${i.year})` : ""}\n\n${texts[n]?.text ?? ""}`);
+        const model = await getScriptModel();
+        const instructions = summaryPrompt(rec.minutes ?? 15);
+        const raw = await chatJson(key, model, [{ role: "system", content: instructions }, { role: "user", content: works.join("\n\n---\n\n") }], SUMMARY_FORMAT, {
           feature: "audio_script",
         });
+        // Spec: AUD-16
+        const provenance: Provenance = {
+          made: nowIso(),
+          device: await myDevice(),
+          scriptModel: model,
+          instructions,
+          minutes: rec.minutes,
+          speechModel: rec.speechModel,
+          voice: rec.voice,
+          sources: items.map((i, n) => ({ itemId: i.id, title: i.title, year: i.year, text: texts[n]?.from ?? "pdf", characters: texts[n]?.text.length ?? 0 })),
+        };
+        await execute(`UPDATE recordings SET provenance = $2 WHERE id = $1`, [id, JSON.stringify(provenance)]);
         const summary = parseSummary(raw);
         if (summary.chapters.length === 0) throw new Error("The script model wrote nothing to read.");
         script = { chapters: summary.chapters.map((c) => ({ title: c.title, chunks: [{ passages: passages(c.paragraphs) }] })) };
@@ -299,7 +363,7 @@ export async function prepareScript(id: string): Promise<void> {
         if (!item) throw new Error("Its paper is no longer in the library.");
         const sources = (await htmlChapters(item, rec.section)) ?? (await pdfChapters(item, rec.section));
         script = {
-          chapters: sources.map((s) => ({ title: s.title, chunks: cut(`${s.title}\n\n${s.text}`, MAX_SCRIPT_CHUNK).map((source) => ({ source, passages: null })) })),
+          chapters: sources.map((s) => ({ title: s.title, key: s.key, chunks: cut(`${s.title}\n\n${s.text}`, MAX_SCRIPT_CHUNK).map((source) => ({ source, passages: null })) })),
         };
         if (script.chapters.every((c) => (c.chunks ?? []).length === 0)) throw new Error("There's no text to read in it.");
       }
@@ -389,7 +453,33 @@ export async function saveListening(id: string, position: number, piece: string 
 /** On start: this device's recordings whose script was being prepared carry on (Rust carries on with those being made at once). */
 export async function resumeRecordings(): Promise<void> {
   const me = await myDevice();
-  for (const r of await listRecordings()) if (r.status === "writing" && r.device === me) void prepareScript(r.id);
+  const all = await listRecordings();
+  for (const r of all) if (r.status === "writing" && r.device === me) void prepareScript(r.id);
+  await adoptEarlier(all).catch((e: unknown) => note("warning", "audio", `Taking earlier recordings into their readings failed: ${errorMessage(e)}`));
+}
+
+// Spec: AUD-14
+/**
+ * An item's recordings from before it had one reading (a section, the whole
+ * of it) become part of its reading, in the voice of the latest of them:
+ * what they made is taken in (in Rust), and they go. Recordings made at once
+ * as one file stay as they are.
+ */
+async function adoptEarlier(all: readonly Recording[]): Promise<void> {
+  const byItem = new Map<string, Recording[]>();
+  for (const r of all) {
+    const item = r.items[0];
+    if (r.kind !== "verbatim" || r.durationSeconds !== null || r.items.length !== 1 || !item) continue;
+    if (r.id === (await readingId(item))) continue;
+    byItem.set(item, [...(byItem.get(item) ?? []), r]);
+  }
+  for (const [item, earlier] of byItem) {
+    const latest = earlier.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
+    const reading = await startReading(item, latest.voice).catch(() => null);
+    if (!reading) continue;
+    await invoke("audio_adopt", { reading, old: earlier.map((r) => r.id) });
+    notifyTablesChanged(AUDIO_TABLES);
+  }
 }
 
 /** What Rust makes refreshes what shows recordings. */

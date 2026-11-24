@@ -941,38 +941,39 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.goto(`${APP}/library/${arx?.id}`);
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "More for this item" }).click();
-    await page.getByRole("menuitem", { name: "Record aloud…" }).click();
-    await page.getByLabel("What to read").selectOption({ label: "\u20032.1 Attention" });
-    await page.getByRole("button", { name: "Record", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Listen…" }).click();
+    await page.getByLabel("Start at").selectOption({ label: "\u20032.1 Attention" });
+    await page.getByRole("button", { name: "Listen", exact: true }).click();
     await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
     await page.waitForTimeout(2500);
     const rec = (await q("SELECT id, kind, section, status, script, voice, speech_model FROM recordings"))[0];
     const recScript = JSON.parse(rec?.script ?? "{}");
-    check("a section of a paper is recorded aloud, word for word, made as it's listened to", rec?.kind === "verbatim" && rec?.section === "html:S2.SS1" && rec?.status === "listening", JSON.stringify({ ...rec, script: undefined }));
-    check("its script is the section's text in chunks, each written by the script model when it's reached", recScript.chapters?.[0]?.chunks?.[0]?.source?.includes("2.1 Attention") && recScript.chapters?.[0]?.chunks?.[0]?.passages?.[1]?.startsWith("Scaled dot-product attention: softmax of Q K"), rec?.script?.slice(0, 300));
+    const titles = (recScript.chapters ?? []).map((c) => c.title);
+    const attention = (recScript.chapters ?? []).findIndex((c) => c.key === "html:S2.SS1");
+    check("a paper has one reading, the whole of it, its sections its chapters", rec?.kind === "verbatim" && rec?.section === null && rec?.status === "listening" && titles.includes("1 Introduction") && titles.at(-1) === "2.1 Attention" && !titles.includes("References"), JSON.stringify(titles));
+    check("started at a section, it's made from there: the section's text written by the script model", recScript.chapters?.[attention]?.chunks?.[0]?.passages?.[1]?.startsWith("Scaled dot-product attention: softmax of Q K") && recScript.chapters?.[attention - 1]?.chunks?.[0]?.passages === null, rec?.script?.slice(0, 300));
     const scriptAsk = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(sentBefore));
     check("the script model is told to keep the prose and say the maths", scriptAsk.includes("Keep every word of the prose exactly") && scriptAsk.includes("2.1 Attention") && scriptAsk.includes("softmax}(QK^{T})V"), scriptAsk.slice(0, 200));
     check("in the voice and speech model chosen", rec?.voice === "Charon" && rec?.speech_model === "google/gemini-3.1-flash-tts-preview");
-    const piecesAt = async () => (await q(`SELECT id, hex(substr(data, 1, 4)) AS head FROM recording_pieces WHERE recording_id = '${rec?.id}' ORDER BY id`));
+    const piecesAt = async () => (await q(`SELECT id, hex(substr(data, 1, 4)) AS head FROM recording_pieces WHERE recording_id = '${rec?.id}' AND chapter = ${attention} ORDER BY id`));
     const firstPieces = await piecesAt();
     check("only what's ahead of the listener is made: a passage a piece, Opus in WebM, kept to sync", firstPieces.length === 2 && firstPieces.every((p) => p.head === "1A45DFA3"), JSON.stringify(firstPieces));
 
     // Spec: AUD-8, AUD-9, AUD-12
     await page.getByRole("button", { name: "Play" }).click();
     await page.waitForTimeout(1600);
-    check("the player plays it", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && /#t=[1-3]$/.test(page.url()), page.url());
+    check("the player plays it, from the section", (await page.getByRole("button", { name: "Pause" }).count()) === 1 && (await page.locator(".recording-chapters button.active").innerText()).includes("2.1 Attention") && /#t=\d+$/.test(page.url()), page.url());
     await page.getByRole("radio", { name: "1.5×" }).click();
     check("at a speed chosen", (await page.getByRole("radio", { name: "1.5×" }).getAttribute("aria-checked")) === "true");
     // Spec: AUD-6
     // At 1.5× the two pieces made last four seconds; the rest is made as it's reached, and it plays on.
     await page.waitForTimeout(5500);
     const later = await piecesAt();
-    const playedTo = await page.locator(".player-times span").first().innerText();
-    check("what comes next is made as it's reached, and it plays on", later.length === 4 && (await page.getByRole("button", { name: "Pause" }).count()) === 1 && playedTo >= "0:06", `${later.length} pieces, at ${playedTo}`);
+    check("what comes next is made as it's reached, and it plays on", later.length === 4 && (await page.getByRole("button", { name: "Pause" }).count()) === 1, `${later.length} pieces`);
     await page.getByRole("button", { name: "Pause" }).click();
     await page.waitForTimeout(600);
     const listened = await q(`SELECT position, piece FROM listening WHERE recording_id = '${rec?.id}'`);
-    check("where it was left is kept, as a moment of a piece", listened[0]?.piece?.startsWith(`${rec?.id}.0.0.`) && listened[0]?.position >= 0, JSON.stringify(listened));
+    check("where it was left is kept, as a moment of a piece", listened[0]?.piece?.startsWith(`${rec?.id}.${attention}.0.`) && listened[0]?.position >= 0, JSON.stringify(listened));
     await page.locator(".recording-chapters button").first().click();
     await page.waitForTimeout(800);
     check("a chapter goes to its start", (await page.locator(".player-times span").first().innerText()) === "0:00");
@@ -980,29 +981,60 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1800);
     check("an address with a moment opens the recording there", (await page.locator(".player-times span").first().innerText()) === "0:02", await page.locator(".player-times span").first().innerText());
 
-    // Spec: AUD-14
-    // The whole paper, after one of its sections: what the section made is used again.
-    const askedBefore = (await (await fetch(`${FAKE}/fake-requests`)).json()).length;
+    // Spec: AUD-2
+    // Listening again, from its beginning, is the same reading.
     await page.goto(`${APP}/library/${arx?.id}`);
     await page.waitForTimeout(1200);
     await page.getByRole("button", { name: "More for this item" }).click();
-    await page.getByRole("menuitem", { name: "Record aloud…" }).click();
-    await page.getByRole("button", { name: "Record", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Listen…" }).click();
+    await page.waitForTimeout(500);
+    const startAt = await page.getByLabel("Start at").innerText();
+    await page.getByLabel("Start at").selectOption({ label: "The beginning of the paper" });
+    await page.getByRole("button", { name: "Listen", exact: true }).click();
     await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
-    await page.waitForTimeout(2000);
-    const wholeId = page.url().split("/audio/")[1]?.split(/[?#]/)[0];
-    await page.getByRole("button", { name: "More for this recording" }).click();
-    await page.getByRole("menuitem", { name: "Make it all now" }).click();
     await page.waitForTimeout(1500);
-    const whole = (await q(`SELECT script FROM recordings WHERE id = '${wholeId}'`))[0];
-    const sectionSource = recScript.chapters?.[0]?.chunks?.[0]?.source;
-    const wholeChapter = JSON.parse(whole?.script ?? "{}").chapters?.findIndex((c) => c.title === "2.1 Attention");
-    const wholeSource = JSON.parse(whole?.script ?? "{}").chapters?.[wholeChapter]?.chunks?.[0]?.source;
-    const askedWhole = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json()).slice(askedBefore));
-    check("recording the whole paper after a section, the section's text is the same and isn't written again", wholeSource === sectionSource && !askedWhole.includes("softmax}(QK^{T})V") && askedWhole.includes("1 Introduction"), `${wholeChapter} ${JSON.stringify(wholeSource)?.slice(0, 80)}`);
-    const sectionKeys = (await q(`SELECT speech_key FROM recording_pieces WHERE recording_id = '${rec?.id}' ORDER BY id`)).map((r) => r.speech_key);
-    const wholeKeys = (await q(`SELECT speech_key FROM recording_pieces WHERE recording_id = '${wholeId}' AND chapter = ${wholeChapter} ORDER BY id`)).map((r) => r.speech_key);
-    check("and its passages are the same pieces", sectionKeys.length === 4 && JSON.stringify(wholeKeys) === JSON.stringify(sectionKeys), JSON.stringify({ sectionKeys, wholeKeys }));
+    check("listening again, from where it was left or its beginning, is the same reading", startAt.includes("Where you left off") && page.url().includes(rec?.id) && (await q("SELECT count(*) AS n FROM recordings WHERE kind = 'verbatim'"))[0].n === 1 && (await page.locator(".player-times span").first().innerText()) === "0:00", page.url());
+
+    // Spec: AUD-14
+    // A section recorded before the paper had one reading becomes part of it when the app starts.
+    const nowScript = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${rec?.id}'`))[0]?.script ?? "{}");
+    const introAt = (nowScript.chapters ?? []).findIndex((c) => c.key === "html:S1");
+    const introSource = nowScript.chapters?.[introAt]?.chunks?.[0]?.source ?? "";
+    const earlierScript = JSON.stringify({ chapters: [{ title: "1 Introduction", chunks: [{ source: introSource, passages: ["Old one.", "Old two."] }] }] }).replace(/'/g, "''");
+    const earlierId = "recordings_01jd00000000000000000ear1y";
+    await q(
+      `INSERT INTO recordings (id, kind, title, items, section, voice, speech_model, status, progress, script, device, created_at, updated_at) VALUES ('${earlierId}', 'verbatim', 'Attention: 1 Introduction', '["${arx?.id}"]', 'html:S1', 'Charon', '${rec?.speech_model}', 'listening', 0.5, '${earlierScript}', 'dev_this', '2026-11-23T00:00:00Z', '2026-11-23T00:00:00Z')`,
+    );
+    for (const [n, text] of ["Old one.", "Old two."].entries()) {
+      await q(
+        `INSERT INTO recording_pieces (id, recording_id, chapter, chunk, passage, seconds, data, created_at, speech_key) SELECT '${earlierId}.0.0.${n}', '${earlierId}', 0, 0, ${n}, 3, data, 'x', '${rec?.speech_model}|Charon|${text}' FROM recording_pieces LIMIT 1`,
+      );
+    }
+    await page.goto(`${APP}/audio`);
+    await page.waitForTimeout(2500);
+    const adopted = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${rec?.id}'`))[0]?.script ?? "{}");
+    const adoptedPieces = (await q(`SELECT id FROM recording_pieces WHERE recording_id = '${rec?.id}' AND chapter = ${introAt} ORDER BY id`)).map((r) => r.id);
+    check(
+      "a section recorded before the paper had one reading becomes part of it: its text and what was spoken",
+      (await q(`SELECT count(*) AS n FROM recordings WHERE id = '${earlierId}'`))[0].n === 0 && adopted.chapters?.[introAt]?.chunks?.[0]?.passages?.join("|") === "Old one.|Old two." && adoptedPieces.length === 2,
+      JSON.stringify({ adoptedPieces, passages: adopted.chapters?.[introAt]?.chunks?.[0]?.passages }),
+    );
+
+    // Spec: AUD-15
+    await page.goto(`${APP}/audio/${rec?.id}`);
+    await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: "More for this recording" }).click();
+    await page.getByRole("menuitem", { name: "Read in another voice…" }).click();
+    await page.getByLabel("Voice", { exact: true }).selectOption("Kore");
+    await page.getByRole("button", { name: "Read in Kore" }).click();
+    await page.waitForTimeout(1800);
+    const kore = (await q(`SELECT voice, script FROM recordings WHERE id = '${rec?.id}'`))[0];
+    const koreKeys = (await q(`SELECT speech_key FROM recording_pieces WHERE recording_id = '${rec?.id}'`)).map((r) => r.speech_key);
+    check(
+      "read in another voice, it starts afresh: what was spoken goes, its text stays",
+      kore?.voice === "Kore" && JSON.parse(kore?.script ?? "{}").chapters?.[attention]?.chunks?.[0]?.passages?.length === 4 && koreKeys.length > 0 && koreKeys.every((k) => k.includes("|Kore|")),
+      JSON.stringify({ voice: kore?.voice, koreKeys }),
+    );
 
     // A recording made before, at once, as one file, still plays.
     const oldId = "recordings_01old0000000000000000000000";
@@ -1024,7 +1056,7 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("link", { name: "← Audio" }).click();
     await page.waitForURL(/\/audio$/);
     await page.waitForTimeout(800);
-    check("the audio library lists it, and offers no deleting", (await page.locator(".library-list").innerText()).includes("2.1 Attention") && (await page.locator(".library-list button").count()) === 0);
+    check("the audio library lists the reading, and offers no deleting", (await page.locator(".library-list").innerText()).includes("Reading · ") && (await page.locator(".library-list").innerText()).includes("Attention Is All You Need") && (await page.locator(".library-list button").count()) === 0);
     check("what's playing stays at hand on other screens", await page.locator(".mini-player").isVisible());
 
     // Spec: AUD-4
@@ -1047,7 +1079,16 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("button", { name: "Record summary" }).click();
     await page.waitForURL(/\/audio\/recording_/, { timeout: 10000 });
     await page.waitForTimeout(2000);
-    const sum = (await q("SELECT id, title, kind, minutes, items, script, status FROM recordings WHERE kind = 'summary'"))[0];
+    const sum = (await q("SELECT id, title, kind, minutes, items, script, status, provenance FROM recordings WHERE kind = 'summary'"))[0];
+    // Spec: AUD-16
+    const prov = JSON.parse(sum?.provenance ?? "{}");
+    check(
+      "a summary keeps its script and where it came from: its works and which texts, the model and what it was told, its length and voice",
+      prov.sources?.length === 2 && prov.sources.every((s) => (s.text === "html" || s.text === "pdf") && s.characters > 0) && prov.scriptModel && prov.instructions?.includes("About 750 words") && prov.minutes === 5 && prov.voice && prov.speechModel && prov.made,
+      sum?.provenance?.slice(0, 300),
+    );
+    await page.locator(".recording-provenance > summary").click();
+    check("and shows it", (await page.locator(".recording-provenance").innerText()).includes("Written by") && (await page.locator(".recording-provenance").innerText()).includes("characters read"));
     check("several papers are summarized aloud, one narrator, at the length chosen", sum?.title === "Two papers on machines" && sum?.minutes === 5 && JSON.parse(sum?.items ?? "[]").length === 2, JSON.stringify({ ...sum, script: undefined }));
     check("the summary's parts are its chapters", (await page.locator(".recording-chapters").innerText()).includes("The question") && JSON.parse(sum?.script ?? "{}").chapters?.length === 2);
     // Spec: AUD-13

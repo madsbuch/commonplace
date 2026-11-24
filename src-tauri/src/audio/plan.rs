@@ -27,6 +27,9 @@ pub struct Script {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Chapter {
     pub title: String,
+    /// The item's section it is: `html:<anchor>`, `toc:<i>`, or `front`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chunks: Option<Vec<Chunk>>,
     /// A recording made before: its chapter's passages, written at once.
@@ -41,6 +44,10 @@ pub struct Chunk {
     pub source: Option<String>,
     /// What's spoken, a piece each; null until written.
     pub passages: Option<Vec<String>>,
+    // Spec: AUD-16
+    /// The script model that wrote them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 impl Chapter {
@@ -48,7 +55,7 @@ impl Chapter {
     pub fn chunks(&self) -> Vec<Chunk> {
         match (&self.chunks, &self.paragraphs) {
             (Some(c), _) => c.clone(),
-            (None, Some(p)) => vec![Chunk { source: None, passages: Some(p.clone()) }],
+            (None, Some(p)) => vec![Chunk { source: None, passages: Some(p.clone()), model: None }],
             (None, None) => Vec::new(),
         }
     }
@@ -142,10 +149,10 @@ pub fn pause_after(text: &str) -> f64 {
 }
 
 // Spec: AUD-14
-/// A chunk with this source already written for another recording: its passages, to use again.
-pub fn written_elsewhere<'a>(scripts: impl IntoIterator<Item = &'a Script>, source: &str) -> Option<Vec<String>> {
+/// A chunk with this source already written for another recording: its passages, to use again, and the model that wrote them.
+pub fn written_elsewhere<'a>(scripts: impl IntoIterator<Item = &'a Script>, source: &str) -> Option<(Vec<String>, Option<String>)> {
     scripts.into_iter().flat_map(|s| s.chapters.iter().flat_map(Chapter::chunks)).find_map(|k| match (k.source.as_deref(), k.passages) {
-        (Some(s), Some(p)) if s == source && !p.is_empty() => Some(p),
+        (Some(s), Some(p)) if s == source && !p.is_empty() => Some((p, k.model)),
         _ => None,
     })
 }
@@ -416,9 +423,9 @@ mod tests {
 
     #[test]
     fn a_chunk_written_for_another_recording_is_found_by_its_source() {
-        let section = script(r#"{"chapters":[{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":["2 Background","Once."]}]}]}"#);
+        let section = script(r#"{"chapters":[{"title":"2 Background","key":"html:S2","chunks":[{"source":"2 Background\n\nOnce.","passages":["2 Background","Once."],"model":"m"}]}]}"#);
         let whole = script(r#"{"chapters":[{"title":"1 Intro","chunks":[{"source":"1 Intro\n\nHi.","passages":null}]},{"title":"2 Background","chunks":[{"source":"2 Background\n\nOnce.","passages":null}]}]}"#);
-        assert_eq!(written_elsewhere([&section, &whole], "2 Background\n\nOnce."), Some(vec!["2 Background".to_string(), "Once.".to_string()]));
+        assert_eq!(written_elsewhere([&section, &whole], "2 Background\n\nOnce."), Some((vec!["2 Background".to_string(), "Once.".to_string()], Some("m".to_string()))));
         assert_eq!(written_elsewhere([&section, &whole], "1 Intro\n\nHi."), None);
         assert_eq!(written_elsewhere([&whole], "2 Background\n\nOnce."), None);
     }
@@ -457,7 +464,7 @@ mod tests {
     fn the_lead_is_counted_in_seconds_of_listening() {
         // Ten passages of 150 characters: ten seconds each before any is made.
         let p: Vec<String> = (0..10).map(|i| format!("{i}{}", "x".repeat(149))).collect();
-        let s = Script { chapters: vec![Chapter { title: "A".into(), chunks: Some(vec![Chunk { source: None, passages: Some(p) }]), paragraphs: None }] };
+        let s = Script { chapters: vec![Chapter { title: "A".into(), key: None, chunks: Some(vec![Chunk { source: None, passages: Some(p), model: None }]), paragraphs: None }] };
         let slots = slots(&s);
         let mut made = HashMap::new();
         for i in 0..3 {
