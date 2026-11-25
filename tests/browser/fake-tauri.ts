@@ -203,6 +203,14 @@ function fakeWeb(url: string): { status: number; contentType: string; url: strin
   // A PDF, served as some servers do, as anything at all.
   if (url === "https://papers.example.com/files/on-loops.pdf")
     return ok(new Uint8Array(readFileSync(new URL("tests/browser/fixtures/with-contents.pdf", root))), "application/octet-stream");
+  // GitHub's page for a file shows it in a viewer of its own; its raw address redirects to the file.
+  if (url === "https://github.com/example/papers/blob/main/loops/paper.pdf") return ok(SHELL_POST, "text/html; charset=utf-8");
+  if (url === "https://github.com/example/papers/raw/main/loops/paper.pdf")
+    return ok(
+      new Uint8Array(readFileSync(new URL("tests/browser/fixtures/with-contents.pdf", root))),
+      "application/octet-stream",
+      "https://raw.githubusercontent.com/example/papers/main/loops/paper.pdf",
+    );
   if (url === "https://blog.example.com/missing") return { status: 404, contentType: "text/html", url, data: Buffer.from("Not Found").toString("base64") };
   return null;
 }

@@ -891,6 +891,14 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     // Spec: AI-7
     const detailsAsk = (await (await fetch(`${FAKE}/fake-requests`)).json()).at(-1);
     check("reading its details asks for at most their share of tokens", detailsAsk?.max_tokens === 4000, JSON.stringify(detailsAsk?.max_tokens));
+    // Spec: LIB-29, LIB-30
+    // A PDF shared from GitHub is the address of GitHub's page for it: the file itself is added.
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ text: "https://github.com/example/papers/blob/main/loops/paper.pdf" }) });
+    await page.goto(APP + "/settings");
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(1500);
+    const fromGithub = (await q("SELECT i.id, i.kind, length(f.data) AS pdf FROM library_items i LEFT JOIN library_files f ON f.item_id = i.id WHERE i.filename = 'paper.pdf'"))[0];
+    check("a code host's page for a PDF adds the PDF itself, not the page", fromGithub?.pdf > 1000 && fromGithub?.kind !== "post" && page.url().includes(fromGithub?.id), JSON.stringify({ fromGithub, url: page.url() }));
 
     // Spec: LIB-30
     // Shared from another app. The app takes shares as it starts: an address with words around it.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, pdfName, sharedAddress, webAddress, yearOf } from "../src/lib/webModel";
+import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, pdfBehind, pdfName, sharedAddress, webAddress, yearOf } from "../src/lib/webModel";
 import { detailsMessages } from "../src/lib/libraryDetailsModel";
 
 describe("blog posts by address", () => {
@@ -46,6 +46,23 @@ describe("blog posts by address", () => {
     expect(pdfName("https://papers.example.com/files/on-loops.pdf?dl=1")).toBe("on-loops.pdf");
     expect(pdfName("https://example.com/download/On%20Loops")).toBe("On Loops.pdf");
     expect(pdfName("https://www.example.com/")).toBe("example.com.pdf");
+  });
+
+  // Spec: LIB-29
+  test("a code host's page for a PDF gives way to the file itself", () => {
+    expect(pdfBehind("https://github.com/google-research/google-research/blob/master/cogentic_research_papers/integer_factorization/paper.pdf")).toBe(
+      "https://github.com/google-research/google-research/raw/master/cogentic_research_papers/integer_factorization/paper.pdf",
+    );
+    expect(pdfBehind("https://github.com/o/r/blob/main/docs/On%20Loops.PDF?plain=1")).toBe("https://github.com/o/r/raw/main/docs/On%20Loops.PDF");
+    expect(pdfBehind("https://gitlab.com/group/sub/project/-/blob/main/paper.pdf")).toBe("https://gitlab.com/group/sub/project/-/raw/main/paper.pdf");
+    expect(pdfBehind("https://git.example.org/team/project/-/blob/v1/a.pdf")).toBe("https://git.example.org/team/project/-/raw/v1/a.pdf");
+    expect(pdfBehind("https://codeberg.org/o/r/src/branch/main/paper.pdf")).toBe("https://codeberg.org/o/r/raw/branch/main/paper.pdf");
+    expect(pdfBehind("https://bitbucket.org/o/r/src/abc123/paper.pdf")).toBe("https://bitbucket.org/o/r/raw/abc123/paper.pdf");
+    // Not a PDF, not a file page, or already the file.
+    expect(pdfBehind("https://github.com/o/r/blob/main/README.md")).toBeNull();
+    expect(pdfBehind("https://github.com/o/r/raw/main/paper.pdf")).toBeNull();
+    expect(pdfBehind("https://papers.example.com/files/on-loops.pdf")).toBeNull();
+    expect(pdfBehind("https://blog.example.com/posts/on-compilers")).toBeNull();
   });
 
   test("a date gives its year", () => {

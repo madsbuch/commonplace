@@ -86,6 +86,53 @@ export function isPdf(contentType: string, bytes: Uint8Array): boolean {
   return new TextDecoder("latin1").decode(bytes.slice(0, 1024)).includes("%PDF-");
 }
 
+// Spec: LIB-29
+/**
+ * The PDF file itself behind a page that only shows it, as code hosts show
+ * a file they hold: GitHub's `/blob/` (and Bitbucket's `/src/`), GitLab's
+ * `/-/blob/`, Gitea's and Forgejo's `/src/branch|tag|commit/` give way to
+ * their `raw` counterparts. Null for any other address.
+ */
+export function pdfBehind(address: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return null;
+  }
+  let path: string;
+  try {
+    path = decodeURIComponent(url.pathname);
+  } catch {
+    path = url.pathname;
+  }
+  if (!/\.pdf$/i.test(path)) return null;
+  const host = url.hostname.replace(/^www\./, "").toLowerCase();
+  const raw = (pathname: string) => {
+    const out = new URL(url.toString());
+    out.pathname = pathname;
+    out.search = "";
+    out.hash = "";
+    return out.toString();
+  };
+  const p = url.pathname;
+  // GitLab, on any host: /<group>/<project>/-/blob/<ref>/<path>.
+  if (/\/-\/blob\//.test(p)) return raw(p.replace("/-/blob/", "/-/raw/"));
+  // GitHub: /<owner>/<repo>/blob/<ref>/<path>.
+  if (host === "github.com") {
+    const m = /^(\/[^/]+\/[^/]+)\/blob\/(.+)$/.exec(p);
+    return m ? raw(`${m[1] ?? ""}/raw/${m[2] ?? ""}`) : null;
+  }
+  // Bitbucket: /<owner>/<repo>/src/<ref>/<path>.
+  if (host === "bitbucket.org") {
+    const m = /^(\/[^/]+\/[^/]+)\/src\/(.+)$/.exec(p);
+    return m ? raw(`${m[1] ?? ""}/raw/${m[2] ?? ""}`) : null;
+  }
+  // Gitea and Forgejo (Codeberg among them): /<owner>/<repo>/src/branch|tag|commit/<ref>/<path>.
+  const m = /^(\/[^/]+\/[^/]+)\/src\/((?:branch|tag|commit)\/.+)$/.exec(p);
+  return m ? raw(`${m[1] ?? ""}/raw/${m[2] ?? ""}`) : null;
+}
+
 /** The file name a PDF at `address` goes by: its last part, else its site's name. */
 export function pdfName(address: string): string {
   let last = "";

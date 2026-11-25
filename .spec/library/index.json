@@ -269,7 +269,16 @@
     },
     {
       "id": "LIB-29",
-      "text": "An address the author adds that serves a PDF adds that PDF, as adding the file would.",
+      "text": "An address the author adds that serves a PDF adds that PDF, as adding the file would; so does the address of a page that only shows a PDF file, as a code host shows a file it holds.",
+      "history": [
+        {
+          "version": 1,
+          "text": "An address the author adds that serves a PDF adds that PDF, as adding the file would.",
+          "reason": "A paper shared from GitHub is the address of GitHub's page for the file, which shows the PDF in a viewer of its own; read as a post, it added the page's frame instead of the paper.",
+          "date": "2026-11-25"
+        }
+      ],
+      "version": 2,
       "related": [
         "#LIB-2",
         "#LIB-28"

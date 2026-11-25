@@ -361,7 +361,10 @@ read and show verdicts.
   plain GET with a browser's user agent, no cookies, http(s) only, at most
   `library.max-file-size`; figures go the same way). A PDF there (as its
   type says, or its first bytes: LIB-29) is added as the file would be,
-  named from the address (`pdfName`); a page goes to Mozilla's Readability,
+  named from the address (`pdfName`); a code host's page for a PDF file
+  (GitHub's `/blob/`, GitLab's `/-/blob/`, Gitea's and Bitbucket's `/src/`)
+  shows it in a viewer of its own, so the file's raw address is fetched
+  instead (`pdfBehind`); a page goes to Mozilla's Readability,
   which finds the post in it. A page that builds itself in the browser
   (z.ai's blog: an empty `<div id="root">`) reads as too little (`MIN_ARTICLE_TEXT`), so it's
   rendered (`web_render`) and read again: on a computer a hidden
@@ -383,7 +386,7 @@ read and show verdicts.
   `readDetails` reads an item's stored text. The fake Tauri layer answers
   as two blogs (`blog.example.com`, served as HTML; `spa.example.com`, a
   shell until rendered) and serves a PDF at
-  `papers.example.com/files/on-loops.pdf`.
+  `papers.example.com/files/on-loops.pdf` and behind a GitHub file page.
 - Sharing to the app (LIB-30): on Android the app is in the share sheet for
   text (a web address) and PDFs. `scripts/android-share.mjs` adds the
   filters (`SEND` text/plain and application/pdf, `SEND_MULTIPLE` PDFs) to

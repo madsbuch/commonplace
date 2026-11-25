@@ -13,7 +13,7 @@ import { z } from "zod";
 import { addFile, addPost, bytesOf, findBySource } from "./library";
 import { asWork } from "./work";
 import { messageOf, note } from "./diagnostics";
-import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, MIN_ARTICLE_TEXT, pdfName, webAddress, yearOf } from "./webModel";
+import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, MIN_ARTICLE_TEXT, pdfBehind, pdfName, webAddress, yearOf } from "./webModel";
 
 const FetchedSchema = z.object({ status: z.number(), contentType: z.string(), url: z.string(), data: z.string() });
 const RenderedSchema = z.object({ html: z.string(), url: z.string() });
@@ -152,8 +152,11 @@ async function rendered(url: string): Promise<{ html: string; url: string }> {
  * goes. Returns the item's id.
  */
 export async function importWebPage(input: string, onStep: (step: string) => void = () => undefined): Promise<string> {
-  const address = webAddress(input);
-  if (!address) throw new Error(`"${input.trim()}" isn't a web address.`);
+  const typed = webAddress(input);
+  if (!typed) throw new Error(`"${input.trim()}" isn't a web address.`);
+  // Spec: LIB-29
+  // A code host's page for a PDF shows it in a viewer of its own: the file itself is fetched instead.
+  const address = pdfBehind(typed) ?? typed;
   const existing = await findBySource(address);
   if (existing) return existing;
   // Spec: WORK-1, DIAG-1
