@@ -37,7 +37,7 @@ export interface PlayerState {
   playing: boolean;
   speed: number;
   loading: boolean;
-  /** Waiting for the part it's at to be made. */
+  /** Waiting, to play, for the part it's at to be made. */
   waiting: boolean;
   /** How much of it is made, in seconds: null for a recording kept as one file. */
   made: number | null;
@@ -481,7 +481,7 @@ export async function load(r: Recording, opts: { at?: number | null; play?: bool
 export async function play(): Promise<void> {
   if (want) {
     want = { ...want, play: true };
-    set({ error: null });
+    set({ error: null, waiting: true });
     if (rec) listenAt(rec.id, want.id);
     return;
   }
@@ -500,7 +500,9 @@ export async function play(): Promise<void> {
 export function pause(): void {
   if (want) {
     want = { ...want, play: false };
-    set({ playing: false });
+    // Spec: AUD-20
+    // Paused, it no longer waits to play: what shows is Play, not that it's getting ready.
+    set({ playing: false, waiting: false });
     return;
   }
   if (native) void nativeCall("pause");

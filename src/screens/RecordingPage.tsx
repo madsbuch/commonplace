@@ -303,7 +303,8 @@ export default function RecordingPage() {
               −15
             </button>
             <button type="button" className="player-play" aria-label={mine && p.playing ? "Pause" : "Play"} disabled={!mine || p.loading} onClick={toggle}>
-              {mine && p.playing ? <PauseIcon /> : <PlayIcon />}
+              {/* Spec: AUD-20 */}
+              {mine && !p.playing && (p.waiting || p.loading) ? <span className="spinner" aria-hidden="true" /> : mine && p.playing ? <PauseIcon /> : <PlayIcon />}
             </button>
             <button type="button" aria-label="Forward 30 seconds" onClick={() => skip(30)}>
               +30
@@ -319,7 +320,7 @@ export default function RecordingPage() {
               </button>
             ))}
           </div>
-          {/* Spec: AUD-6 */}
+          {/* Spec: AUD-6, AUD-20 */}
           {mine && p.waiting ? <p className="muted recording-waiting">Making this part…</p> : null}
           {mine && p.made !== null && rec.status === "listening" ? (
             <p className="muted recording-made">

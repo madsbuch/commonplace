@@ -261,6 +261,7 @@ export default function LibraryItemPage() {
     beginning: beginningEntry(script, reading.made),
     hearing: heard,
     busy: starting,
+    waiting: heard !== null && (player.waiting || player.loading),
     making,
     onListen: (key: string, title: string) => {
       setStarting(key);
@@ -291,6 +292,12 @@ export default function LibraryItemPage() {
     <aside className="toc-panel" aria-label="Contents">
       <div className="toc-head">
         <strong>Contents</strong>
+        {/* Spec: AUD-20 */}
+        {starting !== null || listening.waiting ? (
+          <span className="toc-status" role="status">
+            {starting !== null ? "Getting ready…" : "Making this part…"}
+          </span>
+        ) : null}
         {/* Spec: AUD-19 */}
         {heard !== null ? (
           <button type="button" className="toc-follow" aria-pressed={follow} title="Keep the section being heard in view" onClick={() => chooseFollow(!follow)}>

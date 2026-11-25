@@ -1083,6 +1083,41 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     );
     await page.getByRole("button", { name: "Pause" }).click();
 
+    // Spec: AUD-20
+    // Listening from a section not made yet shows that it's being made until it plays.
+    // "2 Model" is made by now: what was made of it goes, so it's to be made again.
+    const scriptNow = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${rec?.id}'`))[0]?.script ?? "{}");
+    const modelChapter = (scriptNow.chapters ?? []).findIndex((c) => c.key === "html:S2");
+    const unmadeSection = scriptNow.chapters?.[modelChapter]?.title ?? null;
+    await q(`DELETE FROM recording_pieces WHERE recording_id = '${rec?.id}' AND chapter = ${modelChapter}`);
+    await fetch(`${FAKE}/fake-audio-hold`, { method: "POST", body: JSON.stringify({ hold: true }) });
+    await page.goto(`${APP}/library/${arx?.id}?view=text`);
+    await page.waitForTimeout(1500);
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    await page.getByRole("button", { name: `Listen from “${unmadeSection}”` }).click();
+    await page.waitForTimeout(1500);
+    const waitingRow = page.locator(".toc-row.hearing");
+    check(
+      "listening from a part not made yet shows it's being made: a spinner on the section, in the contents' head and on what's playing",
+      unmadeSection !== null &&
+        (await waitingRow.innerText()).includes(unmadeSection) &&
+        (await waitingRow.locator(".toc-listen .spinner").count()) === 1 &&
+        (await page.locator(".toc-head .toc-status").innerText()) === "Making this part…" &&
+        (await page.locator(".mini-player-toggle .spinner").count()) === 1 &&
+        (await page.locator(".mini-player-sub").innerText()).includes("Making this part…"),
+      String(unmadeSection),
+    );
+    if (process.env.CHECK_SHOTS) await page.locator(".toc-panel").screenshot({ path: join(process.env.CHECK_SHOTS, "contents-waiting.png") });
+    await page.locator(".mini-player-toggle").click();
+    await page.waitForTimeout(300);
+    check("paused, it shows Play again rather than that it's getting ready", (await page.locator(".mini-player-toggle").getAttribute("aria-label")) === "Play" && (await page.locator(".toc-head .toc-status").count()) === 0);
+    await fetch(`${FAKE}/fake-audio-hold`, { method: "POST", body: JSON.stringify({ hold: false }) });
+    await page.locator(".mini-player-toggle").click();
+    await page.waitForTimeout(2500);
+    check("once its part is made, it plays and the spinner goes", (await page.locator(".mini-player-toggle").getAttribute("aria-label")) === "Pause" && (await page.locator(".toc-listen .spinner").count()) === 0);
+    await page.locator(".mini-player-toggle").click();
+    await page.waitForTimeout(300);
+
     // Spec: AUD-14
     // A section recorded before the paper had one reading becomes part of it when the app starts.
     const nowScript = JSON.parse((await q(`SELECT script FROM recordings WHERE id = '${rec?.id}'`))[0]?.script ?? "{}");

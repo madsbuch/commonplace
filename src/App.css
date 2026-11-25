@@ -2557,10 +2557,35 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   color: var(--accent);
   background: var(--hover);
 }
-.made-ring.making,
-.toc-listen.busy {
+.made-ring.making {
   color: var(--accent);
   animation: made-ring-making 1.2s ease-in-out infinite;
+}
+.toc-listen.busy {
+  color: var(--accent);
+}
+/* Spec: AUD-20 — getting ready, or waiting for a part to be made. */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spinner-turn 0.8s linear infinite;
+}
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.toc-head .toc-status {
+  font-size: 12px;
+  color: var(--accent);
+  margin-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 @keyframes made-ring-making {
   50% {
@@ -2568,9 +2593,11 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .made-ring.making,
-  .toc-listen.busy {
+  .made-ring.making {
     animation: none;
+  }
+  .spinner {
+    animation-duration: 2.4s;
   }
 }
 .toc-head .toc-follow {

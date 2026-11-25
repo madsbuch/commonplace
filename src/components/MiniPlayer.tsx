@@ -10,16 +10,18 @@ export function MiniPlayer() {
   const location = useLocation();
   if (!p.recordingId || location.pathname === `/audio/${p.recordingId}`) return null;
   const chapter = p.chapters[chapterAt(p.chapters, p.position)];
+  // Spec: AUD-20
+  const busy = !p.playing && (p.waiting || p.loading);
   return (
     <div className="mini-player" role="region" aria-label="Playing">
-      <button type="button" className="mini-player-toggle" aria-label={p.playing ? "Pause" : "Play"} onClick={toggle}>
-        {p.playing ? <PauseIcon /> : <PlayIcon />}
+      <button type="button" className={busy ? "mini-player-toggle busy" : "mini-player-toggle"} aria-label={p.playing ? "Pause" : busy ? "Getting ready" : "Play"} aria-busy={busy} onClick={toggle}>
+        {busy ? <span className="spinner" aria-hidden="true" /> : p.playing ? <PauseIcon /> : <PlayIcon />}
       </button>
       <Link to={`/audio/${p.recordingId}`} className="mini-player-text">
         <span className="mini-player-title">{p.title}</span>
         <span className="mini-player-sub">
           {chapter ? `${chapter.title} · ` : ""}
-          {clock(p.position)}
+          {p.waiting ? "Making this part…" : clock(p.position)}
         </span>
       </Link>
     </div>

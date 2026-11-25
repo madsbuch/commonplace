@@ -35,6 +35,8 @@ export interface ContentsListening {
   hearing: string | null;
   /** A section whose listening is being started. */
   busy: string | null;
+  /** Whether the section being heard waits for its part to be made. */
+  waiting?: boolean;
   /** Sections asked to be made now. */
   making: ReadonlySet<string>;
   /** Listens from a section (where the contents sit beside what's read). */
@@ -49,19 +51,24 @@ export interface ContentsListening {
 /** A row's listening: its made ring and its ▶. */
 function ListenControls(props: { listen: ContentsListening; at: ListenEntry; title: string }) {
   const { listen, at, title } = props;
+  // Spec: AUD-20
+  // Getting ready, or waiting for its part to be made: a spinner in place of its ▶ until it plays.
+  const waiting = listen.hearing === at.key && listen.waiting === true;
+  const busy = listen.busy === at.key || waiting;
   return (
     <>
-      <MadeRing title={title} made={at.made} making={listen.making.has(at.key)} onMake={() => listen.onMake(at.key, title)} />
+      <MadeRing title={title} made={at.made} making={listen.making.has(at.key) || waiting} onMake={() => listen.onMake(at.key, title)} />
       {listen.onListen ? (
         <button
           type="button"
-          className={listen.busy === at.key ? "toc-listen busy" : "toc-listen"}
-          aria-label={`Listen from “${title}”`}
-          title="Listen from here"
+          className={busy ? "toc-listen busy" : "toc-listen"}
+          aria-label={busy ? `Getting “${title}” ready` : `Listen from “${title}”`}
+          aria-busy={busy}
+          title={waiting ? "Making this part…" : "Listen from here"}
           disabled={listen.busy !== null}
           onClick={() => listen.onListen?.(at.key, title)}
         >
-          <ListenIcon />
+          {busy ? <span className="spinner" aria-hidden="true" /> : <ListenIcon />}
         </button>
       ) : null}
     </>

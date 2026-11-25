@@ -20,7 +20,8 @@
         "#AUD-15",
         "#AUD-17",
         "#AUD-18",
-        "#AUD-19"
+        "#AUD-19",
+        "#AUD-20"
       ]
     },
     {
@@ -221,6 +222,14 @@
       "related": [
         "#AUD-2",
         "#LIB-15"
+      ]
+    },
+    {
+      "id": "AUD-20",
+      "text": "Wherever listening is started or shown (the item's contents, the player, and what's playing on other screens), the author sees when it's getting ready or waiting for the part being listened to to be made, until it plays.",
+      "related": [
+        "#AUD-6",
+        "#AUD-19"
       ]
     }
   ],

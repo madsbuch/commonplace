@@ -186,6 +186,8 @@ const RENDERED_POST = `<html><head><meta property="og:title" content="Loops All 
 <div class="body">${postText("Looping")}<h1>The loop</h1><div><img src="https://cdn.example.org/loop.png" alt=""></div>${postText("Gates")}</div>
 <footer>Legal · Privacy</footer></div></body></html>`;
 const webRenders: string[] = [];
+/** While true, `audio_listen` makes nothing (AUD-20's checks). */
+let audioHeld = false;
 
 function fakeWeb(url: string): { status: number; contentType: string; url: string; data: string } | null {
   const ok = (body: string | Uint8Array, contentType: string, at = url) => ({
@@ -339,6 +341,12 @@ if (import.meta.main) {
         sharesWaiting.push(await req.json());
         return Response.json({ ok: true }, { headers: cors });
       }
+      // Spec: AUD-20
+      // Making held back, so the checks can see listening wait for it.
+      if (url.pathname === "/fake-audio-hold") {
+        audioHeld = z.object({ hold: z.boolean() }).parse(await req.json()).hold;
+        return Response.json({ ok: true }, { headers: cors });
+      }
       if (url.pathname === "/fake-web") return Response.json(webRenders, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
@@ -388,6 +396,7 @@ if (import.meta.main) {
         // model would get is recorded, the scripted answer taken), and the fake's
         // lead, the piece listened at and the one after, is spoken, a piece
         // each: the fixture our encoder made. All of it, when asked for at once.
+        if (cmd === "audio_listen" && audioHeld) return Response.json({ ok: null }, { headers: cors });
         if (cmd === "audio_listen" || cmd === "audio_make_all") {
           const id = String(args["id"]);
           const all = cmd === "audio_make_all";

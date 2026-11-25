@@ -568,7 +568,10 @@ one file stay as they are.
   the pace of what's made), chapters, speed (per device), where it was left
   saved every 5 s and on pause (`listening`: seconds into its `piece`; synced),
   and `#t=<seconds>` in the recording's address. At a part not yet made it
-  waits (`waiting`, "Making this part…") and goes on when the piece arrives.
+  waits (`waiting`, "Making this part…") and goes on when the piece arrives;
+  waiting (only while it wants to play: pausing clears it) shows as a
+  spinner on the section's ▶, in the contents' head, on the player's and
+  the mini player's play button (AUD-20).
   Its chapters show how much of each is made (AUD-18, `Timeline.made`, each
   with its section's key) and a chapter not yet made can be made now
   (`makeChapter` → `audio_make_chapter`: the worker's target holds chapters
