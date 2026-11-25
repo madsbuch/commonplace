@@ -2728,3 +2728,172 @@ html.phone-scanning body > *:not(.phone-scan-overlay) {
 .sync-check-lines li.bad span {
   color: var(--lean-error);
 }
+
+/* Spec: LIB-32, LIB-33, LIB-34, LIB-35 — a discussion thread. */
+.thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.thread {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 16px 16px 96px;
+}
+.thread-story h1 {
+  font-family: var(--font-book);
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 4px 0 6px;
+}
+.thread-meta {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.thread-meta a {
+  color: inherit;
+}
+.thread-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.thread-status .spinner {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+  color: var(--accent);
+}
+.thread-story {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+.thread-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.thread-comments .thread-comments {
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+/* Deep in a thread on a phone there's no width left to give: past a depth, replies stop moving in. */
+.thread-comment[data-depth="8"] .thread-comments {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+.thread-comment {
+  padding: 8px 0 2px;
+  scroll-margin-top: 8px;
+}
+.thread-comment.new > .thread-comment-head {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 6px;
+}
+.thread-comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.thread-author {
+  font-weight: 600;
+  color: var(--fg);
+}
+.thread-fold {
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  width: 18px;
+}
+.thread-badge {
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+}
+.thread-badge.new {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.thread-badge.gone {
+  border-style: dashed;
+  font-style: italic;
+}
+.thread-badge.edited {
+  cursor: pointer;
+}
+.thread-badge.edited[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.thread-text {
+  font-family: var(--font-book);
+  font-size: 16px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  margin: 2px 0 0 26px;
+}
+.thread-story > .thread-text {
+  margin-left: 0;
+}
+.thread-text p {
+  margin: 0.5em 0 0;
+}
+.thread-text pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  background: var(--hover);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.thread-comment.gone > .thread-text {
+  opacity: 0.75;
+}
+.thread-earlier {
+  margin: 4px 0 0 26px;
+}
+.thread-story > .thread-earlier {
+  margin-left: 0;
+}
+.thread-versions {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px dashed var(--line);
+}
+.thread-versions .thread-text {
+  margin-left: 0;
+  opacity: 0.8;
+}
+.thread-version-when {
+  font-size: 12px;
+}
+.thread-hidden {
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .thread-comments .thread-comments {
+    padding-left: 8px;
+  }
+  .thread-text,
+  .thread-earlier {
+    margin-left: 20px;
+  }
+}

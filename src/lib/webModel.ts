@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import { parseArxivId } from "./arxivModel";
+import { hnAddressIn } from "./threadModel";
 import { splitAuthors } from "./peopleModel";
 
 // Spec: LIB-28
@@ -44,6 +45,10 @@ export function webAddress(input: string): string | null {
 export function sharedAddress(text: string): string | null {
   const s = text.trim();
   if (parseArxivId(s)) return s;
+  // Spec: LIB-31
+  // A Hacker News thread's address wins over the article's beside it: what's shared from Hacker News is the discussion.
+  const hn = hnAddressIn(s);
+  if (hn) return hn;
   const whole = webAddress(s);
   if (whole) return whole;
   for (const m of s.matchAll(/https?:\/\/[^\s<>"]+/gi)) {

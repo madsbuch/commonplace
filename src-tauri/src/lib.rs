@@ -6,6 +6,7 @@ mod diagnostics;
 // Spec: APP-13
 #[cfg(desktop)]
 mod earlier;
+mod hn;
 // Spec: LEAN-7
 #[cfg(desktop)]
 mod lean;
@@ -113,6 +114,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0012_recording_provenance.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 14,
+            description: "threads",
+            sql: include_str!("../migrations/0013_threads.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -144,6 +151,17 @@ async fn library_save_file(app: tauri::AppHandle, item_id: String, media_type: S
 async fn library_read_file(app: tauri::AppHandle, item_id: String) -> Result<String, String> {
     let bytes = library::read(&db_pool(&app).await?, &item_id).await?;
     Ok(library::encode(&bytes))
+}
+
+// ---------------------------------------------------------------------------
+// Hacker News threads (src/hn.rs)
+// ---------------------------------------------------------------------------
+
+// Spec: LIB-31, LIB-33
+/// The Hacker News thread item `id` is in, its story and every comment.
+#[tauri::command]
+async fn hn_thread(id: u64) -> Result<hn::Fetched, String> {
+    hn::thread(id).await
 }
 
 // ---------------------------------------------------------------------------
@@ -579,6 +597,7 @@ pub fn run() {
             sync_announce,
             sync_peer_found,
             web_get,
+            hn_thread,
             web_render,
             sync_remove_device,
             library_save_file,

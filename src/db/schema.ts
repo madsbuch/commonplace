@@ -242,7 +242,7 @@ export const libraryItems = sqliteTable(
   "library_items",
   {
     id: rowId("library_items"),
-    /** "paper" | "book" | "post" (`library.kinds`). For a post, `filename` is its address. */
+    /** "paper" | "book" | "post" | "thread" (`library.kinds`). For a post or a thread, `filename` is its address. */
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     /** As written ("Ada Lovelace, Charles Babbage"). */
@@ -543,4 +543,76 @@ export const diagnostics = sqliteTable(
     screen: text("screen"),
   },
   (t) => [index("diagnostics_at").on(t.at)],
+);
+
+// Spec: LIB-31, LIB-33
+/**
+ * A discussion thread in the library (a `library_items` row of kind
+ * "thread"): where it's from and what the site last said of the story.
+ * Its story and comments are `thread_comments`.
+ */
+export const threads = sqliteTable("threads", {
+  itemId: text("item_id").primaryKey(),
+  /** "hn": Hacker News. */
+  site: text("site").notNull(),
+  /** The story's id on the site. */
+  storyId: text("story_id").notNull(),
+  /** What the story links to, when it links anywhere. */
+  url: text("url"),
+  /** The story's title as the site last gave it (the item's own can be changed). */
+  siteTitle: text("site_title").notNull(),
+  score: integer("score"),
+  /** How many comments the site counted. */
+  commentCount: integer("comment_count"),
+  /** When the site was last asked, and answered. */
+  checkedAt: text("checked_at").notNull(),
+});
+
+// Spec: LIB-31, LIB-32, LIB-34
+/**
+ * The story and each comment of a thread, as last seen. `id` is
+ * `<item id>.<id on the site>`, so two devices keeping the same comment keep
+ * one row. What the site no longer shows stays, marked `gone`.
+ */
+export const threadComments = sqliteTable(
+  "thread_comments",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id").notNull(),
+    /** Its id on the site. */
+    sourceId: text("source_id").notNull(),
+    /** What it answers, by its id on the site; null for the story. */
+    parentId: text("parent_id"),
+    /** Where it stands among its siblings, as the site orders them. */
+    rank: integer("rank").notNull(),
+    author: text("author"),
+    postedAt: text("posted_at"),
+    /** Its latest text as the site gives it (HTML); null when it never had any here. */
+    text: text("text"),
+    /** "deleted", "dead" (removed) or "missing", once the site no longer shows it; else null. */
+    gone: text("gone"),
+    goneAt: text("gone_at"),
+    /** When the library first saw it. */
+    firstSeenAt: text("first_seen_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("thread_comments_item").on(t.itemId)],
+);
+
+// Spec: LIB-35
+/**
+ * Every text a comment (or the story) had when the library saw it. `id` is
+ * `<comment id>.<SHA-256 of the text, 16 hex digits>`, so the same text seen
+ * on two devices is one row.
+ */
+export const threadCommentVersions = sqliteTable(
+  "thread_comment_versions",
+  {
+    id: text("id").primaryKey(),
+    commentId: text("comment_id").notNull(),
+    itemId: text("item_id").notNull(),
+    text: text("text").notNull(),
+    seenAt: text("seen_at").notNull(),
+  },
+  (t) => [index("thread_comment_versions_comment").on(t.commentId), index("thread_comment_versions_item").on(t.itemId)],
 );

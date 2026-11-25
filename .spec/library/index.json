@@ -79,21 +79,40 @@
       "requirements": [
         "#LIB-30"
       ]
+    },
+    {
+      "id": "US-27",
+      "as": "an author who follows discussions on Hacker News",
+      "want": "to keep a whole thread in the library, by its address or by sharing it to the app, and see it grow",
+      "soThat": "I can read it offline, come back to what's new, and still read what was said after it's edited or deleted",
+      "requirements": [
+        "#LIB-31",
+        "#LIB-32",
+        "#LIB-33",
+        "#LIB-34",
+        "#LIB-35"
+      ]
     }
   ],
   "requirements": [
     {
       "id": "LIB-1",
-      "text": "The library holds papers, books and blog posts, each with a PDF, an HTML version, or both.",
+      "text": "The library holds papers, books and blog posts, each with a PDF, an HTML version, or both, and discussion threads, each with its comments.",
       "history": [
         {
           "version": 1,
           "text": "The library holds papers and books, each with one PDF file.",
           "reason": "The author reads blog posts as well as papers and books, and wants them in the library beside them. A post has no PDF: its text is its HTML version, as an HTML file's is.",
           "date": "2026-11-23"
+        },
+        {
+          "version": 2,
+          "text": "The library holds papers, books and blog posts, each with a PDF, an HTML version, or both.",
+          "reason": "The author keeps discussions from Hacker News beside what they discuss, to read offline and come back to as they grow. A thread is neither a PDF nor a page: it's a story and its comments.",
+          "date": "2026-11-25"
         }
       ],
-      "version": 2
+      "version": 3
     },
     {
       "id": "LIB-2",
@@ -286,12 +305,60 @@
     },
     {
       "id": "LIB-30",
-      "text": "On a phone, the author can share to the app from any other app: a web address, or one or more PDFs. Each is added to the library as if the author had added it there (an address by the first web address or arXiv number in what's shared), the library shows it being added, and a single item opens once it's in.",
+      "text": "On a phone, the author can share to the app from any other app: a web address, or one or more PDFs. Each is added to the library as if the author had added it there (an address by the Hacker News thread's address in what's shared, else its first web address or arXiv number), the library shows it being added, and a single item opens once it's in.",
+      "history": [
+        {
+          "version": 1,
+          "text": "On a phone, the author can share to the app from any other app: a web address, or one or more PDFs. Each is added to the library as if the author had added it there (an address by the first web address or arXiv number in what's shared), the library shows it being added, and a single item opens once it's in.",
+          "reason": "What's shared from Hacker News can carry the article's address beside the thread's; the author shares the discussion, so the thread's address wins.",
+          "date": "2026-11-25"
+        }
+      ],
+      "version": 2,
       "related": [
         "#LIB-2",
         "#LIB-23",
         "#LIB-28",
-        "#LIB-29"
+        "#LIB-29",
+        "#LIB-31"
+      ]
+    },
+    {
+      "id": "LIB-31",
+      "text": "The author adds a Hacker News thread by its address, in the library or by sharing it to the app: the story and every comment in it, kept on the device so it reads offline. The address of one of its comments adds the whole thread and opens it at that comment. Adding a thread already in the library opens it.",
+      "related": [
+        "#LIB-1",
+        "#LIB-30"
+      ]
+    },
+    {
+      "id": "LIB-32",
+      "text": "A thread reads as the site shows it: the story, with a link to what it's about and its own text, then its comments nested under what they answer, in the site's order, each with its author and when it was written. A comment's replies can be folded away.",
+      "related": [
+        "#LIB-31"
+      ]
+    },
+    {
+      "id": "LIB-33",
+      "text": "A thread looks for new, edited and deleted comments each time it's opened while the device is online, and when the author asks; it says when it last did. Comments that arrived since the author last opened it on this device are marked as new.",
+      "related": [
+        "#LIB-31"
+      ]
+    },
+    {
+      "id": "LIB-34",
+      "text": "A comment deleted or removed on the site stays in the thread as it was last seen, marked as gone from the site. One deleted before the thread was kept shows as a placeholder where it has replies.",
+      "related": [
+        "#LIB-31",
+        "#LIB-33"
+      ]
+    },
+    {
+      "id": "LIB-35",
+      "text": "A comment, or the story's text, edited on the site shows its latest text, marked as edited, and keeps every earlier text the library saw, which the author can read beside it.",
+      "related": [
+        "#LIB-31",
+        "#LIB-33"
       ]
     }
   ],
@@ -302,7 +369,8 @@
       "value": [
         "Paper",
         "Book",
-        "Blog post"
+        "Blog post",
+        "Thread"
       ],
       "description": "What a library item can be.",
       "history": [
@@ -313,6 +381,15 @@
           ],
           "reason": "The author reads blog posts as well as papers and books, and wants them in the library beside them.",
           "date": "2026-11-23"
+        },
+        {
+          "value": [
+            "Paper",
+            "Book",
+            "Blog post"
+          ],
+          "reason": "The author keeps discussion threads from Hacker News in the library.",
+          "date": "2026-11-25"
         }
       ]
     },

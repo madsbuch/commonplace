@@ -5,6 +5,7 @@ import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
 import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
+import { ThreadScreen } from "../components/ThreadView";
 import { MoreMenu } from "../components/MoreMenu";
 import { refetchArxivHtml } from "../lib/arxiv";
 import { PdfViewer } from "../components/PdfViewer";
@@ -67,7 +68,8 @@ function Details(props: { item: LibraryItem }) {
               if (isKind(kind)) void updateItem(item.id, { kind });
             }}
           >
-            {KINDS.map((k) => (
+            {/* A thread is a thread; nothing else becomes one. */}
+            {KINDS.filter((k) => k !== "thread" || item.kind === "thread").map((k) => (
               <option key={k} value={k}>
                 {KIND_NAMES[k]}
               </option>
@@ -336,6 +338,8 @@ export default function LibraryItemPage() {
     );
   }
   if (item === null) return null;
+  // Spec: LIB-32
+  if (item.kind === "thread") return <ThreadScreen key={item.id} item={item} />;
 
   // Spec: LIB-25
   // Beside the viewer's own controls, so the bar keeps room for the title.

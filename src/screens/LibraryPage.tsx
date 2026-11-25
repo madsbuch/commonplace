@@ -8,6 +8,8 @@ import { useTablesVersion } from "../lib/live";
 import { importArxiv } from "../lib/arxiv";
 import { parseArxivId } from "../lib/arxivModel";
 import { importWebPage } from "../lib/web";
+import { importHnThread } from "../lib/threads";
+import { parseHnId } from "../lib/threadModel";
 import { nextShare, onShares } from "../lib/share";
 import { hostOf, webAddress } from "../lib/webModel";
 import { detailsOf, messageOf, note } from "../lib/diagnostics";
@@ -76,20 +78,28 @@ export default function LibraryPage() {
     );
   }, [items, query, filter]);
 
-  // Spec: LIB-23, LIB-28
-  // An arXiv number (or arXiv address) adds the paper; any other web address, the post there.
+  // Spec: LIB-23, LIB-28, LIB-31
+  // An arXiv number (or arXiv address) adds the paper; a Hacker News address, the thread; any other web address, the post there.
   const [addressInput, setAddressInput] = useState("");
   const arxivId = parseArxivId(addressInput);
+  const hnId = arxivId ? null : parseHnId(addressInput);
   const fromAddress = async (input: string) => {
     const arxiv = parseArxivId(input);
+    const hn = arxiv ? null : parseHnId(input);
     setProblems([]);
     try {
+      if (hn !== null) {
+        const { itemId, comment } = await importHnThread(input, setBusy);
+        setAddressInput("");
+        void navigate(`/library/${itemId}${comment ? `#c${comment}` : ""}`);
+        return;
+      }
       const id = arxiv ? await importArxiv(input, setBusy) : await importWebPage(input, setBusy);
       setAddressInput("");
       void navigate(`/library/${id}`);
     } catch (e) {
       // Spec: DIAG-1
-      note("error", "library", `Adding ${arxiv ? "from arXiv" : "from the web"} failed: ${messageOf(e)}`, detailsOf(e));
+      note("error", "library", `Adding ${arxiv ? "from arXiv" : hn !== null ? "from Hacker News" : "from the web"} failed: ${messageOf(e)}`, detailsOf(e));
       setProblems([messageOf(e)]);
     } finally {
       setBusy(null);
@@ -202,7 +212,7 @@ export default function LibraryPage() {
           disabled={busy !== null}
         />
         <button type="submit" disabled={busy !== null || (arxivId === null && webAddress(addressInput) === null)}>
-          {arxivId ? "Add from arXiv" : "Add"}
+          {arxivId ? "Add from arXiv" : hnId !== null ? "Add from Hacker News" : "Add"}
         </button>
       </form>
       {busy ? <p className="muted">{busy}</p> : null}
@@ -227,7 +237,7 @@ export default function LibraryPage() {
         />
         {tab === "items" ? (
           <div className="segmented" role="tablist">
-            {(["all", "paper", "book", "post"] as const).map((f) => (
+            {(["all", "paper", "book", "post", "thread"] as const).map((f) => (
               <button key={f} type="button" role="tab" aria-selected={filter === f} onClick={() => setKind(f === "all" ? null : f)}>
                 {f === "all" ? "All" : `${KIND_NAMES[f]}s`}
               </button>
@@ -248,7 +258,7 @@ export default function LibraryPage() {
                 <Link to={`/library/${i.id}`} className="library-row">
                   <span className="library-title">{i.title}</span>
                   <span className="library-meta muted">
-                    {[i.authors || null, i.year, KIND_NAMES[i.kind], i.pages ? `${i.pages} pages` : null, i.kind === "post" ? hostOf(i.filename) : sizeText(i.fileSize)]
+                    {[i.authors || null, i.year, KIND_NAMES[i.kind], i.pages ? `${i.pages} pages` : null, i.kind === "post" || i.kind === "thread" ? hostOf(i.filename) : sizeText(i.fileSize)]
                       .filter((x) => x !== null && x !== "")
                       .join(" · ")}
                   </span>

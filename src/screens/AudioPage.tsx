@@ -29,7 +29,8 @@ function SummarizeDialog(props: { onClose: () => void }) {
   // Spec: DIAG-1
   const [problem, setProblem] = useNotedProblem("audio");
   useEffect(() => {
-    void listItems().then(setItems);
+    // A thread is comments, not a text to be read aloud.
+    void listItems().then((all) => setItems(all.filter((i) => i.kind !== "thread")));
   }, []);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

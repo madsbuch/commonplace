@@ -922,6 +922,94 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(1500);
     const shared = (await q("SELECT i.id, i.filename, length(f.data) AS pdf FROM library_items i JOIN library_files f ON f.item_id = i.id WHERE i.filename = 'Shared Contents.pdf'"))[0];
     check("a shared PDF is added as uploading it would, and opens", shared?.pdf > 1000 && page.url().includes(shared?.id), JSON.stringify({ shared, url: page.url() }));
+    // Spec: LIB-31, LIB-32
+    // A Hacker News thread, by its address: the story and every comment, nested.
+    const hn = (items) => fetch(`${FAKE}/fake-hn`, { method: "POST", body: JSON.stringify({ items }) });
+    const story = { id: 4242, type: "story", by: "pg", time: 1764000000, title: "Show HN: Loops all the way", url: "https://blog.example.com/posts/on-compilers", score: 120, descendants: 3, kids: [4300, 4301] };
+    const ada = { id: 4300, type: "comment", by: "ada", parent: 4242, time: 1764000100, text: "Loved it.<p>A second thought, see <a href=\"https://news.ycombinator.com/item?id=4302\">below</a>.", kids: [4302] };
+    const bob = { id: 4301, type: "comment", by: "bob", parent: 4242, time: 1764000200, text: "Hmm, <i>maybe</i>." };
+    const cy = { id: 4302, type: "comment", by: "cy", parent: 4300, time: 1764000300, text: "Agreed." };
+    await hn([story, ada, bob, cy]);
+    await page.goto(APP + "/library");
+    await page.waitForTimeout(600);
+    await page.getByLabel("arXiv number or web address").fill("https://news.ycombinator.com/item?id=4242");
+    check("a Hacker News address is offered as one", (await page.getByRole("button", { name: "Add from Hacker News" }).count()) === 1);
+    await page.getByRole("button", { name: "Add from Hacker News" }).click();
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(1200);
+    const thread = (await q("SELECT id, kind, title, filename FROM library_items WHERE kind = 'thread'"))[0];
+    const kept = await q(`SELECT source_id FROM thread_comments WHERE item_id = '${thread?.id}' ORDER BY source_id`);
+    check(
+      "the thread is kept whole: its story and every comment",
+      thread?.title === "Show HN: Loops all the way" && thread?.filename === "https://news.ycombinator.com/item?id=4242" && kept.map((r) => r.source_id).join(",") === "4242,4300,4301,4302" && page.url().includes(thread?.id),
+      JSON.stringify({ thread, kept }),
+    );
+    const head = await page.locator(".thread-story").innerText();
+    check("it reads as the site shows it: the story, its link, its comments nested under what they answer", head.includes("120 points") && head.includes("by pg") && head.includes("3 comments") && head.includes("blog.example.com") && (await page.locator("#c4300 #c4302").count()) === 1 && (await page.locator("#c4300 .thread-author").first().innerText()) === "ada", head);
+    await page.locator("#c4300 > .thread-comment-head .thread-fold").click();
+    check("a comment's replies fold away", (await page.locator("#c4302").count()) === 0 && (await page.locator("#c4300 .thread-hidden").innerText()) === "1 reply");
+    await page.locator("#c4300 > .thread-comment-head .thread-fold").click();
+
+    // Spec: LIB-33, LIB-34, LIB-35
+    // On the site: ada deletes hers, bob edits his, cy's is removed, dee answers.
+    const dee = { id: 4303, type: "comment", by: "dee", parent: 4242, time: 1764000400, text: "Late to this." };
+    await hn([
+      { ...story, descendants: 4, kids: [4300, 4301, 4303] },
+      { id: 4300, type: "comment", parent: 4242, time: 1764000100, deleted: true, kids: [4302] },
+      { ...bob, text: "Hmm, <i>maybe</i> not." },
+      { ...cy, dead: true },
+      dee,
+    ]);
+    await page.getByRole("button", { name: "Check now" }).click();
+    await page.waitForTimeout(1500);
+    const status = await page.locator(".thread-status").innerText();
+    check("asked, it looks again and says what it found", status.includes("1 new comment") && status.includes("1 edited") && status.includes("2 gone from the site") && status.includes("Checked just now"), status);
+    check(
+      "a deleted comment stays as it was, marked",
+      (await page.locator("#c4300 > .thread-text").innerText()).includes("Loved it.") && (await page.locator("#c4300 > .thread-comment-head .thread-badge.gone").innerText()) === "deleted on Hacker News" && (await page.locator("#c4300 #c4302 .thread-badge.gone").innerText()) === "removed on Hacker News",
+    );
+    check("an edited one shows its latest text", (await page.locator("#c4301 > .thread-text").innerText()) === "Hmm, maybe not.");
+    await page.locator("#c4301 .thread-badge.edited").click();
+    const earlier = await page.locator("#c4301 .thread-versions").innerText();
+    check("and every earlier text seen, beside it", (await page.locator("#c4301 .thread-badge.edited").innerText()).includes("1 earlier text") && earlier.includes("Hmm, maybe.") && earlier.includes("Seen"), earlier);
+    // Opened again: what arrived since it was last opened here is new.
+    await page.goto(`${APP}/library/${thread?.id}`);
+    await page.waitForTimeout(1200);
+    check("opened again, what arrived since it was last opened is marked new", (await page.locator("#c4303.new .thread-badge.new").count()) === 1 && (await page.locator(".thread-comment.new").count()) === 1 && (await page.locator(".thread-status").innerText()).includes("1 new since you last opened it"));
+    check("and, just checked, it isn't fetched again", (await q("SELECT count(*) AS n FROM diagnostics WHERE message LIKE 'Started: Looking for new comments%'"))[0].n === 1);
+    // A link to a comment of the thread moves within it.
+    await page.locator("#c4300 > .thread-text a", { hasText: "below" }).click();
+    await page.waitForTimeout(500);
+    // The thread is short enough to show whole: the comment is in view, and the app stays on the thread.
+    check(
+      "a link to one of its comments goes to it, in the app",
+      page.url().includes(thread?.id) && (await page.locator("#c4302").evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const s = el.closest(".thread-scroll").getBoundingClientRect();
+        return r.top >= s.top - 1 && r.top < s.bottom;
+      })),
+      page.url(),
+    );
+
+    // Spec: LIB-30, LIB-31
+    // Shared, a comment's address (with the article's beside it) opens the thread kept, at the comment.
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ text: "https://blog.example.com/posts/on-compilers via https://news.ycombinator.com/item?id=4303" }) });
+    await page.goto(APP + "/settings");
+    await page.waitForURL(/\/library\/lib_.*#c4303$/, { timeout: 15000 });
+    await page.waitForTimeout(800);
+    check(
+      "a shared comment's address opens its thread, kept once, at that comment",
+      page.url().includes(thread?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE kind = 'thread'"))[0].n === 1 && (await q("SELECT count(*) AS n FROM library_items WHERE kind = 'post'"))[0].n === 2,
+      page.url(),
+    );
+    if (process.env.CHECK_SHOTS) {
+      await page.setViewportSize({ width: 400, height: 860 });
+      await page.goto(`${APP}/library/${thread?.id}`);
+      await page.waitForTimeout(1000);
+      await page.screenshot({ path: join(process.env.CHECK_SHOTS, "thread-phone.png") });
+      await page.setViewportSize({ width: 1200, height: 800 });
+    }
+
     // What can't be added says why, in the library.
     await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ files: [{ name: "Huge.pdf", type: "application/pdf", size: 200000000 }] }) });
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));

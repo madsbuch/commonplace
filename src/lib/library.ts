@@ -18,9 +18,9 @@ import { removeItemAuthors } from "./people";
 
 // Spec: LIB-3
 /** `library.kinds` in the spec, as stored. */
-export const KINDS = ["paper", "book", "post"] as const;
+export const KINDS = ["paper", "book", "post", "thread"] as const;
 export type Kind = (typeof KINDS)[number];
-export const KIND_NAMES: Record<Kind, string> = { paper: "Paper", book: "Book", post: "Blog post" };
+export const KIND_NAMES: Record<Kind, string> = { paper: "Paper", book: "Book", post: "Blog post", thread: "Thread" };
 
 export function isKind(x: unknown): x is Kind {
   return KINDS.some((k) => k === x);
@@ -278,11 +278,15 @@ export async function saveToc(id: string, toc: readonly TocEntry[]): Promise<voi
 }
 
 // Spec: LIB-8
-/** Removes an item and its PDF from the library, on every device. */
+/** Removes an item and its PDF (or a thread's comments) from the library, on every device. */
 export async function removeItem(id: string): Promise<void> {
   await removeItemAuthors(id);
   await execute(`DELETE FROM library_files WHERE item_id = $1`, [id]);
   await execute(`DELETE FROM library_html WHERE item_id = $1`, [id]);
+  // Spec: LIB-31
+  await execute(`DELETE FROM thread_comment_versions WHERE item_id = $1`, [id]);
+  await execute(`DELETE FROM thread_comments WHERE item_id = $1`, [id]);
+  await execute(`DELETE FROM threads WHERE item_id = $1`, [id]);
   await execute(`DELETE FROM library_items WHERE id = $1`, [id]);
 }
 

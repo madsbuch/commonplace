@@ -189,6 +189,38 @@ const webRenders: string[] = [];
 /** While true, `audio_listen` makes nothing (AUD-20's checks). */
 let audioHeld = false;
 
+// Spec: LIB-31, LIB-33
+/** Hacker News, as its API answers: the items the checks set with `/fake-hn`. */
+let hnItems = new Map<number, Record<string, unknown>>();
+/** `hn_thread` as Rust does it: from a comment up to its story, then every comment under it. */
+function fakeHnThread(asked: number): { story: number; asked: number; items: unknown[]; missing: number[]; failed: number[] } | string {
+  const kidsOf = (v: Record<string, unknown> | undefined) => (Array.isArray(v?.["kids"]) ? v["kids"].filter((k): k is number => typeof k === "number") : []);
+  let id = asked;
+  let story = hnItems.get(id);
+  while (story && story["type"] === "comment" && typeof story["parent"] === "number") {
+    id = story["parent"];
+    story = hnItems.get(id);
+  }
+  if (!story) return `Hacker News has no item ${id}.`;
+  const items: unknown[] = [story];
+  const missing: number[] = [];
+  let level = kidsOf(story);
+  while (level.length > 0) {
+    const next: number[] = [];
+    for (const k of level) {
+      const v = hnItems.get(k);
+      if (!v) {
+        missing.push(k);
+        continue;
+      }
+      items.push(v);
+      next.push(...kidsOf(v));
+    }
+    level = next;
+  }
+  return { story: id, asked, items, missing, failed: [] };
+}
+
 function fakeWeb(url: string): { status: number; contentType: string; url: string; data: string } | null {
   const ok = (body: string | Uint8Array, contentType: string, at = url) => ({
     status: 200,
@@ -341,6 +373,13 @@ if (import.meta.main) {
         sharesWaiting.push(await req.json());
         return Response.json({ ok: true }, { headers: cors });
       }
+      // Spec: LIB-31, LIB-33
+      // What Hacker News holds, as the checks set it.
+      if (url.pathname === "/fake-hn") {
+        const body = z.object({ items: z.array(z.record(z.string(), z.unknown())) }).parse(await req.json());
+        hnItems = new Map(body.items.map((i) => [Number(i["id"]), i]));
+        return Response.json({ ok: true }, { headers: cors });
+      }
       // Spec: AUD-20
       // Making held back, so the checks can see listening wait for it.
       if (url.pathname === "/fake-audio-hold") {
@@ -381,6 +420,11 @@ if (import.meta.main) {
           const got = fakeWeb(String(args["url"]));
           if (!got) return Response.json({ err: `couldn't fetch ${String(args["url"])}: dns error` }, { headers: cors });
           return Response.json({ ok: got }, { headers: cors });
+        }
+        // Spec: LIB-31
+        if (cmd === "hn_thread") {
+          const got = fakeHnThread(Number(args["id"]));
+          return Response.json(typeof got === "string" ? { err: got } : { ok: got }, { headers: cors });
         }
         if (cmd === "web_render") {
           const url = String(args["url"]);

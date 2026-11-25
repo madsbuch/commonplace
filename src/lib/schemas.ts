@@ -432,3 +432,40 @@ export const PieceRowSchema = z.object({ id: z.string(), seconds: z.number() });
 
 /** Where a recording was left: seconds into its piece, or into the recording when it's one file. */
 export const ListeningRowSchema = z.object({ position: z.number(), piece: z.string().nullable() });
+
+// ---------------------------------------------------------------------------
+// Hacker News threads (LIB-31): the site's items, as Rust fetched them
+// ---------------------------------------------------------------------------
+
+// Spec: LIB-31
+/** One item as Hacker News's API gives it: forgiving, since it's the site's. */
+export const HnItemSchema = z.object({
+  id: z.coerce.number(),
+  type: z.string().optional(),
+  by: z.string().optional(),
+  /** Seconds since the epoch. */
+  time: z.coerce.number().optional(),
+  text: z.string().optional(),
+  title: z.string().optional(),
+  url: z.string().optional(),
+  score: z.coerce.number().optional(),
+  descendants: z.coerce.number().optional(),
+  kids: z.array(z.coerce.number()).catch([]).default([]),
+  parent: z.coerce.number().optional(),
+  deleted: z.boolean().optional(),
+  dead: z.boolean().optional(),
+});
+export type HnItem = z.infer<typeof HnItemSchema>;
+
+/** What `hn_thread` hands back; items that aren't items are left out. */
+export function parseHnThread(raw: unknown): { story: number; asked: number; items: HnItem[]; missing: number[]; failed: number[] } {
+  const r = z
+    .object({ story: z.number(), asked: z.number(), items: z.array(z.unknown()), missing: z.array(z.number()), failed: z.array(z.number()) })
+    .parse(raw);
+  const items: HnItem[] = [];
+  for (const i of r.items) {
+    const p = HnItemSchema.safeParse(i);
+    if (p.success) items.push(p.data);
+  }
+  return { ...r, items };
+}

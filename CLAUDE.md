@@ -400,10 +400,36 @@ read and show verdicts.
   says `shared` when one arrives. `src/lib/share.ts` takes shares when the
   app starts (from the layout, once it can navigate), when it comes to the
   front and on `shared`, and opens the Library, which adds each as if typed
-  in its field (`sharedAddress` in `webModel.ts`: the text when it's an
-  address or arXiv number, else its first web address) or uploaded; each is
+  in its field (`sharedAddress` in `webModel.ts`: a Hacker News thread's
+  address in it, else the text when it's an address or arXiv number, else
+  its first web address) or uploaded; each is
   noted in the diagnostics. Elsewhere `take` gives nothing. The fake Tauri
   layer hands over what the checks post to `/fake-share`.
+- Hacker News threads (LIB-31 to LIB-35; kind `thread`; `src/lib/threads.ts`,
+  pure parts in `threadModel.ts`, the screen `src/components/ThreadView.tsx`,
+  which `LibraryItemPage` shows for a thread): the Library's field and the
+  share sheet take a `news.ycombinator.com/item?id=` address (a shared text's
+  HN address wins over the article's beside it, `hnAddressIn`). Rust fetches
+  the whole thread from the site's API (`hn_thread`, `src-tauri/src/hn.rs`:
+  one request an item, 16 at once, climbing from a comment to its story;
+  items answered `null` are `missing`, those the network failed `failed`).
+  Kept as `threads` (the story's link, score, when last checked), one
+  `thread_comments` row per story and comment (`<item>.<hn id>`: parent,
+  rank among siblings, author, time, latest text, `gone`) and
+  `thread_comment_versions` (`<comment>.<sha16 of text>`: every text seen,
+  once a text changes, so edits seen on two devices all stay). `planThread`
+  decides what a fetch changes: deleted keeps its text (`gone: deleted`),
+  dead (`gone: dead`), missing (`gone: missing`), failed left alone; only
+  changed rows are written, 50 to an upsert. The item's `filename` is the
+  story's address, `file_size` 0, its comments written before it. Opening a
+  thread online looks again unless it was checked in the last 2 minutes
+  (`refreshThread`, one at a time); "Check now" and the ⋯ menu ask. Comments
+  first seen after it was last opened on this device (localStorage
+  `thread-opened:<id>`) are marked new. The fragment is the comment at the
+  top (`#c<id>`), and links to its own comments move within it. A thread
+  has no PDF or text: no Details, no listening, not offered for summaries.
+  The fake Tauri layer answers `hn_thread` from what the checks post to
+  `/fake-hn`.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -659,7 +685,8 @@ completions, streamed, with the author's own key, through the HTTP plugin
 (`https://openrouter.ai/*`; the `http` capability's only other hosts are
 arXiv's, for fetching papers, where nothing but an identifier goes).
 Book content leaves the device only that way. (Blog posts are fetched by
-Rust, `web_get` and `web_render`, with nothing but their address.)
+Rust, `web_get` and `web_render`, with nothing but their address; Hacker
+News threads by `hn_thread`, with nothing but their item ids.)
 
 - The key and the assistant's model are synced `settings`
   (`src/lib/aiSettings.ts`); the model list is fetched live and cached per
