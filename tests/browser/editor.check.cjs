@@ -207,6 +207,12 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.waitForTimeout(2500);
     const sent2 = JSON.stringify((await (await fetch(`${FAKE}/fake-requests`)).json())[1] ?? {});
     check("a PDF without text is sent as images of its first pages", sent2.includes("image_url") && sent2.includes("data:image/jpeg"), sent2.slice(0, 120));
+    // Spec: AUD-2
+    // Listening starts in the contents, so an item without sections has them too: its Beginning alone.
+    if (!(await page.locator(".toc-panel").isVisible())) await page.locator(".toc-toggle").click();
+    await page.waitForTimeout(300);
+    const bare = await page.locator(".toc-panel .toc-entry").allInnerTexts();
+    check("an item without contents still has Contents, with its Beginning to listen from", bare.length === 1 && bare[0].startsWith("Beginning") && (await page.locator(".toc-panel .toc-listen").count()) === 1, JSON.stringify(bare));
     const counts = await q("SELECT (SELECT count(*) FROM people) AS people, (SELECT count(*) FROM institutions) AS insts");
     check("a new item's authors and institutions link to existing ones", counts[0].people === 2 && counts[0].insts === 2, JSON.stringify(counts));
     await page.locator(".item-authors a", { hasText: "Turing" }).first().click();

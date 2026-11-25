@@ -277,6 +277,9 @@ export default function LibraryItemPage() {
       else setJump((j) => ({ itemId: id, page: 1, seq: (j?.seq ?? 0) + 1 }));
     },
   };
+  // Spec: AUD-2
+  // The contents are where listening starts, so every item has them: one without sections, its Beginning alone.
+  const hasContents = toc.length > 0 || listening.beginning !== null;
   const toggleContents = () =>
     setShowContents((s) => {
       rememberContents(!s);
@@ -341,7 +344,7 @@ export default function LibraryItemPage() {
       </div>
     ) : null;
   const contentsToggle =
-    toc.length > 0 ? (
+    hasContents ? (
       <button type="button" className="toc-toggle" aria-pressed={showContents} onClick={toggleContents}>
         Contents
       </button>
@@ -418,8 +421,8 @@ export default function LibraryItemPage() {
       ) : null}
       {view === "text" ? (
         html?.id === id ? (
-          <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"}>
-            {showContents && toc.length > 0 ? contentsPanel : null}
+          <div className={showContents && hasContents ? "library-body with-contents" : "library-body"}>
+            {showContents && hasContents ? contentsPanel : null}
             <div className="html-view" onWheelCapture={stopFollowing} onTouchMoveCapture={stopFollowing} onKeyDownCapture={stopFollowing}>
               {contentsToggle || viewSwitch ? (
                 <div className="pdf-toolbar">
@@ -442,9 +445,9 @@ export default function LibraryItemPage() {
       ) : fileHere === false ? (
         <p className="muted library-waiting">This PDF hasn't reached this device yet. It arrives with the next sync.</p>
       ) : fileHere ? (
-        <div className={showContents && toc.length > 0 ? "library-body with-contents" : "library-body"} onWheelCapture={stopFollowing} onTouchMoveCapture={stopFollowing}>
+        <div className={showContents && hasContents ? "library-body with-contents" : "library-body"} onWheelCapture={stopFollowing} onTouchMoveCapture={stopFollowing}>
           {/* Spec: LIB-15 */}
-          {showContents && toc.length > 0 ? contentsPanel : null}
+          {showContents && hasContents ? contentsPanel : null}
           <PdfViewer
             key={id}
             load={load}
