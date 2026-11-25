@@ -87,8 +87,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       # Until the generated Android project is committed, generate it from
-      # Tauri's template and give it release signing. Both steps leave a
-      # committed project as it is.
+      # Tauri's template, give it release signing, the app's icons and the
+      # share sheet's filters. The scripts change nothing already done.
       - name: Generate Android project
         run: |
           if [ ! -d src-tauri/gen/android ]; then
@@ -96,6 +96,7 @@ jobs:
           fi
           bun scripts/android-signing.mjs
           bun scripts/android-icons.mjs
+          bun scripts/android-share.mjs
 
       - name: Write signing config
         env:

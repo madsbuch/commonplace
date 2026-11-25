@@ -70,6 +70,15 @@
         "#LIB-26",
         "#LIB-27"
       ]
+    },
+    {
+      "id": "US-26",
+      "as": "an author who comes across things to read on my phone",
+      "want": "to share a post or a PDF to the app from wherever I found it",
+      "soThat": "it's in the library without copying addresses or downloading files",
+      "requirements": [
+        "#LIB-30"
+      ]
     }
   ],
   "requirements": [
@@ -264,6 +273,16 @@
       "related": [
         "#LIB-2",
         "#LIB-28"
+      ]
+    },
+    {
+      "id": "LIB-30",
+      "text": "On a phone, the author can share to the app from any other app: a web address, or one or more PDFs. Each is added to the library as if the author had added it there (an address by the first web address or arXiv number in what's shared), the library shows it being added, and a single item opens once it's in.",
+      "related": [
+        "#LIB-2",
+        "#LIB-23",
+        "#LIB-28",
+        "#LIB-29"
       ]
     }
   ],

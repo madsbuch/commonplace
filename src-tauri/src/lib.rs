@@ -504,6 +504,8 @@ pub fn run() {
         .plugin(tauri_plugin_lan::init())
         // Spec: LIB-28
         .plugin(tauri_plugin_page_render::init())
+        // Spec: LIB-30
+        .plugin(tauri_plugin_share_target::init())
         .manage(work::Work::default())
         .manage(std::sync::Arc::new(sync::service::SyncService::default()))
         .manage(std::sync::Arc::new(audio::render::AudioService::default()));

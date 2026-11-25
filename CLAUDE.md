@@ -384,6 +384,23 @@ read and show verdicts.
   as two blogs (`blog.example.com`, served as HTML; `spa.example.com`, a
   shell until rendered) and serves a PDF at
   `papers.example.com/files/on-loops.pdf`.
+- Sharing to the app (LIB-30): on Android the app is in the share sheet for
+  text (a web address) and PDFs. `scripts/android-share.mjs` adds the
+  filters (`SEND` text/plain and application/pdf, `SEND_MULTIPLE` PDFs) to
+  the generated manifest's main activity, so a share reaches the running app
+  as a new intent (it's singleTask) with the grant to read its files; CI runs
+  it after `tauri android init`, beside the signing and icons scripts.
+  `src-tauri/plugins/share-target` (`ShareTargetPlugin.kt`) keeps what
+  arrives (the intent that started the app, unless it came from the recent
+  apps, or a new one) until the frontend takes it (`take`: each file read
+  then, base64, without its bytes when over `library.max-file-size`) and
+  says `shared` when one arrives. `src/lib/share.ts` takes shares when the
+  app starts (from the layout, once it can navigate), when it comes to the
+  front and on `shared`, and opens the Library, which adds each as if typed
+  in its field (`sharedAddress` in `webModel.ts`: the text when it's an
+  address or arXiv number, else its first web address) or uploaded; each is
+  noted in the diagnostics. Elsewhere `take` gives nothing. The fake Tauri
+  layer hands over what the checks post to `/fake-share`.
 - Authors and institutions are records (`people`, `institutions`), linked to
   items through `authorships` (ordered) and `affiliations` (an author's
   institutions on one item). New names link to an existing record when
@@ -723,9 +740,11 @@ Dependencies install only once published for two weeks (`bunfig.toml`,
 - `android-apk.yml` also checks the migrations on SQLite 3.39
   (`tools/sqlite-android-compat`).
 - Android: `src-tauri/gen/android` isn't committed yet. CI generates it with
-  `tauri android init --ci` and adds release signing with
-  `scripts/android-signing.mjs`. Once generated locally (needs the Android
-  SDK and NDK), commit it and run the script once; CI then uses it as is.
+  `tauri android init --ci`, adds release signing with
+  `scripts/android-signing.mjs`, the icons with `scripts/android-icons.mjs`
+  and the share sheet's filters with `scripts/android-share.mjs`. Once
+  generated locally (needs the Android SDK and NDK), commit it and run the
+  scripts once; CI then uses it as is.
 - Release signing for Android reads the secrets `ANDROID_KEYSTORE` (base64),
   `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; without them the APK
   is unsigned. macOS builds are signed ad hoc (`bundle.macOS.signingIdentity`

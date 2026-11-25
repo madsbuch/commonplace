@@ -115,6 +115,9 @@ const ReplySchema = z.union([
 let chatReplies: z.infer<typeof ReplySchema>[] = [];
 const workLog: { event: "begin" | "end"; id: string; title: string }[] = [];
 const lanStarts: unknown[] = [];
+// Spec: LIB-30
+// What the checks shared to the app, until it takes it (`plugin:share-target|take`).
+const sharesWaiting: unknown[] = [];
 let offerShown = false;
 let running: { id: string; title: string; since: number }[] = [];
 
@@ -324,6 +327,10 @@ if (import.meta.main) {
       if (url.pathname === "/fake-joins") return Response.json(joins, { headers: cors });
       if (url.pathname === "/fake-work") return Response.json({ log: workLog, running }, { headers: cors });
       if (url.pathname === "/fake-lan") return Response.json(lanStarts, { headers: cors });
+      if (url.pathname === "/fake-share") {
+        sharesWaiting.push(await req.json());
+        return Response.json({ ok: true }, { headers: cors });
+      }
       if (url.pathname === "/fake-web") return Response.json(webRenders, { headers: cors });
       if (url.pathname === "/query") {
         // For the checks: run SQL directly.
@@ -589,6 +596,9 @@ if (import.meta.main) {
         // Spec: tandem.SYN-5, tandem.SYN-25
         // The LAN plugin as a computer runs it: what's announced is recorded for the checks.
         if (cmd === "plugin:lan|is_mobile") return Response.json({ ok: false }, { headers: cors });
+        // Spec: LIB-30
+        // The share sheet's plugin: what the checks shared, taken once.
+        if (cmd === "plugin:share-target|take") return Response.json({ ok: { shares: sharesWaiting.splice(0) } }, { headers: cors });
         if (cmd === "plugin:lan|start") {
           lanStarts.push(args["config"]);
           return Response.json({ ok: null }, { headers: cors });

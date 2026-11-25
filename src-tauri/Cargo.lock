@@ -2811,6 +2811,7 @@ dependencies = [
  "tauri-plugin-lan",
  "tauri-plugin-opener",
  "tauri-plugin-page-render",
+ "tauri-plugin-share-target",
  "tauri-plugin-sql",
  "tauri-plugin-sync-background",
  "tokio",
@@ -5240,6 +5241,17 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-page-render"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tauri-plugin-share-target"
 version = "0.1.0"
 dependencies = [
  "serde",

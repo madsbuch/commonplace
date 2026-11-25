@@ -4,6 +4,7 @@
 // byline, its date, its fuller title). Tested in tests/web.test.ts.
 // ---------------------------------------------------------------------------
 
+import { parseArxivId } from "./arxivModel";
 import { splitAuthors } from "./peopleModel";
 
 // Spec: LIB-28
@@ -30,6 +31,29 @@ export function webAddress(input: string): string | null {
   if ((url.protocol !== "http:" && url.protocol !== "https:") || !url.hostname.includes(".")) return null;
   url.hash = "";
   return url.toString();
+}
+
+// Spec: LIB-30
+/**
+ * What a share's text adds: the text itself when it's an arXiv number or a
+ * web address, else the first web address in it ("Title — https://…",
+ * "Read this: https://…."). A sentence's punctuation after an address isn't
+ * part of it; a closing bracket is only when it closes one inside it.
+ * Null when it holds neither.
+ */
+export function sharedAddress(text: string): string | null {
+  const s = text.trim();
+  if (parseArxivId(s)) return s;
+  const whole = webAddress(s);
+  if (whole) return whole;
+  for (const m of s.matchAll(/https?:\/\/[^\s<>"]+/gi)) {
+    let candidate = m[0];
+    const unclosed = () => candidate.endsWith(")") && candidate.split("(").length < candidate.split(")").length;
+    while (/[.,;:!?'’”\]}>*]$/.test(candidate) || unclosed()) candidate = candidate.slice(0, -1);
+    const address = webAddress(candidate);
+    if (address) return address;
+  }
+  return null;
 }
 
 /** "https://www.example.com/a" → "example.com". */

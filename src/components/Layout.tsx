@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import { installSelectionTracking, setPath } from "../lib/currentView";
 import { toggleDock, useDockOpen } from "../lib/dock";
 import { setNavigate } from "../lib/navigation";
+import { takeShares } from "../lib/share";
 import { AssistantDock } from "./AssistantDock";
 import { ChatIcon, HeadphonesIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon } from "./Icons";
 import { MiniPlayer } from "./MiniPlayer";
@@ -19,6 +20,9 @@ export function Layout() {
   const location = useLocation();
   const dock = useDockOpen();
   useEffect(() => setNavigate((to) => void navigate(to)), [navigate]);
+  // Spec: LIB-30
+  // After navigate is set: what was shared opens the Library.
+  useEffect(() => takeShares(), []);
   // Spec: ATL-1
   useEffect(() => setPath(location.pathname, `${location.pathname}${location.search}${location.hash}`), [location.pathname, location.search, location.hash]);
   // Spec: ATL-6

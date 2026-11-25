@@ -6,7 +6,7 @@
 // Not part of `bun test` (it needs a browser and two servers).
 const { chromium } = require("playwright");
 const { spawn } = require("node:child_process");
-const { mkdtempSync, rmSync } = require("node:fs");
+const { mkdtempSync, readFileSync, rmSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 
@@ -891,6 +891,38 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     // Spec: AI-7
     const detailsAsk = (await (await fetch(`${FAKE}/fake-requests`)).json()).at(-1);
     check("reading its details asks for at most their share of tokens", detailsAsk?.max_tokens === 4000, JSON.stringify(detailsAsk?.max_tokens));
+
+    // Spec: LIB-30
+    // Shared from another app. The app takes shares as it starts: an address with words around it.
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ text: "On compilers, a good read: https://blog.example.com/posts/on-compilers#back-ends.", subject: "On Compilers" }) });
+    await page.goto(APP + "/settings");
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    check("a shared address opens the library and is added as if typed there (this one is in already, so it opens)", page.url().includes(post?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE kind = 'post'"))[0].n === 2, page.url());
+    // A PDF shared while the app runs: taken when the app comes back to the front.
+    const sharedPdf = readFileSync(join(__dirname, "fixtures", "with-contents.pdf")).toString("base64");
+    await page.goto(APP + "/settings");
+    await page.waitForTimeout(600);
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ files: [{ name: "Shared Contents.pdf", type: "application/pdf", size: 1, data: sharedPdf }] }) });
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
+    await page.waitForTimeout(1500);
+    const shared = (await q("SELECT i.id, i.filename, length(f.data) AS pdf FROM library_items i JOIN library_files f ON f.item_id = i.id WHERE i.filename = 'Shared Contents.pdf'"))[0];
+    check("a shared PDF is added as uploading it would, and opens", shared?.pdf > 1000 && page.url().includes(shared?.id), JSON.stringify({ shared, url: page.url() }));
+    // What can't be added says why, in the library.
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ files: [{ name: "Huge.pdf", type: "application/pdf", size: 200000000 }] }) });
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForURL(/\/library$/, { timeout: 15000 });
+    await page.waitForTimeout(800);
+    const tooLarge = await page.locator(".library-problem").allInnerTexts();
+    check("a shared PDF over the limit says so", tooLarge.join(" ").includes("Huge.pdf is larger than 100 MB."), JSON.stringify(tooLarge));
+    await fetch(`${FAKE}/fake-share`, { method: "POST", body: JSON.stringify({ text: "Just some words" }) });
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(800);
+    const shareProblems = await page.locator(".library-problem").allInnerTexts();
+    check("a shared text without an address says so, and shows in the field", shareProblems.join(" ").includes("no web address or arXiv number") && (await page.getByLabel("arXiv number or web address").inputValue()) === "Just some words", JSON.stringify(shareProblems));
+    await page.waitForTimeout(1500);
+    const shareNotes = await q("SELECT message FROM diagnostics WHERE source = 'share' ORDER BY id");
+    check("each share is noted in the diagnostics", shareNotes.length >= 4 && shareNotes.some((n) => n.message.includes("Shared Contents.pdf")), JSON.stringify(shareNotes));
 
     // Spec: LIB-25
     await page.setViewportSize({ width: 390, height: 800 });

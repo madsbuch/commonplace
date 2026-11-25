@@ -8,6 +8,7 @@ import { useTablesVersion } from "../lib/live";
 import { importArxiv } from "../lib/arxiv";
 import { parseArxivId } from "../lib/arxivModel";
 import { importWebPage } from "../lib/web";
+import { nextShare, onShares } from "../lib/share";
 import { hostOf, webAddress } from "../lib/webModel";
 import { detailsOf, messageOf, note } from "../lib/diagnostics";
 
@@ -79,23 +80,24 @@ export default function LibraryPage() {
   // An arXiv number (or arXiv address) adds the paper; any other web address, the post there.
   const [addressInput, setAddressInput] = useState("");
   const arxivId = parseArxivId(addressInput);
-  const fromAddress = async () => {
+  const fromAddress = async (input: string) => {
+    const arxiv = parseArxivId(input);
     setProblems([]);
     try {
-      const id = arxivId ? await importArxiv(addressInput, setBusy) : await importWebPage(addressInput, setBusy);
+      const id = arxiv ? await importArxiv(input, setBusy) : await importWebPage(input, setBusy);
       setAddressInput("");
       void navigate(`/library/${id}`);
     } catch (e) {
       // Spec: DIAG-1
-      note("error", "library", `Adding ${arxivId ? "from arXiv" : "from the web"} failed: ${messageOf(e)}`, detailsOf(e));
+      note("error", "library", `Adding ${arxiv ? "from arXiv" : "from the web"} failed: ${messageOf(e)}`, detailsOf(e));
       setProblems([messageOf(e)]);
     } finally {
       setBusy(null);
     }
   };
 
-  const add = async (files: File[]) => {
-    const issues: string[] = [];
+  const add = async (files: File[], known: string[] = []) => {
+    const issues = [...known];
     let last: string | null = null;
     for (const f of files) {
       const problem = problemWith(f);
@@ -116,6 +118,32 @@ export default function LibraryPage() {
     setProblems(issues);
     if (files.length === 1 && last) void navigate(`/library/${last}`);
   };
+
+  // Spec: LIB-30
+  // What another app shared is added here, one share at a time, as if typed in the field or uploaded.
+  const adding = useRef(false);
+  const addShared = useRef<() => Promise<void>>(async () => undefined);
+  addShared.current = async () => {
+    if (adding.current) return;
+    adding.current = true;
+    try {
+      for (let share = nextShare(); share; share = nextShare()) {
+        if (share.kind === "files") {
+          await add(share.files, share.problems);
+          continue;
+        }
+        setAddressInput(share.address ?? share.text);
+        if (share.address) await fromAddress(share.address);
+        else setProblems(["What was shared has no web address or arXiv number in it."]);
+      }
+    } finally {
+      adding.current = false;
+    }
+  };
+  useEffect(() => {
+    void addShared.current();
+    return onShares(() => void addShared.current());
+  }, []);
 
   return (
     <div
@@ -159,7 +187,7 @@ export default function LibraryPage() {
         className="arxiv-form"
         onSubmit={(e) => {
           e.preventDefault();
-          void fromAddress();
+          void fromAddress(addressInput);
         }}
       >
         <input

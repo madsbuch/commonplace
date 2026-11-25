@@ -49,6 +49,8 @@ tauri-plugin-background-work = { path = "plugins/background-work" }
 tauri-plugin-lan = { path = "plugins/lan" }
 # Spec: LIB-28 — a blog post that builds itself, read on Android.
 tauri-plugin-page-render = { path = "plugins/page-render" }
+# Spec: LIB-30 — what other apps share to this one, on Android.
+tauri-plugin-share-target = { path = "plugins/share-target" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The background sync's entry point (src/sync/background.rs).

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, pdfName, webAddress, yearOf } from "../src/lib/webModel";
+import { bylineAuthors, charsetOf, fullerTitle, hostOf, isPage, isPdf, pdfName, sharedAddress, webAddress, yearOf } from "../src/lib/webModel";
 import { detailsMessages } from "../src/lib/libraryDetailsModel";
 
 describe("blog posts by address", () => {
@@ -76,5 +76,32 @@ describe("blog posts by address", () => {
     expect(typeof user?.content === "string" && user.content).toContain('blog post in my library, from z.ai');
     expect(typeof user?.content === "string" && user.content).toContain('title "GLM-5.4: Toward Generalized Coding"');
     expect(typeof user?.content === "string" && user.content).not.toContain("authors");
+  });
+});
+
+// Spec: LIB-30
+describe("sharedAddress", () => {
+  test("a shared address is the address", () => {
+    expect(sharedAddress("https://blog.example.com/posts/loops#top")).toBe("https://blog.example.com/posts/loops");
+    expect(sharedAddress("  z.ai/blog/glm-5.4 ")).toBe("https://z.ai/blog/glm-5.4");
+  });
+  test("an arXiv number or arXiv address stays as it is, for the library to read", () => {
+    expect(sharedAddress("1706.03762")).toBe("1706.03762");
+    expect(sharedAddress("arXiv:1706.03762")).toBe("arXiv:1706.03762");
+    expect(sharedAddress("https://arxiv.org/abs/1706.03762")).toBe("https://arxiv.org/abs/1706.03762");
+  });
+  test("the first web address in words around it", () => {
+    expect(sharedAddress("On loops — a post\nhttps://blog.example.com/posts/loops")).toBe("https://blog.example.com/posts/loops");
+    expect(sharedAddress("Read this: https://blog.example.com/a. And https://other.example.com/b")).toBe("https://blog.example.com/a");
+    expect(sharedAddress("(see https://blog.example.com/a)")).toBe("https://blog.example.com/a");
+    expect(sharedAddress("“https://blog.example.com/a”")).toBe("https://blog.example.com/a");
+  });
+  test("a bracket that belongs to the address is kept", () => {
+    expect(sharedAddress("See https://en.wikipedia.org/wiki/Loop_(music), it's good")).toBe("https://en.wikipedia.org/wiki/Loop_(music)");
+  });
+  test("nothing to add", () => {
+    expect(sharedAddress("Just some words")).toBeNull();
+    expect(sharedAddress("")).toBeNull();
+    expect(sharedAddress("ftp://files.example.com/a.pdf")).toBeNull();
   });
 });
