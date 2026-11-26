@@ -6,6 +6,7 @@ import { setNavigate } from "../lib/navigation";
 import { takeShares } from "../lib/share";
 import { AssistantDock } from "./AssistantDock";
 import { ChatIcon, HeadphonesIcon, LibraryIcon, SearchIcon, SettingsIcon, SparkIcon } from "./Icons";
+import { LastSync } from "./LastSync";
 import { MiniPlayer } from "./MiniPlayer";
 import { Logo } from "./Logo";
 import { PageTree } from "./PageTree";
@@ -89,6 +90,7 @@ export function Layout() {
             <SettingsIcon />
             Settings
           </NavLink>
+          <LastSync />
           <ThemeSwitch />
         </div>
       </nav>

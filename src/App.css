@@ -132,6 +132,19 @@ a {
   background: var(--hover);
   color: var(--fg);
 }
+/* Spec: SYN-26 */
+.sidebar-footer a.sidebar-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 4px;
+  font-size: 12px;
+}
+.sidebar-sync svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
 .sidebar-toggle {
   display: none;
 }
@@ -504,6 +517,10 @@ button.danger {
 }
 .page-link-block {
   color: var(--muted);
+}
+.page-link.missing {
+  color: var(--muted);
+  font-style: italic;
 }
 .math-inline {
   cursor: pointer;
@@ -895,6 +912,21 @@ button.danger {
 .item-meta {
   margin: 0;
   font-size: 13px;
+}
+/* Spec: LNK-6 */
+.item-linked-from {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.item-linked-from a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.item-linked-from a:hover {
+  border-bottom-color: var(--fg);
+}
+.thread-story .item-linked-from {
+  margin: 4px 0 8px;
 }
 .details-status {
   margin: 6px 0 4px;

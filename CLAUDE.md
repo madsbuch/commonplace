@@ -156,6 +156,10 @@ The book syncs peer to peer over the local network, as Tally does
   development build beside the real one, holds it too, and searches are
   broadcast, so each hears them. A taken port is noted in the diagnostics
   and shown by the connection check.
+- The sidebar, under Settings, says when this device last synced with any
+  other (`LastSync`, `lastSyncLine` in `src/lib/sync.ts`; SYN-26), and opens
+  Settings → Sync. Not "syncing now": a round runs every minute whether or
+  not a device answers.
 - `src/lib/syncBoot.ts` (imported by `main.tsx`) checks the database's
   instance before anything writes, starts sync, and refreshes the screens
   when another device's data arrives.
@@ -227,7 +231,13 @@ The book syncs peer to peer over the local network, as Tally does
   and the handle stack vertically in a 26px margin there.
 - Inline maths is a `math` inline node (`$…$` input rule, KaTeX); links are
   `pageLink` nodes holding the page's (and block's) id, showing live titles
-  from `src/lib/pageIndex.ts`. Code blocks highlight with Shiki (JS regex
+  from `src/lib/pageIndex.ts`, or `libraryLink` nodes holding a library
+  item's id (`src/blocks/inline/libraryLink.tsx`, LNK-4; Markdown gives the
+  assistant its id). The `@` menu offers pages, library items (each naming
+  the pages that link to it already, LNK-5) and blocks; an item's screen
+  lists the pages that link to it (`LinkedFrom`, LNK-6). Both come from
+  `linksToLibrary` (`book.ts`: blocks whose content holds a `libraryLink`,
+  on a live page). Code blocks highlight with Shiki (JS regex
   engine), Lean included.
 - Spacing and sizes are CSS over BlockNote's (`src/App.css`), nothing
   stored: blocks stand `blocks.space` apart (BLK-7, a margin between

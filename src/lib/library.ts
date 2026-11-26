@@ -76,6 +76,22 @@ export async function listItems(): Promise<LibraryItem[]> {
   return z.array(ItemSchema).parse(await select(`SELECT ${COLUMNS} FROM library_items ORDER BY added_at DESC`));
 }
 
+// Spec: LNK-4
+/** Items whose title or authors contain `query`, most recently added first: what a link can point at. */
+export async function searchItems(query: string, limit: number): Promise<LibraryItem[]> {
+  const like = `%${query.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  return z
+    .array(ItemSchema)
+    .parse(
+      await select(
+        `SELECT ${COLUMNS} FROM library_items
+         WHERE title LIKE $1 ESCAPE '\\' OR authors LIKE $1 ESCAPE '\\'
+         ORDER BY added_at DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+        [like],
+      ),
+    );
+}
+
 export async function getItem(id: string): Promise<LibraryItem | null> {
   return z.array(ItemSchema).parse(await select(`SELECT ${COLUMNS} FROM library_items WHERE id = $1`, [id]))[0] ?? null;
 }

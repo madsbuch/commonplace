@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { pageOfFragment, useQueryParam } from "../lib/address";
 import { AuthorsEditor } from "../components/AuthorsEditor";
 import { InfoButton } from "../components/InfoButton";
+import { LinkedFrom } from "../components/LinkedFrom";
 import { Contents } from "../components/Contents";
 import { HtmlReader } from "../components/HtmlReader";
 import { ThreadScreen } from "../components/ThreadView";
@@ -419,6 +420,7 @@ export default function LibraryItemPage() {
           </span>
           <DetailsInfo itemId={item.id} />
         </p>
+        <LinkedFrom itemId={item.id} />
       </div>
       {showDetails ? (
         <>

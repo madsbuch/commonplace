@@ -19,6 +19,7 @@ import { useTablesVersion } from "../lib/live";
 import { readThread, refreshThread, THREAD_TABLES } from "../lib/threads";
 import { ago, earlierTexts, foundLine, isNew, parseHnId, threadTree, type SeenText, type StoredComment, type StoredThread, type ThreadNode } from "../lib/threadModel";
 import { hostOf } from "../lib/webModel";
+import { LinkedFrom } from "./LinkedFrom";
 import { InfoButton } from "./InfoButton";
 import { MoreMenu } from "./MoreMenu";
 
@@ -350,6 +351,7 @@ export function ThreadScreen(props: { item: LibraryItem }) {
                 {check.state === "failed" ? <p>The last try failed: {check.problem}</p> : null}
               </InfoButton>
             </p>
+            <LinkedFrom itemId={item.id} />
             {story ? <Body comment={story} texts={texts.get(story.id) ?? []} /> : null}
           </header>
           {data !== null && thread === null ? <p className="muted">This thread hasn't fully reached this device yet. It arrives with the next sync.</p> : null}

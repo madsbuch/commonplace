@@ -19,8 +19,9 @@ import "@blocknote/mantine/style.css";
 import { useLocation } from "react-router-dom";
 import { fromEditorBlocks, schema, syntaxHighlighter, toEditorBlocks } from "../blocks";
 import { dbId, editorId } from "../blocks/ids";
-import { applySave, loadPage, moveBlockToPage, searchLinkTargets, type LoadedPage } from "../lib/book";
-import { planSave, type DocBlock, type Snapshot } from "../lib/bookModel";
+import { applySave, linksToLibrary, loadPage, moveBlockToPage, searchLinkTargets, type LinkTarget, type LoadedPage } from "../lib/book";
+import { linkingPages, planSave, type DocBlock, type ItemLink, type Snapshot } from "../lib/bookModel";
+import { KIND_NAMES, searchItems, type LibraryItem } from "../lib/library";
 import { replaceFragment } from "../lib/address";
 import { installBlockTouchDrag } from "./blockTouchDrag";
 import { registerEditor, setDraggedBlock } from "../lib/editorBridge";
@@ -49,6 +50,16 @@ function isBlank(blocks: readonly DocBlock[]): boolean {
   const [only] = blocks;
   return blocks.length === 1 && only !== undefined && only.type === "paragraph" && only.children.length === 0 &&
     (!Array.isArray(only.content) || only.content.length === 0);
+}
+
+// Spec: LNK-5
+/** A library item in the link menu: what it is, and the pages that link to it already. */
+function itemLinkLine(item: LibraryItem, pages: readonly ItemLink[]): string {
+  const what = [KIND_NAMES[item.kind], item.year].filter(Boolean).join(" · ");
+  if (pages.length === 0) return what;
+  const names = pages.slice(0, 3).map((p) => p.pageTitle);
+  const more = pages.length - names.length;
+  return `${what} · linked from ${names.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
 }
 
 /** The "Move to page…" entry of a block's handle menu. */
@@ -334,9 +345,9 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
           onItemClick: () => editor.insertInlineContent([{ type: "math", props: { latex: "" } }]),
         },
         {
-          title: "Link to a page",
-          subtext: "Or type @",
-          aliases: ["link", "page link", "mention"],
+          title: "Link to a page or item",
+          subtext: "A page, a block, or something in the library (or type @)",
+          aliases: ["link", "page link", "mention", "library", "paper", "cite"],
           group: "Book",
           onItemClick: () => editor.insertInlineContent(["@"]),
         },
@@ -346,19 +357,32 @@ export function PageEditor(props: { loaded: LoadedPage; editable?: boolean }) {
     [editor, flush],
   );
 
-  // Spec: LNK-1, LNK-2
+  // Spec: LNK-1, LNK-2, LNK-4, LNK-5
   const linkItems = useCallback(
     async (query: string): Promise<DefaultReactSuggestionItem[]> => {
-      const targets = await searchLinkTargets(query);
-      return targets
-        .filter((t) => t.pageId !== pageId || t.blockId !== null)
-        .map((t) => ({
-          title: t.blockId ? (t.snippet ?? "") : t.title,
-          subtext: t.blockId ? `in ${t.title}` : "Page",
-          group: t.blockId ? "Blocks" : "Pages",
-          onItemClick: () =>
-            editor.insertInlineContent([{ type: "pageLink", props: { pageId: t.pageId, blockId: t.blockId ?? "" } }, " "]),
-        }));
+      const [targets, items, links] = await Promise.all([
+        searchLinkTargets(query),
+        searchItems(query, query.trim().length < 2 ? 4 : 8),
+        linksToLibrary(),
+      ]);
+      const toTarget = (t: LinkTarget): DefaultReactSuggestionItem => ({
+        title: t.blockId ? (t.snippet ?? "") : t.title,
+        subtext: t.blockId ? `in ${t.title}` : "Page",
+        group: t.blockId ? "Blocks" : "Pages",
+        onItemClick: () =>
+          editor.insertInlineContent([{ type: "pageLink", props: { pageId: t.pageId, blockId: t.blockId ?? "" } }, " "]),
+      });
+      const shown = targets.filter((t) => t.pageId !== pageId || t.blockId !== null);
+      return [
+        ...shown.filter((t) => t.blockId === null).map(toTarget),
+        ...items.map((item) => ({
+          title: item.title || "Untitled",
+          subtext: itemLinkLine(item, linkingPages(links.get(item.id) ?? [])),
+          group: "Library",
+          onItemClick: () => editor.insertInlineContent([{ type: "libraryLink", props: { itemId: item.id } }, " "]),
+        })),
+        ...shown.filter((t) => t.blockId !== null).map(toTarget),
+      ];
     },
     [editor, pageId],
   );

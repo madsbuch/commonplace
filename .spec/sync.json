@@ -328,6 +328,13 @@
         ],
         "date": "2026-11-23"
       }
+    },
+    {
+      "id": "SYN-26",
+      "text": "Beside Settings in the sidebar, the app says when this device last synced with another of the book's devices, or that it is on no other device yet; the line opens Settings → Sync.",
+      "related": [
+        "#tandem.SYN-1"
+      ]
     }
   ],
   "values": [

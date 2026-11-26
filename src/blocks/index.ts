@@ -23,6 +23,7 @@ import { paragraph } from "./paragraph";
 import { fromUnknown, toUnknown, unknownBlockSpec } from "./unknown";
 import { mathInlineSpec } from "./inline/math";
 import { pageLinkInlineSpec } from "./inline/pageLink";
+import { libraryLinkInlineSpec } from "./inline/libraryLink";
 import { dbId, editorId } from "./ids";
 import type { BlockType } from "./types";
 
@@ -43,6 +44,7 @@ export const schema = BlockNoteSchema.create({
     ...defaultInlineContentSpecs,
     math: mathInlineSpec,
     pageLink: pageLinkInlineSpec,
+    libraryLink: libraryLinkInlineSpec,
   },
   styleSpecs: defaultStyleSpecs,
 });

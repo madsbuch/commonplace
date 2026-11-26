@@ -215,6 +215,25 @@ export function copyLine(state: CopyState, now: number = Date.now()): string {
   }
 }
 
+// Spec: SYN-26
+/** When this device last synced with any other of the book's devices; null when never, or alone. */
+export function lastSyncedAt(status: SyncStatus): string | null {
+  let last: string | null = null;
+  for (const d of status.devices) {
+    if (!d.isSelf && d.lastSyncAt && (last === null || Date.parse(d.lastSyncAt) > Date.parse(last))) last = d.lastSyncAt;
+  }
+  return last;
+}
+
+// Spec: SYN-26
+/** The sidebar's line on sync. */
+export function lastSyncLine(status: SyncStatus, now: number = Date.now()): string {
+  const others = status.devices.filter((d) => !d.isSelf);
+  if (!status.inBook || others.length === 0) return "Only on this device";
+  const at = lastSyncedAt(status);
+  return at ? `Synced ${ago(at, now)}` : "Not synced yet";
+}
+
 export function isAndroid(): boolean {
   return navigator.userAgent.includes("Android");
 }

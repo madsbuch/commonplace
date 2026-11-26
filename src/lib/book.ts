@@ -17,16 +17,21 @@ import {
   canonical,
   keyBetween,
   contentTree,
+  groupItemLinks,
   inlineMarkdown,
+  LIBRARY_LINK,
+  libraryLinksIn,
   PAGE_TYPE,
   pageTree,
   parseContent,
   parseProps,
   snapshotOf,
   titleOf,
+  UNTITLED,
   toMarkdown,
   type BlockRow,
   type DocBlock,
+  type ItemLink,
   type PageNode,
   type RevisionRow,
   type RowWrite,
@@ -194,7 +199,44 @@ export async function pageOfBlock(blockId: string): Promise<string | null> {
 
 /** A block's text, for showing a link to it. */
 export function plainText(content: unknown): string {
-  return inlineMarkdown(content, () => "").replace(/[*_~`]/g, "");
+  return inlineMarkdown(content, () => "", () => "").replace(/[*_~`]/g, "");
+}
+
+// Spec: LNK-5, LNK-6
+/**
+ * Where the book links to library items (to `itemId` alone, when given): per
+ * item, each live block holding a link on a live page, by the page's title.
+ */
+export async function linksToLibrary(itemId?: string): Promise<Map<string, ItemLink[]>> {
+  const rows = z
+    .array(z.object({ id: z.string(), content: z.string(), page_id: z.string().nullable(), dead: z.number() }))
+    .parse(
+      await select(
+        `WITH RECURSIVE up(start, id, parent_id, type, dead, depth) AS (
+           SELECT id, id, parent_id, type, 0, 0 FROM blocks
+           WHERE deleted_at IS NULL AND type != '${PAGE_TYPE}'
+             AND content LIKE '%"${LIBRARY_LINK}"%' AND content LIKE $1 ESCAPE '\\'
+           UNION ALL
+           SELECT up.start, b.id, b.parent_id, b.type, b.deleted_at IS NOT NULL, up.depth + 1
+           FROM blocks b JOIN up ON b.id = up.parent_id
+           WHERE up.depth < 64
+         )
+         SELECT b.id, b.content,
+           (SELECT u.id FROM up u WHERE u.start = b.id AND u.type = '${PAGE_TYPE}' ORDER BY u.depth LIMIT 1) AS page_id,
+           (SELECT max(u.dead) FROM up u WHERE u.start = b.id) AS dead
+         FROM blocks b WHERE b.id IN (SELECT start FROM up)`,
+        [itemId ? `%${itemId.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : "%"],
+      ),
+    );
+  const titles = await allTitles();
+  return groupItemLinks(
+    rows.flatMap((r) =>
+      r.dead || r.page_id === null
+        ? []
+        : [{ pageId: r.page_id, pageTitle: titles.get(r.page_id) ?? UNTITLED, blockId: r.id, itemIds: libraryLinksIn(parseContent(r.content)) }],
+    ),
+    itemId,
+  );
 }
 
 export interface LinkTarget {

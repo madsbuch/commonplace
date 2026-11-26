@@ -814,6 +814,37 @@ const q = async (sql) => (await fetch(`${FAKE}/query`, { method: "POST", body: J
     await page.getByRole("button", { name: "Add from arXiv" }).click();
     await page.waitForURL(/\/library\/lib_/, { timeout: 15000 });
     check("adding it again opens the one already there", page.url().includes(arx?.id) && (await q("SELECT count(*) AS n FROM library_items WHERE arxiv_id = '1706.03762'"))[0].n === 1);
+
+    // Spec: LNK-4, LNK-5, LNK-6
+    await page.goto(url);
+    await page.waitForTimeout(1200);
+    await page.locator(".bn-editor h1").click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Read @Attention");
+    await page.waitForTimeout(800);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(1500);
+    check("a link to a library item shows its title", (await page.locator(".library-link").allInnerTexts()).join() === "Attention Is All You Need");
+    const linking = (await q(`SELECT id, content FROM blocks WHERE deleted_at IS NULL AND content LIKE '%libraryLink%'`))[0];
+    check("it's stored by the item's id", linking?.content.includes(`"itemId":"${arx?.id}"`), linking?.content);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("@Attention");
+    await page.waitForTimeout(800);
+    const offered = await page.locator(".bn-suggestion-menu").innerText().catch(() => "");
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "link-menu.png") });
+    check("the link menu names the pages that link to an item already", offered.includes("linked from Simple types"), offered);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(1200);
+    await page.goto(APP + "/library/" + arx?.id + "?view=pdf");
+    await page.locator(".item-linked-from").waitFor({ timeout: 5000 }).catch(() => undefined);
+    check("an item lists the pages that link to it", (await page.locator(".item-linked-from").innerText().catch(() => "")).includes("Simple types"));
+    if (process.env.CHECK_SHOTS) await page.screenshot({ path: join(process.env.CHECK_SHOTS, "linked-from.png") });
+    await page.locator(".item-linked-from a").first().click();
+    await page.waitForURL(/\/page\//);
+    check("and opens the page at the linking block", page.url() === `${url}#${linking?.id}`, page.url());
+    // Spec: SYN-26
+    check("the sidebar says how this device stands in sync", (await page.locator(".sidebar-sync").innerText().catch(() => "")).includes("Only on this device"));
     await page.goto(APP + "/library");
     await page.waitForTimeout(600);
     await page.getByLabel("arXiv number or web address").fill("2101.99999");

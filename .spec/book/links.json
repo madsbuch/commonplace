@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/madsbuch/better-github/main/schema/spec.schema.json",
   "title": "Links",
-  "summary": "Text can link to any page or to a single block.",
+  "summary": "Text can link to any page, to a single block, or to an item in the library.",
   "order": 3,
   "stories": [
     {
@@ -12,6 +12,17 @@
       "requirements": [
         "#LNK-1",
         "#LNK-2"
+      ]
+    },
+    {
+      "id": "US-28",
+      "as": "someone who writes about what they read",
+      "want": "to link from my pages to the papers, posts and threads in my library, and to see from an item where I wrote about it",
+      "soThat": "what I read and what I think of it stay connected",
+      "requirements": [
+        "#LNK-4",
+        "#LNK-5",
+        "#LNK-6"
       ]
     }
   ],
@@ -27,6 +38,21 @@
     {
       "id": "LNK-3",
       "text": "A link still reaches its target after the target is moved."
+    },
+    {
+      "id": "LNK-4",
+      "text": "A block's text can link inline to any item in the library; the link shows the item's current title and opens the item.",
+      "related": [
+        "#LIB-1"
+      ]
+    },
+    {
+      "id": "LNK-5",
+      "text": "While a link is being made, each library item offered names the pages that already link to it."
+    },
+    {
+      "id": "LNK-6",
+      "text": "A library item's screen lists the pages that link to it, each opening the page at the block that holds the link."
     }
   ]
 }

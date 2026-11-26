@@ -415,8 +415,12 @@ type Field = (o: unknown, k: string) => unknown;
 const field: Field = (o, k) => (o !== null && typeof o === "object" && k in o ? Object.entries(o).find(([key]) => key === k)?.[1] : undefined);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** Inline content (the editor's text runs, links, maths, page links) as Markdown. */
-export function inlineMarkdown(content: unknown, pageTitle: (id: string) => string): string {
+/**
+ * Inline content (the editor's text runs, links, maths, page links) as Markdown.
+ * A link to a library item is its title by `itemTitle`, its id by default, so
+ * the assistant can look the item up.
+ */
+export function inlineMarkdown(content: unknown, pageTitle: (id: string) => string, itemTitle: (id: string) => string = (id) => id): string {
   if (!Array.isArray(content)) return "";
   return content
     .map((run: unknown) => {
@@ -430,12 +434,67 @@ export function inlineMarkdown(content: unknown, pageTitle: (id: string) => stri
         if (field(styles, "strike") === true) t = `~~${t}~~`;
         return t;
       }
-      if (type === "link") return `[${inlineMarkdown(field(run, "content"), pageTitle)}](${str(field(run, "href"))})`;
+      if (type === "link") return `[${inlineMarkdown(field(run, "content"), pageTitle, itemTitle)}](${str(field(run, "href"))})`;
       if (type === "math") return `$${str(field(field(run, "props"), "latex"))}$`;
       if (type === "pageLink") return `[[${pageTitle(str(field(field(run, "props"), "pageId")))}]]`;
+      if (type === LIBRARY_LINK) return itemTitle(str(field(field(run, "props"), "itemId")));
       return "";
     })
     .join("");
+}
+
+/** A block that links to a library item, and the page it's on. */
+export interface ItemLink {
+  pageId: string;
+  pageTitle: string;
+  blockId: string;
+}
+
+// Spec: LNK-5, LNK-6
+/**
+ * Blocks' links to library items, per item (only `only`'s, when given), each
+ * item's sorted by page title; blocks of one page keep their order.
+ */
+export function groupItemLinks(blocks: readonly (ItemLink & { itemIds: readonly string[] })[], only?: string): Map<string, ItemLink[]> {
+  const out = new Map<string, ItemLink[]>();
+  for (const { itemIds, ...link } of blocks) {
+    for (const id of itemIds) {
+      if (only !== undefined && id !== only) continue;
+      const list = out.get(id) ?? [];
+      list.push(link);
+      out.set(id, list);
+    }
+  }
+  for (const list of out.values()) list.sort((a, b) => a.pageTitle.localeCompare(b.pageTitle));
+  return out;
+}
+
+/** The pages among `links`, each once, in order. */
+export function linkingPages(links: readonly ItemLink[]): ItemLink[] {
+  const seen = new Set<string>();
+  const out: ItemLink[] = [];
+  for (const l of links) {
+    if (seen.has(l.pageId)) continue;
+    seen.add(l.pageId);
+    out.push(l);
+  }
+  return out;
+}
+
+/** The inline type of a link to a library item. */
+export const LIBRARY_LINK = "libraryLink";
+
+// Spec: LNK-6
+/** The library items a block's inline content links to, each once, in order. */
+export function libraryLinksIn(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const out: string[] = [];
+  for (const run of content) {
+    const type = str(field(run, "type"));
+    const ids = type === LIBRARY_LINK ? [str(field(field(run, "props"), "itemId"))] : type === "link" ? libraryLinksIn(field(run, "content")) : [];
+    for (const id of ids) if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
 }
 
 /** A page's content as Markdown. */
